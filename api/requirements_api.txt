@@ -1,0 +1,22 @@
+# SUS Predict — Backend FastAPI
+# Instale no mesmo venv do projeto (Python 3.12):
+#   source ../venv/bin/activate
+#   pip install -r requirements_api.txt
+
+# API
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+
+# Análise e predição
+pandas>=2.0.0
+prophet>=1.1.5
+openpyxl>=3.1.2
+
+# Pinado para compatibilidade entre PySUS (exige ==2.8.2) e Prophet (>=2.8.2).
+# 2.9.0.post0 é retrocompatível, mas o resolver do pip reclama sem esse pin.
+python-dateutil==2.9.0.post0
+
+# Nota: Prophet instala automaticamente pystan e cmdstanpy.
+# A primeira instalação pode demorar 5-10 min (compila Stan).
+# Se falhar no Windows, tente: pip install pystan==3.9.2 antes do prophet.
