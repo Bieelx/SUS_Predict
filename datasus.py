@@ -11,6 +11,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Schema Silver: seleção e transformação de colunas por sistema
+from schema import processar_sinan, processar_sih
+
 try:
     import pandas as pd
 except ImportError:
@@ -527,7 +530,20 @@ def to_df(result) -> "pd.DataFrame | None":
     return None
 
 
-def baixar(sistema: str, uf: str, ibge6: str, anos: list[int], doenca_cod: str = "DENG") -> pd.DataFrame:
+def baixar(sistema: str, uf: str, ibge6: str, anos: list[int], doenca_cod: str = "DENG", silver: bool = True) -> pd.DataFrame:
+    """
+    Baixa dados do sistema informado e retorna um DataFrame.
+
+    Parâmetros:
+        sistema    : "SIH" | "SIM" | "SINASC" | "SINAN" | "CNES"
+        uf         : sigla do estado (ex: "SP")
+        ibge6      : código IBGE de 6 dígitos do município (ex: "355030")
+        anos       : lista de anos a baixar (ex: [2022, 2023])
+        doenca_cod : código da doença para SINAN (padrão: "DENG" = dengue)
+        silver     : True (padrão) → aplica schema Silver (seleciona colunas,
+                     renomeia e transforma valores conforme schema.py).
+                     False → retorna dados Bronze brutos do DATASUS.
+    """
     frames = []
     col_mun = ""
 
@@ -615,6 +631,13 @@ def baixar(sistema: str, uf: str, ibge6: str, anos: list[int], doenca_cod: str =
         resultado = resultado[
             resultado[col_mun].astype(str).str[:6] == ibge6[:6]
         ]
+
+    # ── Camada Silver: seleciona colunas e transforma valores ─────────────────
+    if silver and not resultado.empty:
+        if sistema == "SINAN":
+            resultado = processar_sinan(resultado)
+        elif sistema == "SIH":
+            resultado = processar_sih(resultado)
 
     return resultado
 
@@ -756,9 +779,9 @@ def main():
     linha()
     print("  📅  PERÍODO DE EXTRAÇÃO\n")
     print("  Dados disponíveis a partir de ~2000.")
-    print("  ⚠️  Recomendado: use até 2024 — dados de 2025/2026 podem não estar no DATASUS.\n")
-    ano_ini = input_num("  👉  Ano de início (ex: 2019): ", 2000, 2026)
-    ano_fim = input_num("  👉  Ano final   (ex: 2024): ", ano_ini, 2026)
+    print("  ⚠️  Recomendado: use até 2025 — dados de 2026 podem não estar consolidados no DATASUS.\n")
+    ano_ini = input_num("  👉  Ano de início (ex: 2019): ", 2000, 2025)
+    ano_fim = input_num("  👉  Ano final   (ex: 2025): ", ano_ini, 2025)
     anos = list(range(ano_ini, ano_fim + 1))
     print(f"\n  ✅  Período: {ano_ini} → {ano_fim}  ({len(anos)} ano(s))\n")
 

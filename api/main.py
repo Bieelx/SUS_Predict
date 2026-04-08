@@ -33,11 +33,11 @@ import urllib.parse
 # ano exibindo valores totalmente diferentes dependendo do intervalo selecionado).
 _ANO_ATUAL = datetime.now().year
 ANO_MAXIMO_CONFIAVEL: dict = {
-    "SINAN":  _ANO_ATUAL - 3,   # ex: 2026 → máximo 2023 (defasagem ~3 anos)
-    "SIM":    _ANO_ATUAL - 2,   # ex: 2026 → máximo 2024
-    "SIH":    _ANO_ATUAL - 2,
-    "SINASC": _ANO_ATUAL - 2,
-    "SIA":    _ANO_ATUAL - 2,
+    "SINAN":  _ANO_ATUAL - 1,   # ex: 2026 → máximo 2025 (defasagem ~1 ano)
+    "SIM":    _ANO_ATUAL - 1,   # ex: 2026 → máximo 2025
+    "SIH":    _ANO_ATUAL - 1,
+    "SINASC": _ANO_ATUAL - 1,
+    "SIA":    _ANO_ATUAL - 1,
 }
 
 from fastapi import FastAPI, BackgroundTasks, HTTPException
@@ -481,6 +481,54 @@ CIDADES_FALLBACK = {
     "ES":[("Vitória","3205309"),("Vila Velha","3205200"),("Serra","3205010"),("Cariacica","3201308")],
 }
 
+# ── Lista local de estados — independente do PySUS ────────────────────────────
+_ESTADOS_LOCAL: list[tuple[str, str]] = [
+    ("AC", "Acre"),           ("AL", "Alagoas"),      ("AM", "Amazonas"),
+    ("AP", "Amapá"),          ("BA", "Bahia"),         ("CE", "Ceará"),
+    ("DF", "Distrito Federal"),("ES", "Espírito Santo"),("GO", "Goiás"),
+    ("MA", "Maranhão"),       ("MG", "Minas Gerais"),  ("MS", "Mato Grosso do Sul"),
+    ("MT", "Mato Grosso"),    ("PA", "Pará"),          ("PB", "Paraíba"),
+    ("PE", "Pernambuco"),     ("PI", "Piauí"),         ("PR", "Paraná"),
+    ("RJ", "Rio de Janeiro"), ("RN", "Rio Grande do Norte"),("RO", "Rondônia"),
+    ("RR", "Roraima"),        ("RS", "Rio Grande do Sul"),  ("SC", "Santa Catarina"),
+    ("SE", "Sergipe"),        ("SP", "São Paulo"),     ("TO", "Tocantins"),
+]
+
+# ── Cache de municípios por UF — preenchido via API do IBGE em runtime ────────
+_MUNICIPIOS_CACHE: dict[str, list[tuple[str, str]]] = {}
+
+
+def _buscar_municipios_ibge(uf: str) -> list[tuple[str, str]]:
+    """
+    Retorna todos os municípios de uma UF como [(nome, ibge7)].
+
+    Fonte primária: API IBGE localidades (5.570 municípios, ordenados por nome).
+    Fallback:       CIDADES_FALLBACK (lista reduzida hardcoded).
+
+    O resultado é cacheado em memória por sessão de servidor.
+    O código IBGE retornado tem 7 dígitos; o DATASUS usa os 6 primeiros.
+    """
+    uf = uf.upper()
+    if uf in _MUNICIPIOS_CACHE:
+        return _MUNICIPIOS_CACHE[uf]
+
+    url = (
+        f"https://servicodados.ibge.gov.br/api/v1/localidades"
+        f"/estados/{uf}/municipios?orderBy=nome"
+    )
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "SUSPredict/2.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            dados = json.loads(resp.read().decode("utf-8"))
+        resultado = [(m["nome"], str(m["id"])) for m in dados]
+        _MUNICIPIOS_CACHE[uf] = resultado
+        log.info(f"IBGE: {len(resultado)} municípios carregados para {uf}")
+        return resultado
+    except Exception as exc:
+        log.warning(f"IBGE API falhou para {uf} ({exc}) — usando CIDADES_FALLBACK")
+        return CIDADES_FALLBACK.get(uf, [])
+
+
 POPULACAO_REL = {
     "SP":1.00,"MG":0.50,"RJ":0.45,"BA":0.37,"PR":0.30,"RS":0.28,"PE":0.25,
     "CE":0.23,"PA":0.20,"SC":0.18,"MA":0.17,"GO":0.16,"AM":0.15,"DF":0.14,
@@ -504,7 +552,7 @@ COLS_MINIMAS = {
 }
 
 
-def _ler_slim(raw, sistema: str, ibge6: str) -> "pd.DataFrame | None":
+def _ler_slim(raw, sistema: str, ibge6: str, *, strict_municipio: bool = False) -> "pd.DataFrame | None":
     """
     Substitui to_df() com leitura otimizada de parquet:
     1. Column pruning: lê só as 4-5 colunas necessárias do disco (evita 80+ colunas em RAM)
@@ -577,11 +625,14 @@ def _ler_slim(raw, sistema: str, ibge6: str) -> "pd.DataFrame | None":
     if df is None or df.empty:
         return None
 
-    # ── Filtro de município com fallback para UF inteira ─────────────────────
+    # ── Filtro de município ─────────────────────────────────────────────────
     if ibge6 and col_mun and col_mun in df.columns:
         mask = df[col_mun].astype(str).str[:6] == ibge6[:6]
         if mask.any():
             return df[mask].copy()
+        if strict_municipio:
+            log.info(f"    📍 Município {ibge6} sem dados na col {col_mun} — retornando vazio (strict)")
+            return df.iloc[0:0].copy()
         log.info(f"    📍 Município {ibge6} sem dados na col {col_mun} — usando UF inteira")
 
     return df
@@ -724,7 +775,8 @@ def _baixar_sinan(doenca_cod: str, ano: int, ibge6: str = ""):
         return None
     try:
         raw = _sinan_dl(doenca_cod, ano)
-        df  = _ler_slim(raw, "SINAN", ibge6)
+        # SINAN é nacional: se não houver match do município, não fazemos fallback para "UF inteira".
+        df  = _ler_slim(raw, "SINAN", ibge6, strict_municipio=bool(ibge6))
         if df is not None and not df.empty:
             df["_ano"] = ano
             return df
@@ -1473,7 +1525,7 @@ def get_ano_limite():
     O frontend usa esses valores para restringir a seleção de período e
     evitar que o usuário consulte dados preliminares/incompletos.
     """
-    defasagens = {"SINAN": 3, "SIM": 2, "SIH": 2, "SINASC": 2, "SIA": 2}
+    defasagens = {"SINAN": 1, "SIM": 1, "SIH": 1, "SINASC": 1, "SIA": 1}
     return {
         sistema: {
             "ano_maximo":  ano,
@@ -1490,16 +1542,19 @@ def get_ano_limite():
 
 @app.get("/api/estados")
 def get_estados():
-    if not PYSUS_OK:
-        raise HTTPException(503, "PySUS não disponível. O backend precisa rodar com Python 3.12 (venv do projeto).")
-    return [{"sigla": s, "nome": n} for s, n in _EST]
+    base = list(_EST) if PYSUS_OK else _ESTADOS_LOCAL
+    return [{"sigla": s, "nome": n} for s, n in base]
 
 
 @app.get("/api/cidades/{uf}")
 def get_cidades(uf: str):
-    if not PYSUS_OK:
-        raise HTTPException(503, "PySUS não disponível. O backend precisa rodar com Python 3.12 (venv do projeto).")
-    lista = _CID.get(uf.upper(), [])
+    """
+    Retorna todos os municípios da UF informada (código IBGE de 7 dígitos).
+    Fonte primária: API IBGE (5.570 municípios totais).
+    Fallback: lista reduzida hardcoded caso a API esteja indisponível.
+    Não depende do PySUS.
+    """
+    lista = _buscar_municipios_ibge(uf.upper())
     return [{"nome": n, "ibge": c} for n, c in lista]
 
 

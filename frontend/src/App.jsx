@@ -185,6 +185,60 @@ function StepPills({ step }) {
   )
 }
 
+function CitySearch({ cidades, value, onSelect, disabled }) {
+  const [query, setQuery] = useState(value || '')
+  const [open, setOpen] = useState(false)
+  const ref = useState(null)
+
+  const filtered = cidades.length === 0
+    ? []
+    : query.trim().length === 0
+      ? cidades.slice(0, 8)
+      : cidades
+          .filter((c) => c.nome.toLowerCase().includes(query.toLowerCase()))
+          .slice(0, 10)
+
+  const handleSelect = (item) => {
+    setQuery(item.nome)
+    setOpen(false)
+    onSelect(item)
+  }
+
+  const inputCls =
+    'h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400'
+
+  return (
+    <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false) }}>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        disabled={disabled}
+        placeholder={disabled ? 'Selecione o estado primeiro' : 'Digite para buscar…'}
+        className={inputCls}
+        autoComplete="off"
+      />
+      {open && !disabled && filtered.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg" style={{ maxHeight: '220px' }}>
+          {filtered.map((item) => (
+            <button
+              key={item.ibge}
+              type="button"
+              tabIndex={0}
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(item) }}
+              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+              <span>{item.nome}</span>
+              <span className="ml-2 text-xs text-slate-400">{item.ibge}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ExtractionWorkspace(props) {
   const {
     step,
@@ -215,8 +269,8 @@ function ExtractionWorkspace(props) {
 
   const sistemaInfo = SISTEMA_META[sistema] ?? null
   const limiteInfo = anoLimites[sistema] ?? {}
-  const anoMaximo = limiteInfo.ano_maximo ?? 2024
-  const defasagem = limiteInfo.defasagem_anos ?? 2
+  const anoMaximo = limiteInfo.ano_maximo ?? 2025
+  const defasagem = limiteInfo.defasagem_anos ?? 1
   const doencaNome = doencas.find((item) => item.codigo === doenca)?.nome ?? doenca
 
   const handleSistema = (codigo) => {
@@ -232,11 +286,9 @@ function ExtractionWorkspace(props) {
     if (sigla) onLoadCidades(sigla)
   }
 
-  const handleCidade = (event) => {
-    const nome = event.target.value
-    const municipio = cidades.find((item) => item.nome === nome)
-    setCidade(nome)
-    setIbge(municipio?.ibge ?? '')
+  const handleCidade = (item) => {
+    setCidade(item.nome)
+    setIbge(item.ibge ?? '')
   }
 
   const handleAnoIni = (event) => {
@@ -344,12 +396,12 @@ function ExtractionWorkspace(props) {
 
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Município</label>
-                <select value={cidade} onChange={handleCidade} disabled={!uf || !cidades.length} className={inputCls}>
-                  <option value="">Selecione o município</option>
-                  {cidades.map((item) => (
-                    <option key={item.ibge} value={item.nome}>{item.nome}</option>
-                  ))}
-                </select>
+                <CitySearch
+                  cidades={cidades}
+                  value={cidade}
+                  onSelect={handleCidade}
+                  disabled={!uf}
+                />
               </div>
             </div>
 
@@ -1041,7 +1093,7 @@ export default function App() {
   const [cidade, setCidade] = useState('São Paulo')
   const [ibge, setIbge] = useState('3550308')
   const [anoIni, setAnoIni] = useState(2019)
-  const [anoFim, setAnoFim] = useState(2024)
+  const [anoFim, setAnoFim] = useState(2025)
   const [doenca, setDoenca] = useState('')
 
   const [estados, setEstados] = useState([])
@@ -1186,7 +1238,7 @@ export default function App() {
       setCidade('')
       setIbge('')
       setAnoIni(2019)
-      setAnoFim(2024)
+      setAnoFim(2025)
       setDoenca('')
       setJobId(null)
       setJobStatus('idle')
