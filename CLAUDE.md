@@ -1,6 +1,6 @@
 # CLAUDE.md — SUS Predict
 
-Projeto acadêmico de startup desenvolvido por um grupo de 5 pessoas da FIAP (TCC 2025/2026).
+Projeto acadêmico de startup desenvolvido por um grupo de 5 pessoas da FIAP (TCC 2026).
 Gabriel é o cientista de dados do grupo.
 
 ---

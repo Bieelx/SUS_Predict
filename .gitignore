@@ -38,6 +38,7 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+graphify-out
 
 # ========================
 # IDEs & Editors
@@ -63,6 +64,9 @@ ehthumbs.db
 # ========================
 .pysus_cache/
 api/temp_data/
+api/sus_predict.db
+api/sus_predict.db-wal
+api/sus_predict.db-shm
 exports/
 
 # ========================
@@ -93,3 +97,6 @@ logs/
 *.tmp
 *.temp
 .python-version
+CLAUDE.md
+.claude/
+PRODUCT.md
