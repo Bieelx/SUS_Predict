@@ -27,17 +27,6 @@ COL_SEXO: dict[str, str] = {
     "SIM":"SEXO", "SIH":"SEXO", "SINASC":"SEXO", "SIA":"SEXO", "SINAN":"CS_SEXO",
 }
 
-POPULACAO_REL: dict[str, float] = {
-    "SP":1.00,"MG":0.50,"RJ":0.45,"BA":0.37,"PR":0.30,"RS":0.28,"PE":0.25,
-    "CE":0.23,"PA":0.20,"SC":0.18,"MA":0.17,"GO":0.16,"AM":0.15,"DF":0.14,
-    "ES":0.10,"PB":0.10,"RN":0.09,"MT":0.09,"MS":0.08,"PI":0.08,"AL":0.08,
-    "SE":0.06,"RO":0.05,"TO":0.04,"AC":0.03,"AP":0.025,"RR":0.02,
-}
-
-BASE_SISTEMA: dict[str, int] = {
-    "SIM":130_000, "SIH":900_000, "SINASC":160_000, "SIA":2_500_000,
-}
-
 CID10_CAP: dict[str, str] = {
     "A":"Infecciosas e parasitárias", "B":"Infecciosas e parasitárias",
     "C":"Neoplasias malignas",        "D":"Neoplasias / sangue",

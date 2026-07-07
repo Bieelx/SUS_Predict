@@ -321,6 +321,31 @@ def delete_run(run_id: str) -> None:
             con.execute(f"DELETE FROM {table} WHERE run_id = ?", (run_id,))
 
 
+# ── Supabase read-only query (curated tables, e.g. sih_dengue_*, sinan_dengue_*) ──
+
+def supabase_configured() -> bool:
+    return bool(os.getenv("SUPABASE_URL", "").strip() and os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip())
+
+
+def sb_select(table: str, eq: dict | None = None, order: str | None = None, limit: int | None = None) -> list[dict]:
+    """Read-only SELECT against a Supabase table via PostgREST. Never writes."""
+    sb_url = os.getenv("SUPABASE_URL", "").strip()
+    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not sb_url or not sb_key:
+        raise RuntimeError("Supabase não configurado (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes)")
+
+    filters = [f"{k}=eq.{urllib.parse.quote(str(v))}" for k, v in (eq or {}).items() if v is not None]
+    qs = "&".join(["select=*"] + filters)
+    url = f"{sb_url.rstrip('/')}/rest/v1/{table}?{qs}"
+    if order:
+        url += f"&order={order}"
+    if limit:
+        url += f"&limit={limit}"
+
+    data = _sb_get(url, sb_key)
+    return data if isinstance(data, list) else []
+
+
 # ── Supabase helpers (internal) ───────────────────────────────────────────────
 
 def _sb_headers(key: str) -> dict:

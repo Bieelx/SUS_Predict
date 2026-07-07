@@ -1,11 +1,7 @@
-"""Data aggregation: temporal series, demographics, top causes, synthetic fallback."""
+"""Data aggregation: temporal series, demographics, top causes."""
 import logging
-import random
 
-from api.core.constants import (
-    BASE_SISTEMA, CID10_CAP, COL_MUNICIPIO, COL_SEXO,
-    POPULACAO_REL, SIA_GRUPO, SINAN_FAIXA,
-)
+from api.core.constants import CID10_CAP, COL_MUNICIPIO, COL_SEXO, SIA_GRUPO, SINAN_FAIXA
 
 log = logging.getLogger("sus_predict.aggregation")
 
@@ -141,36 +137,3 @@ def causas_de_df(df, sistema: str) -> list[dict] | None:
     except Exception as e:
         log.warning(f"causas_de_df: {e}")
         return None
-
-
-# ── Synthetic fallback ────────────────────────────────────────────────────────
-
-def serie_sintetica(sistema: str, uf: str, ano_ini: int, ano_fim: int) -> list[dict]:
-    base  = BASE_SISTEMA.get(sistema, 100_000) // 10
-    fator = POPULACAO_REL.get(uf, 0.05)
-    trend = {"SIM":0.018,"SIH":0.015,"SINASC":-0.012,"SIA":0.025}.get(sistema, 0.015)
-    rng   = random.Random(abs(hash(f"{sistema}{uf}")) % 99999)
-    return [
-        {"ano": ano, "total": int(base * fator * (1 + i * trend) * rng.uniform(0.93, 1.07)), "tipo": "real"}
-        for i, ano in enumerate(range(ano_ini, ano_fim + 1))
-    ]
-
-
-def sexo_sintetico(sistema: str) -> list[dict]:
-    return {
-        "SIM":    [{"sexo":"Masculino","pct":56},{"sexo":"Feminino","pct":44}],
-        "SINASC": [{"sexo":"Masculino","pct":51},{"sexo":"Feminino","pct":49}],
-        "SIH":    [{"sexo":"Feminino", "pct":53},{"sexo":"Masculino","pct":47}],
-        "SIA":    [{"sexo":"Feminino", "pct":57},{"sexo":"Masculino","pct":43}],
-    }.get(sistema, [{"sexo":"Masculino","pct":50},{"sexo":"Feminino","pct":50}])
-
-
-def faixa_sintetica(sistema: str) -> list[dict]:
-    data = {
-        "SIM":    [("0–14",4),("15–29",7),("30–44",11),("45–59",21),("60–74",31),("75+",26)],
-        "SIH":    [("0–14",18),("15–29",13),("30–44",15),("45–59",20),("60–74",21),("75+",13)],
-        "SINASC": [("Mães <20",16),("Mães 20–24",24),("Mães 25–29",25),
-                   ("Mães 30–34",20),("Mães 35–39",11),("Mães 40+",4)],
-        "SIA":    [("0–14",14),("15–29",18),("30–44",20),("45–59",22),("60–74",17),("75+",9)],
-    }.get(sistema, [("0–14",15),("15–29",20),("30–44",22),("45–59",22),("60–74",13),("75+",8)])
-    return [{"faixa": f, "pct": p} for f, p in data]

@@ -113,85 +113,6 @@ const ALERTAS = [
   { id: 3, titulo: 'Ocupação UTI Adulto acima de 90%',               fonte: 'CNES · Hospital Regional Oeste', tempo: 'há 1h 4min', tipo: 'Lotação', cor: '#D4883A' },
 ];
 
-const EPI_SAZONALIDADE = [
-  { mes: 'Jan', atual2026: 310, ano2025: 260, media5anos: 220 },
-  { mes: 'Fev', atual2026: 520, ano2025: 440, media5anos: 380 },
-  { mes: 'Mar', atual2026: 485, ano2025: 430, media5anos: 370 },
-  { mes: 'Abr', atual2026: 415, ano2025: 370, media5anos: 310 },
-  { mes: 'Mai', atual2026: 218, ano2025: 190, media5anos: 165 },
-  { mes: 'Jun', atual2026: 96,  ano2025: 82,  media5anos: 72  },
-  { mes: 'Jul', atual2026: 48,  ano2025: 38,  media5anos: 32  },
-  { mes: 'Ago', atual2026: 46,  ano2025: 36,  media5anos: 30  },
-  { mes: 'Set', atual2026: 75,  ano2025: 62,  media5anos: 52  },
-  { mes: 'Out', atual2026: 128, ano2025: 110, media5anos: 95  },
-  { mes: 'Nov', atual2026: 210, ano2025: 178, media5anos: 155 },
-  { mes: 'Dez', atual2026: 300, ano2025: 258, media5anos: 220 },
-];
-
-const EPI_CIDADES = [
-  { name: 'Cotia',        value: 30.8, total: 3843, color: 'var(--primary)' },
-  { name: 'Barueri',      value: 23.4, total: 2921, color: '#4A7FBF' },
-  { name: 'Carapicuíba',  value: 17.5, total: 2184, color: '#7B6BBF' },
-  { name: 'Osasco',       value: 13.1, total: 1635, color: '#4A9B72' },
-  { name: 'Itapevi',      value: 9.5,  total: 1186, color: '#D4883A' },
-  { name: 'Jandira',      value: 5.8,  total: 724,  color: '#A8A39A' },
-];
-
-const EPI_FAIXA = [
-  { faixa: '0–4',   casos: 480  },
-  { faixa: '5–14',  casos: 1320 },
-  { faixa: '15–29', casos: 2780 },
-  { faixa: '30–44', casos: 3300 },
-  { faixa: '45–59', casos: 2620 },
-  { faixa: '60+',   casos: 1980 },
-];
-
-const EPI_GENERO = [
-  { name: 'Feminino',  value: 54.8, color: '#B85C6E' },
-  { name: 'Masculino', value: 45.2, color: '#4A7FBF' },
-];
-
-const EPI_DESFECHO = [
-  { ano: '2022', leves: 5200, hosp: 320, obitos: 18 },
-  { ano: '2023', leves: 6100, hosp: 380, obitos: 22 },
-  { ano: '2024', leves: 7200, hosp: 452, obitos: 26 },
-  { ano: '2025', leves: 8400, hosp: 540, obitos: 31 },
-  { ano: '2026', leves: 9820, hosp: 620, obitos: 40 },
-];
-
-const SIH_MENSAL = [
-  { mes: 'Jan', int: 118, custo: 890  }, { mes: 'Fev', int: 152, custo: 1120 },
-  { mes: 'Mar', int: 168, custo: 1240 }, { mes: 'Abr', int: 145, custo: 1080 },
-  { mes: 'Mai', int: 135, custo: 980  }, { mes: 'Jun', int: 128, custo: 920  },
-  { mes: 'Jul', int: 122, custo: 875  }, { mes: 'Ago', int: 119, custo: 860  },
-  { mes: 'Set', int: 130, custo: 940  }, { mes: 'Out', int: 142, custo: 1050 },
-  { mes: 'Nov', int: 155, custo: 1140 }, { mes: 'Dez', int: 208, custo: 1560 },
-];
-
-const SIH_CAUSAS = [
-  { grupo: 'A90 Dengue grave',    int: 482, custo: 'R$ 1.690' },
-  { grupo: 'J18 Pneumonia',       int: 364, custo: 'R$ 2.210' },
-  { grupo: 'I50 Insuf. cardíaca', int: 218, custo: 'R$ 3.490' },
-  { grupo: 'J44 DPOC',            int: 184, custo: 'R$ 1.980' },
-  { grupo: 'O80 Parto',           int: 162, custo: 'R$ 1.240' },
-  { grupo: 'K35 Apendicite',      int: 142, custo: 'R$ 2.891' },
-];
-
-const SIH_PERMANENCIA = [
-  { grupo: 'Dengue grave',    dias: 4.2, color: '#D94F4F' },
-  { grupo: 'Pneumonia',       dias: 5.8, color: '#E8903A' },
-  { grupo: 'Insuf. cardíaca', dias: 7.0, color: '#4A7FBF' },
-  { grupo: 'DPOC',            dias: 6.2, color: '#7B6BBF' },
-  { grupo: 'Parto',           dias: 2.4, color: '#4A9B72' },
-  { grupo: 'Apendicite',      dias: 3.1, color: '#B85C6E' },
-];
-
-const SIH_ORIGEM = [
-  { name: 'Pronto-socorro', value: 42, color: '#D94F4F' },
-  { name: 'Eletivo',        value: 26, color: '#4A7FBF' },
-  { name: 'Encam. UBS',     value: 18, color: '#4A9B72' },
-  { name: 'Transferência',  value: 14, color: '#E8903A' },
-];
 
 const HEX_REGIONS = [
   { id: 'grande-sp',  label: 'Grande SP',   x: 230, y: 155, risk: 'alto',  casos: 13240, color: '#D94F4F' },
@@ -241,6 +162,17 @@ function Badge({ label, color }) {
   );
 }
 
+function formatMesAno(valor) {
+  const d = new Date(valor);
+  if (isNaN(d)) return valor;
+  return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+}
+
+function diffSinal(diff) {
+  if (diff == null || isNaN(diff)) return '—';
+  return `${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR')}`;
+}
+
 function ChartTip({ active, payload, label, unit = '' }) {
   if (!active || !payload?.length) return null;
   return (
@@ -271,8 +203,8 @@ const SPARK_RISCO   = [60,62,64,65,66,68,68,70,70,71,72,72].map(v => ({ v }));
 const SPARK_RUPTURA = [3,4,4,5,5,6,6,7,7,7,7,7].map(v => ({ v }));
 const SPARK_VACINAL = [85,84,84,83,83,83,82,82,82,82,81,81].map(v => ({ v }));
 
-function KpiCard({ label, value, delta, deltaLabel, icon, iconColor, sparkData, rising }) {
-  const deltaColor = rising ? '#2A6B40' : '#8A2A38';
+function KpiCard({ label, value, delta, deltaLabel, icon, iconColor, sparkData, rising, neutral }) {
+  const deltaColor = neutral ? '#6B665D' : (rising ? '#2A6B40' : '#8A2A38');
   return (
     <Card className="p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between">
@@ -284,14 +216,14 @@ function KpiCard({ label, value, delta, deltaLabel, icon, iconColor, sparkData, 
             {value}
           </p>
         </div>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: iconColor + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-          {icon}
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: iconColor + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <span className="material-symbols-rounded" style={{ fontSize: 18, color: iconColor }}>{icon}</span>
         </div>
       </div>
       {sparkData && <Sparkline data={sparkData} color={iconColor} />}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ color: deltaColor, fontSize: 11, fontWeight: 700 }}>
-          {rising ? '↑' : '↓'} {delta}
+          {neutral ? '' : (rising ? '↑ ' : '↓ ')}{delta}
         </span>
         <span style={{ color: '#8A8579', fontSize: 11 }}>{deltaLabel}</span>
       </div>
@@ -376,7 +308,7 @@ function GreetingBanner() {
           MO
         </div>
         <div>
-          <p style={{ color: 'white', fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Boa tarde, Dr(a). Márcia 👋</p>
+          <p style={{ color: 'white', fontWeight: 600, fontSize: 15, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>Boa tarde, Dr(a). Márcia <span className="material-symbols-rounded" style={{ fontSize: 16 }}>waving_hand</span></p>
           <p style={{ color: 'var(--primary-on-dark)', fontSize: 13 }}>
             O município apresenta <strong style={{ color: 'white' }}>4 alertas críticos</strong> e índice de risco{' '}
             <strong style={{ color: '#D94F4F' }}>72%</strong>. Análise preditiva atualizada há 8 min.
@@ -397,22 +329,82 @@ function GreetingBanner() {
 
 // ─── Filter Bar ───────────────────────────────────────────────────────────────
 
-function FilterBar({ fields }) {
+function FilterBar({ fields, onRecalcular, loading }) {
+  const fieldStyle = { borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 500, border: 'none', outline: 'none', background: 'var(--primary-field)', color: 'var(--primary-on-dark)' };
   return (
     <div style={{ background: 'var(--primary-dark)', borderRadius: 12, padding: '16px 20px', marginBottom: 24, display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
       {fields.map(f => (
         <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <label style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--primary-label)' }}>{f.label}</label>
-          <input defaultValue={f.value} style={{ borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 500, border: 'none', outline: 'none', background: 'var(--primary-field)', color: 'var(--primary-on-dark)', minWidth: f.width || 140 }} />
+          {f.options ? (
+            <select value={f.value} onChange={e => f.onChange?.(e.target.value)} style={{ ...fieldStyle, minWidth: f.width || 140 }}>
+              {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          ) : (
+            <input value={f.value} onChange={e => f.onChange?.(e.target.value)} readOnly={!f.onChange}
+              style={{ ...fieldStyle, minWidth: f.width || 140 }} />
+          )}
         </div>
       ))}
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-        <button style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'var(--primary-dark)', background: 'var(--accent)', border: 'none', cursor: 'pointer' }}>Recalcular</button>
-        <button style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, color: 'var(--primary-on-dark)', background: 'transparent', border: '1px solid var(--primary-field)', cursor: 'pointer' }}>Exportar</button>
-      </div>
+      {onRecalcular && (
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button onClick={onRecalcular} disabled={loading}
+            style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'var(--primary-dark)', background: 'var(--accent)', border: 'none', cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+            {loading ? 'Carregando…' : 'Recalcular'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
+
+// ─── API dengue (Supabase, dados curados) ──────────────────────────────────────
+
+const API_BASE = 'http://localhost:8000';
+
+async function apiDengue(path) {
+  const r = await fetch(`${API_BASE}/api/dengue/${path}`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.detail || `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
+const PERIODO_OPTIONS = [
+  { value: 'Trimestre', label: 'Trimestre' },
+  { value: 'Semestre', label: 'Semestre' },
+  { value: '12 Meses', label: '12 Meses' },
+  { value: '3 Anos', label: '3 Anos' },
+  { value: '5 Anos', label: '5 Anos' },
+];
+
+const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const PERIODO_MESES = { 'Trimestre': 3, 'Semestre': 6, '12 Meses': 12, '3 Anos': 36, '5 Anos': 60 };
+
+function deltaLabelPeriodo(periodo) {
+  const meses = PERIODO_MESES[periodo] || 12;
+  const hoje = new Date();
+  const inicioAtual = new Date(hoje.getFullYear(), hoje.getMonth() - meses + 1, 1);
+  const fimAnterior = new Date(inicioAtual.getFullYear(), inicioAtual.getMonth() - 1, 1);
+  const inicioAnterior = new Date(fimAnterior.getFullYear(), fimAnterior.getMonth() - meses + 1, 1);
+
+  if (meses >= 12) {
+    const anoIni = inicioAnterior.getFullYear();
+    const anoFim = fimAnterior.getFullYear();
+    return `vs ${anoIni === anoFim ? anoIni : `${anoIni}–${anoFim}`}`;
+  }
+  const fmt = (d) => `${MESES_ABREV[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
+  return `vs ${fmt(inicioAnterior)}–${fmt(fimAnterior)}`;
+}
+
+const MUNICIPIO_OPTIONS = [
+  { value: '355030', label: 'São Paulo' },
+  { value: '354980', label: 'São José do Rio Preto' },
+  { value: '352900', label: 'Marília' },
+  { value: '354340', label: 'Ribeirão Preto' },
+  { value: '354140', label: 'Presidente Prudente' },
+];
 
 // ─── Page: Visão Geral ────────────────────────────────────────────────────────
 
@@ -422,10 +414,10 @@ function PageVisaoGeral() {
       <GreetingBanner />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
-        <KpiCard label="Casos Notificados (30D)" value="4.812" delta="+12,4%" deltaLabel="vs mês anterior" icon="📊" iconColor="#4A7FBF" sparkData={SPARK_CASOS} rising={false} />
-        <KpiCard label="Índice de Risco Regional" value="72%" delta="+8,0 p.p." deltaLabel="vs 30D anteriores" icon="⚠️" iconColor="#D94F4F" sparkData={SPARK_RISCO} rising={false} />
-        <KpiCard label="UBS em Ruptura ou Alerta" value="7" delta="+2" deltaLabel="vs semana anterior" icon="💊" iconColor="#E8903A" sparkData={SPARK_RUPTURA} rising={false} />
-        <KpiCard label="Cobertura Vacinal Média" value="81,3%" delta="-1,8 p.p." deltaLabel="vs trimestre anterior" icon="💉" iconColor="#4A9B72" sparkData={SPARK_VACINAL} rising={false} />
+        <KpiCard label="Casos Notificados (30D)" value="4.812" delta="+12,4%" deltaLabel="vs mês anterior" icon="bar_chart" iconColor="#4A7FBF" sparkData={SPARK_CASOS} rising={false} />
+        <KpiCard label="Índice de Risco Regional" value="72%" delta="+8,0 p.p." deltaLabel="vs 30D anteriores" icon="warning" iconColor="#D94F4F" sparkData={SPARK_RISCO} rising={false} />
+        <KpiCard label="UBS em Ruptura ou Alerta" value="7" delta="+2" deltaLabel="vs semana anterior" icon="medication" iconColor="#E8903A" sparkData={SPARK_RUPTURA} rising={false} />
+        <KpiCard label="Cobertura Vacinal Média" value="81,3%" delta="-1,8 p.p." deltaLabel="vs trimestre anterior" icon="vaccines" iconColor="#4A9B72" sparkData={SPARK_VACINAL} rising={false} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
@@ -545,88 +537,96 @@ function PageVisaoGeral() {
 
 // ─── Page: Epidemiologia ──────────────────────────────────────────────────────
 
+const GENERO_CORES = { M: '#4A7FBF', F: '#D4883A', Masculino: '#4A7FBF', Feminino: '#D4883A' };
+
 function PageEpidemiologia() {
+  const [ibge, setIbge] = useState('355030');
+  const [periodo, setPeriodo] = useState('12 Meses');
+  const [dados, setDados] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState(null);
+
+  async function carregar() {
+    setLoading(true); setErro(null);
+    const p = encodeURIComponent(periodo);
+    try {
+      const [casos, faixa, genero, sazonalidade, incidencia, taxaHosp, taxaObito, desfecho, previsao] = await Promise.all([
+        apiDengue(`sinan/casos?ibge=${ibge}&periodo=${p}`),
+        apiDengue(`sinan/faixa-etaria?ibge=${ibge}&periodo=${p}`),
+        apiDengue(`sinan/genero?ibge=${ibge}&periodo=${p}`),
+        apiDengue(`sinan/sazonalidade?ibge=${ibge}`),
+        apiDengue(`sinan/incidencia?ibge=${ibge}&periodo=${p}`),
+        apiDengue(`sinan/taxa-hospitalizacao?ibge=${ibge}&periodo=${p}`),
+        apiDengue(`sinan/taxa-obito?ibge=${ibge}&periodo=${p}`),
+        apiDengue(`sinan/desfecho-clinico?ibge=${ibge}`),
+        apiDengue(`sinan/previsao?ibge=${ibge}`).catch(() => null),
+      ]);
+      const sazonalidadeFmt = (sazonalidade || []).map(s => ({
+        ...s,
+        mes_ano: formatMesAno(s.mes_ano),
+      }));
+      setDados({ casos, faixa, genero, sazonalidade: sazonalidadeFmt, incidencia, taxaHosp, taxaObito, desfecho, previsao });
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { carregar(); }, [ibge, periodo]);
+
+  const casosAtual = dados?.casos?.[0];
+  const hospAtual = dados?.taxaHosp?.[0];
+  const obitoAtual = dados?.taxaObito?.[0];
+  const incAtual = dados?.incidencia?.[0];
+  const previsao = dados?.previsao;
+  const totalGenero = (dados?.genero || []).reduce((s, g) => s + (g.casos || 0), 0);
+  const municipioNome = MUNICIPIO_OPTIONS.find(m => m.value === ibge)?.label || ibge;
+
   return (
     <div className="rise">
-      <FilterBar fields={[
-        { label: 'Agravo / CID', value: 'A90 Dengue', width: 160 },
-        { label: 'Período', value: 'Últimos 12 meses', width: 180 },
-        { label: 'Cidade / Região', value: 'Cotia', width: 140 },
-      ]} />
+      <FilterBar
+        loading={loading}
+        onRecalcular={carregar}
+        fields={[
+          { label: 'Agravo', value: 'Dengue', width: 140 },
+          { label: 'Período', value: periodo, onChange: setPeriodo, options: PERIODO_OPTIONS, width: 140 },
+          { label: 'Município', value: ibge, onChange: setIbge, options: MUNICIPIO_OPTIONS, width: 200 },
+        ]}
+      />
+
+      {erro && <Card className="p-4 mb-5" style={{ color: '#8A2A38', background: '#FBEAEA', border: '1px solid #E9C2C2' }}>Falha ao carregar dados: {erro}</Card>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
-        <KpiCard label="Total Casos Notificados" value="12.480" delta="+18,2%" deltaLabel="vs ano anterior" icon="📋" iconColor="#D4883A" sparkData={SPARK_CASOS} rising={false} />
-        <KpiCard label="Taxa de Hospitalização" value="6,4%" delta="+0,9 p.p." deltaLabel="vs ano anterior" icon="🏥" iconColor="#4A7FBF" sparkData={SPARK_RISCO} rising={false} />
-        <KpiCard label="Taxa de Óbito" value="0,18%" delta="-0,0 p.p." deltaLabel="estável" icon="📉" iconColor="#2A6B40" sparkData={SPARK_VACINAL} rising={true} />
-        <KpiCard label="Incidência /100mil hab." value="432" delta="+24,0%" deltaLabel="vs ano anterior" icon="📍" iconColor="#D94F4F" sparkData={SPARK_RISCO} rising={false} />
+        <KpiCard label="Total Casos Notificados" value={casosAtual ? casosAtual.casos_atual.toLocaleString('pt-BR') : '—'}
+          delta={casosAtual?.variacao_pct != null ? `${casosAtual.variacao_pct > 0 ? '+' : ''}${casosAtual.variacao_pct}%` : '—'}
+          deltaLabel={deltaLabelPeriodo(periodo)} icon="assignment" iconColor="#D4883A" sparkData={SPARK_CASOS} rising={(casosAtual?.variacao_pct ?? 0) < 0} />
+        <KpiCard label="Hospitalizações" value={hospAtual ? hospAtual.hospitalizacoes_atual.toLocaleString('pt-BR') : '—'}
+          delta={hospAtual ? `${diffSinal(hospAtual.hospitalizacoes_atual - hospAtual.hospitalizacoes_anterior)}` : '—'}
+          deltaLabel={deltaLabelPeriodo(periodo)} icon="local_hospital" iconColor="#4A7FBF" sparkData={SPARK_RISCO} rising={(hospAtual?.variacao_pp ?? 0) < 0} />
+        <KpiCard label="Óbitos" value={obitoAtual ? obitoAtual.obitos_atual.toLocaleString('pt-BR') : '—'}
+          delta={obitoAtual ? `${diffSinal(obitoAtual.obitos_atual - obitoAtual.obitos_anterior)}` : '—'}
+          deltaLabel={deltaLabelPeriodo(periodo)} icon="trending_down" iconColor="#2A6B40" sparkData={SPARK_VACINAL} rising={(obitoAtual?.variacao_pp ?? 0) < 0} />
+        <KpiCard label={`Previsão de Casos ${previsao?.proximo_ano ?? ''}`} value={previsao ? previsao.casos_previstos.toLocaleString('pt-BR') : '—'}
+          delta={previsao ? `modelo ${previsao.modelo}` : '—'}
+          deltaLabel="próximo ano" icon="insights" iconColor="#D94F4F" sparkData={SPARK_RISCO} neutral />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
         <Card className="p-5">
-          <SectionTitle>Sazonalidade · Dengue (A90)</SectionTitle>
+          <SectionTitle>Sazonalidade · Dengue — {municipioNome}</SectionTitle>
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={EPI_SAZONALIDADE} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+              <LineChart data={dados?.sazonalidade || []} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
                 <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="mes_ano" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<ChartTip />} />
                 <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-                <Line type="monotone" dataKey="atual2026" name="2026 (atual)" stroke="var(--primary)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="ano2025" name="2025" stroke="#D4883A" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="media5anos" name="Média 5 anos" stroke="#A8A39A" strokeWidth={1} strokeDasharray="4 2" dot={false} />
+                <Line type="monotone" dataKey="casos_atual" name="Casos" stroke="var(--primary)" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="casos_ano_anterior" name="Ano anterior" stroke="#D4883A" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="media_historica" name="Média histórica" stroke="#A8A39A" strokeWidth={1} strokeDasharray="4 2" dot={false} />
               </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <SectionTitle>Distribuição por Cidade</SectionTitle>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-            <div style={{ width: 148, height: 148, flexShrink: 0 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={EPI_CIDADES} cx="50%" cy="50%" innerRadius={38} outerRadius={66} dataKey="value" strokeWidth={0}>
-                    {EPI_CIDADES.map((c, i) => <Cell key={i} fill={c.color} />)}
-                  </Pie>
-                  <Tooltip content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return <div style={{ background: '#fff', border: '1px solid #E5E1D6', borderRadius: 8, padding: '6px 10px', fontSize: 11, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                      <p style={{ fontWeight: 600, color: '#3D3A33' }}>{d.name}</p>
-                      <p style={{ color: d.color }}>{d.value}% · {d.total.toLocaleString('pt-BR')} casos</p>
-                    </div>;
-                  }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
-              {EPI_CIDADES.map(c => (
-                <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: '#3D3A33', flex: 1 }}>{c.name}</span>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#6B665D' }}>{c.total.toLocaleString('pt-BR')}</span>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: '#1A1814', width: 36, textAlign: 'right' }}>{c.value}%</span>
-                </div>
-              ))}
-              <p style={{ fontSize: 10, color: '#8A8579', paddingTop: 6, borderTop: '1px solid #EFEBE0', marginTop: 2 }}>Total: 12.480 casos</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
-        <Card className="p-5">
-          <SectionTitle>Distribuição por Faixa Etária</SectionTitle>
-          <div style={{ height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={EPI_FAIXA} layout="vertical" margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
-                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
-                <YAxis dataKey="faixa" type="category" tick={{ fontSize: 10, fill: '#6B665D' }} tickLine={false} axisLine={false} width={36} />
-                <Tooltip content={<ChartTip unit=" casos" />} />
-                <Bar dataKey="casos" name="Casos" fill="var(--primary)" radius={[0, 3, 3, 0]} />
-              </BarChart>
             </ResponsiveContainer>
           </div>
         </Card>
@@ -637,45 +637,60 @@ function PageEpidemiologia() {
             <div style={{ width: 180, height: 180 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={EPI_GENERO} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" strokeWidth={0}>
-                    {EPI_GENERO.map((g, i) => <Cell key={i} fill={g.color} />)}
+                  <Pie data={dados?.genero || []} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="percentual" nameKey="genero" strokeWidth={0}>
+                    {(dados?.genero || []).map((g, i) => <Cell key={i} fill={GENERO_CORES[g.genero] || '#A8A39A'} />)}
                   </Pie>
                   <Tooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
                     return <div style={{ background: '#fff', border: '1px solid #E5E1D6', borderRadius: 8, padding: '6px 10px', fontSize: 11 }}>
-                      <p style={{ color: d.color, fontWeight: 700 }}>{d.name}: {d.value}%</p>
+                      <p style={{ fontWeight: 700 }}>{d.genero}: {d.percentual}%</p>
                     </div>;
                   }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
             <div style={{ display: 'flex', gap: 24, marginTop: 8 }}>
-              {EPI_GENERO.map(g => (
-                <div key={g.name} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: g.color }} />
-                  <span style={{ fontSize: 12, color: '#3D3A33' }}>{g.name}</span>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: '#1A1814' }}>{g.value}%</span>
+              {(dados?.genero || []).map(g => (
+                <div key={g.genero} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: GENERO_CORES[g.genero] || '#A8A39A' }} />
+                  <span style={{ fontSize: 12, color: '#3D3A33' }}>{g.genero}</span>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: '#1A1814' }}>{g.percentual}%</span>
                 </div>
               ))}
             </div>
-            <p style={{ fontSize: 10, color: '#8A8579', marginTop: 10 }}>Total: 12.480 casos</p>
+            <p style={{ fontSize: 10, color: '#8A8579', marginTop: 10 }}>Total: {totalGenero.toLocaleString('pt-BR')} casos</p>
           </div>
         </Card>
       </div>
+
+      <Card className="p-5 mb-5">
+        <SectionTitle>Distribuição por Faixa Etária</SectionTitle>
+        <div style={{ height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dados?.faixa || []} layout="vertical" margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
+              <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+              <YAxis dataKey="faixa_etaria" type="category" tick={{ fontSize: 10, fill: '#6B665D' }} tickLine={false} axisLine={false} width={80} />
+              <Tooltip content={<ChartTip unit=" casos" />} />
+              <Bar dataKey="casos" name="Casos" fill="var(--primary)" radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
 
       <Card className="p-5">
         <SectionTitle>Desfecho Clínico por Ano</SectionTitle>
         <div style={{ height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={EPI_DESFECHO} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+            <BarChart data={dados?.desfecho || []} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
               <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="ano" tick={{ fontSize: 10, fill: '#6B665D' }} tickLine={false} axisLine={false} />
+              <XAxis dataKey="ano_referencia" tick={{ fontSize: 10, fill: '#6B665D' }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
               <Tooltip content={<ChartTip />} />
               <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-              <Bar dataKey="leves" name="Casos leves" stackId="a" fill="#4A9B6F" />
-              <Bar dataKey="hosp" name="Hospitalizações" stackId="a" fill="#E8903A" />
+              <Bar dataKey="casos_leves" name="Casos leves" stackId="a" fill="#4A9B6F" />
+              <Bar dataKey="hospitalizacoes" name="Hospitalizações" stackId="a" fill="#E8903A" />
               <Bar dataKey="obitos" name="Óbitos" stackId="a" fill="#D94F4F" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -688,109 +703,143 @@ function PageEpidemiologia() {
 // ─── Page: Internações ────────────────────────────────────────────────────────
 
 function PageInternacoes() {
+  const [periodo, setPeriodo] = useState('12 Meses');
+  const [dados, setDados] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState(null);
+  const [avisoCustoMensal, setAvisoCustoMensal] = useState(null);
+
+  async function carregar() {
+    setLoading(true); setErro(null); setAvisoCustoMensal(null);
+    try {
+      const [internacoes, permanencia, mortalidade, custo, topHospitais, faixaEtaria, topMunicipios] = await Promise.all([
+        apiDengue(`sih/internacoes?periodo=${encodeURIComponent(periodo)}`),
+        apiDengue(`sih/permanencia?periodo=${encodeURIComponent(periodo)}`),
+        apiDengue(`sih/mortalidade?periodo=${encodeURIComponent(periodo)}`),
+        apiDengue(`sih/custo?periodo=${encodeURIComponent(periodo)}`),
+        apiDengue(`sih/top-hospitais?periodo=${encodeURIComponent(periodo)}`),
+        apiDengue(`sih/faixa-etaria?periodo=${encodeURIComponent(periodo)}`),
+        apiDengue(`sih/top-municipios?periodo=${encodeURIComponent(periodo)}`),
+      ]);
+      let custoMensal = [];
+      try {
+        custoMensal = await apiDengue(`sih/custo-mensal?periodo=${encodeURIComponent(periodo)}`);
+      } catch (e) {
+        setAvisoCustoMensal('Gráfico mensal indisponível: tabela ainda não publicada no Supabase.');
+      }
+      setDados({ internacoes, permanencia, mortalidade, custo, topHospitais, faixaEtaria, topMunicipios, custoMensal });
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { carregar(); }, [periodo]);
+
+  const internacoesTodos = dados?.internacoes?.find(r => r.cnes === 'TODOS');
+  const permanenciaTodos = dados?.permanencia?.find(r => r.cnes === 'TODOS');
+  const mortalidadeTodos = dados?.mortalidade?.find(r => r.cnes === 'TODOS');
+  const custoTodos = dados?.custo?.find(r => r.cnes === 'TODOS');
+
+  const fmtBRL = (v) => v == null ? '—' : `R$ ${(v / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} mi`;
+
   return (
     <div className="rise">
-      <FilterBar fields={[
-        { label: 'Agravo / CID', value: 'Dengue', width: 140 },
-        { label: 'Período', value: 'Últimos 12 meses', width: 180 },
-        { label: 'Hospital', value: 'Todos', width: 140 },
-      ]} />
+      <FilterBar
+        loading={loading}
+        onRecalcular={carregar}
+        fields={[
+          { label: 'Agravo', value: 'Dengue', width: 140 },
+          { label: 'Período', value: periodo, onChange: setPeriodo, options: PERIODO_OPTIONS, width: 140 },
+          { label: 'Hospital', value: 'TODOS', width: 200 },
+        ]}
+      />
+
+      {erro && <Card className="p-4 mb-5" style={{ color: '#8A2A38', background: '#FBEAEA', border: '1px solid #E9C2C2' }}>Falha ao carregar dados: {erro}</Card>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
-        <KpiCard label="Internações no Período" value="1.742" delta="+14,8%" deltaLabel="vs ano anterior" icon="🏥" iconColor="#4A7FBF" sparkData={SPARK_CASOS} rising={false} />
-        <KpiCard label="Permanência Média" value="4,2 dias" delta="-0,3 d." deltaLabel="vs ano anterior" icon="📅" iconColor="#4A9B72" sparkData={SPARK_VACINAL} rising={true} />
-        <KpiCard label="Reinternações em 30D" value="8,6%" delta="+1,2 p.p." deltaLabel="vs ano anterior" icon="🔄" iconColor="#D94F4F" sparkData={SPARK_RISCO} rising={false} />
-        <KpiCard label="Custo Total SIH" value="12,84 mi BRL" delta="-18,6 p.p." deltaLabel="vs ano anterior" icon="💰" iconColor="#2A6B40" sparkData={SPARK_VACINAL} rising={true} />
+        <KpiCard label="Internações no Período" value={internacoesTodos ? internacoesTodos.internacoes_atual.toLocaleString('pt-BR') : '—'}
+          delta={internacoesTodos?.variacao_percentual != null ? `${internacoesTodos.variacao_percentual > 0 ? '+' : ''}${internacoesTodos.variacao_percentual}%` : 'Sem base de comparação'}
+          deltaLabel={deltaLabelPeriodo(periodo)} icon="local_hospital" iconColor="#4A7FBF" sparkData={SPARK_CASOS} rising={(internacoesTodos?.variacao_percentual ?? 0) < 0} />
+        <KpiCard label="Permanência Média" value={permanenciaTodos ? `${permanenciaTodos.permanencia_media_atual} dias` : '—'}
+          delta={permanenciaTodos?.diferenca_dias != null ? `${permanenciaTodos.diferenca_dias > 0 ? '+' : ''}${permanenciaTodos.diferenca_dias} d.` : 'Sem base de comparação'}
+          deltaLabel={deltaLabelPeriodo(periodo)} icon="calendar_month" iconColor="#4A9B72" sparkData={SPARK_VACINAL} rising={(permanenciaTodos?.diferenca_dias ?? 0) < 0} />
+        <KpiCard label="Óbitos Hospitalares" value={mortalidadeTodos ? mortalidadeTodos.obitos.toLocaleString('pt-BR') : '—'}
+          delta={mortalidadeTodos?.variacao_percentual != null ? `${mortalidadeTodos.variacao_percentual > 0 ? '+' : ''}${mortalidadeTodos.variacao_percentual}%` : 'Sem base de comparação'}
+          deltaLabel={deltaLabelPeriodo(periodo)} icon="warning" iconColor="#D94F4F" sparkData={SPARK_RISCO} rising={(mortalidadeTodos?.variacao_percentual ?? 0) < 0} />
+        <KpiCard label="Custo Total SIH" value={custoTodos ? fmtBRL(custoTodos.custo_total) : '—'}
+          delta={custoTodos?.variacao_percentual != null ? `${custoTodos.variacao_percentual > 0 ? '+' : ''}${custoTodos.variacao_percentual}%` : 'Sem base de comparação'}
+          deltaLabel={deltaLabelPeriodo(periodo)} icon="payments" iconColor="#2A6B40" sparkData={SPARK_VACINAL} rising={(custoTodos?.variacao_percentual ?? 0) < 0} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
         <Card className="p-5">
           <SectionTitle>Internações e Custo Mensal</SectionTitle>
-          <div style={{ height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={SIH_MENSAL} margin={{ top: 4, right: 36, left: -18, bottom: 0 }}>
-                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
-                <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
-                <Tooltip content={<ChartTip />} />
-                <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-                <Bar yAxisId="left" dataKey="int" name="Internações" fill="var(--primary)" radius={[3, 3, 0, 0]} />
-                <Line yAxisId="right" type="monotone" dataKey="custo" name="Custo (R$ mil)" stroke="#D94F4F" strokeWidth={2} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+          {avisoCustoMensal ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 240, fontSize: 12, color: '#8A8579', textAlign: 'center', padding: '0 20px' }}>{avisoCustoMensal}</div>
+          ) : (
+            <div style={{ height: 240 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={dados?.custoMensal || []} margin={{ top: 4, right: 36, left: -18, bottom: 0 }}>
+                  <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="mes_exibicao" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                  <Tooltip content={<ChartTip />} />
+                  <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+                  <Bar yAxisId="left" dataKey="internacoes" name="Internações" fill="var(--primary)" radius={[3, 3, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="custo_total_mil" name="Custo (R$ mil)" stroke="#D94F4F" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </Card>
 
         <Card className="p-5">
-          <SectionTitle>Principais Grupos de Causa</SectionTitle>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #E5E1D6' }}>
-                <th style={{ textAlign: 'left', padding: '8px 0', fontSize: 11, fontWeight: 600, color: '#6B665D' }}>Grupo</th>
-                <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 600, color: '#6B665D' }}>Internações</th>
-                <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 600, color: '#6B665D' }}>Custo médio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SIH_CAUSAS.map((c, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #F5F2EB' }}>
-                  <td style={{ padding: '9px 0', color: '#3D3A33', fontWeight: 500 }}>{c.grupo}</td>
-                  <td style={{ padding: '9px 0', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: '#1A1814' }}>{c.int}</td>
-                  <td style={{ padding: '9px 0', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: '#6B665D' }}>{c.custo}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <SectionTitle>Top 5 Hospitais — Internações</SectionTitle>
+          <div style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dados?.topHospitais || []} layout="vertical" margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
+                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <YAxis dataKey="nome_hospital" type="category" tick={{ fontSize: 9, fill: '#6B665D' }} tickLine={false} axisLine={false} width={140} />
+                <Tooltip content={<ChartTip unit=" internações" />} />
+                <Bar dataKey="internacoes" name="Internações" fill="var(--primary)" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </Card>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
         <Card className="p-5">
-          <SectionTitle>Permanência Média por Grupo</SectionTitle>
+          <SectionTitle>Internações por Faixa Etária</SectionTitle>
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={SIH_PERMANENCIA} layout="vertical" margin={{ top: 0, right: 24, left: 64, bottom: 0 }}>
-                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} unit="d" />
-                <YAxis dataKey="grupo" type="category" tick={{ fontSize: 9.5, fill: '#6B665D' }} tickLine={false} axisLine={false} width={92} />
-                <Tooltip content={<ChartTip unit=" dias" />} />
-                <Bar dataKey="dias" name="Dias" radius={[0, 3, 3, 0]}>
-                  {SIH_PERMANENCIA.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Bar>
+              <BarChart data={dados?.faixaEtaria || []} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="faixa_etaria" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <Tooltip content={<ChartTip unit=" internações" />} />
+                <Bar dataKey="internacoes" name="Internações" fill="var(--primary)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Card>
 
         <Card className="p-5">
-          <SectionTitle>Origem das AIH</SectionTitle>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-            <div style={{ width: 158, height: 158, flexShrink: 0 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={SIH_ORIGEM} cx="50%" cy="50%" innerRadius={44} outerRadius={70} dataKey="value" strokeWidth={0}>
-                    {SIH_ORIGEM.map((o, i) => <Cell key={i} fill={o.color} />)}
-                  </Pie>
-                  <Tooltip content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return <div style={{ background: '#fff', border: '1px solid #E5E1D6', borderRadius: 8, padding: '6px 10px', fontSize: 11 }}>
-                      <p style={{ color: d.color, fontWeight: 700 }}>{d.name}: {d.value}%</p>
-                    </div>;
-                  }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {SIH_ORIGEM.map(o => (
-                <div key={o.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: 2, background: o.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: '#3D3A33', flex: 1 }}>{o.name}</span>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 800, color: '#1A1814' }}>{o.value}%</span>
-                </div>
-              ))}
-            </div>
+          <SectionTitle>Top 5 Municípios de Residência</SectionTitle>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dados?.topMunicipios || []} layout="vertical" margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
+                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <YAxis dataKey="nome_municipio" type="category" tick={{ fontSize: 9, fill: '#6B665D' }} tickLine={false} axisLine={false} width={120} />
+                <Tooltip content={<ChartTip unit=" internações" />} />
+                <Bar dataKey="internacoes" name="Internações" fill="#4A7FBF" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </Card>
       </div>
@@ -803,8 +852,8 @@ function PageInternacoes() {
 function PagePlaceholder({ icon, title, description }) {
   return (
     <div className="rise" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 440 }}>
-      <div style={{ width: 64, height: 64, borderRadius: 16, background: '#F0EDE6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, marginBottom: 20 }}>
-        {icon}
+      <div style={{ width: 64, height: 64, borderRadius: 16, background: '#F0EDE6', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+        <span className="material-symbols-rounded" style={{ fontSize: 30, color: 'var(--primary)' }}>{icon}</span>
       </div>
       <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 20, fontWeight: 700, color: '#1A1814', marginBottom: 8 }}>{title}</h2>
       <p style={{ fontSize: 13, color: '#8A8579', textAlign: 'center', maxWidth: 320, lineHeight: 1.6 }}>{description}</p>
@@ -1042,7 +1091,7 @@ const SUSBOT_SUGESTOES = [
 ];
 
 const SUSBOT_SAUDACAO =
-  'Olá! Sou o SusBot 👋 Posso te ajudar a navegar pelo SusPredict e a entender os ' +
+  'Olá! Sou o SusBot. Posso te ajudar a navegar pelo SusPredict e a entender os ' +
   'indicadores, alertas e previsões. Escolha uma sugestão abaixo ou escreva sua dúvida.';
 
 /**
@@ -1523,25 +1572,54 @@ const PERFIL_ATIVIDADES = [
   { icon: 'notifications', cor: '#8A8579', titulo: 'Configurou alerta de Hantavirose para Cotia', tempo: 'há 3 dias' },
 ];
 
-const PERFIL_CADASTRO = [
-  { k: 'E-mail institucional', v: 'marcia.oliveira@cotia.sp.gov.br' },
-  { k: 'Matrícula',            v: 'SMS-2018-0184' },
-  { k: 'No SusPredict desde',  v: 'Janeiro de 2024' },
-  { k: 'Último login',         v: 'hoje, 09:14' },
-];
-
 const PERFIL_UBSS = [
   { nome: 'UBS Cotia Centro', leitos: '38 leitos · Cotia', status: 'crítico' },
   { nome: 'UBS Vila Bela',    leitos: '24 leitos · Cotia', status: 'crítico' },
 ];
 
-function PagePerfil() {
+function fmtDataHora(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return `${d.toLocaleDateString('pt-BR')}, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function PagePerfil({ onLogout }) {
+  const [user, setUser] = useState(null);
+  const [erro, setErro] = useState('');
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('sus_predict_token');
+    if (!token || token === 'mock-token') { setCarregando(false); return; }
+    fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Falha ao carregar perfil.');
+        return r.json();
+      })
+      .then(setUser)
+      .catch((e) => setErro(e.message))
+      .finally(() => setCarregando(false));
+  }, []);
+
+  const email = user?.email || 'marcia.oliveira@cotia.sp.gov.br';
+  const nome = user?.user_metadata?.nome || email.split('@')[0];
+  const iniciais = nome.split(/[.\s]+/).filter(Boolean).slice(0, 2).map(s => s[0].toUpperCase()).join('') || 'US';
+
+  const perfilCadastro = [
+    { k: 'E-mail institucional', v: email },
+    { k: 'ID de usuário',        v: user?.id ? user.id.slice(0, 8) : '—' },
+    { k: 'No SusPredict desde',  v: user?.created_at ? new Date(user.created_at).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : '—' },
+    { k: 'Último login',         v: fmtDataHora(user?.last_sign_in_at) },
+  ];
+
   return (
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', letterSpacing: '-0.02em', marginBottom: 4 }}>Perfil do Usuário</h1>
         <p style={{ fontSize: 13, color: '#8A8579' }}>Suas informações, permissões e histórico de atividades no SusPredict.</p>
       </div>
+
+      {erro && <Card className="p-4 mb-5" style={{ color: '#8A2A38', background: '#FBEAEA', border: '1px solid #E9C2C2' }}>{erro}</Card>}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 20, alignItems: 'start' }}>
         {/* Coluna esquerda */}
@@ -1550,11 +1628,11 @@ function PagePerfil() {
           <Card className="p-5">
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18 }}>
               <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-dark) 0%, var(--accent) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700, color: 'white', flexShrink: 0 }}>
-                MO
+                {carregando ? '···' : iniciais}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 22, fontWeight: 800, color: '#1A1814', lineHeight: 1.1, marginBottom: 4 }}>Márcia Oliveira</h2>
-                <p style={{ fontSize: 13, color: '#8A8579', marginBottom: 12 }}>Secretária Municipal de Saúde · Cotia · SP</p>
+                <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 22, fontWeight: 800, color: '#1A1814', lineHeight: 1.1, marginBottom: 4 }}>{carregando ? 'Carregando…' : nome}</h2>
+                <p style={{ fontSize: 13, color: '#8A8579', marginBottom: 12 }}>{email}</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {['Admin', 'Aprovador de ETP', 'Gestão de UBS'].map(p => (
                     <span key={p} style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 99, fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)' }}>{p}</span>
@@ -1601,7 +1679,7 @@ function PagePerfil() {
           {/* Dados cadastrais */}
           <Card className="p-5">
             <CardHead title="Dados cadastrais" />
-            {PERFIL_CADASTRO.map(r => (
+            {perfilCadastro.map(r => (
               <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 0', fontSize: 13, borderBottom: '1px solid #F5F2EB' }}>
                 <span style={{ color: '#6B665D', flexShrink: 0 }}>{r.k}</span>
                 <span style={{ fontWeight: 600, color: '#1A1814', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, textAlign: 'right' }}>{r.v}</span>
@@ -1642,7 +1720,7 @@ function PagePerfil() {
                 <p style={{ fontSize: 13, fontWeight: 700, color: '#1A1814', marginBottom: 2 }}>Sair do SusPredict</p>
                 <p style={{ fontSize: 11.5, color: '#8A8579', lineHeight: 1.4 }}>Você será desconectado em todos os dispositivos.</p>
               </div>
-              <button style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#D94F4F', background: '#D94F4F12', border: '1px solid #D94F4F33', cursor: 'pointer', flexShrink: 0 }}>
+              <button onClick={onLogout} style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#D94F4F', background: '#D94F4F12', border: '1px solid #D94F4F33', cursor: 'pointer', flexShrink: 0 }}>
                 Sair
               </button>
             </div>
@@ -1663,6 +1741,39 @@ function PagePerfil() {
 
 function LoginScreen({ onEnter }) {
   const [erro, setErro] = useState('');
+  const [modo, setModo] = useState('login'); // 'login' | 'signup'
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+  const [carregando, setCarregando] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErro('');
+    setCarregando(true);
+    try {
+      const path = modo === 'login' ? 'login' : 'signup';
+      const resp = await fetch(`${API_BASE}/api/auth/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: senha }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Falha na autenticação.');
+
+      if (modo === 'signup') {
+        setModo('login');
+        setErro('Conta criada. Verifique seu e-mail (se confirmação estiver ativa) e entre.');
+        return;
+      }
+      if (!data.access_token) throw new Error('Resposta de login sem token.');
+      localStorage.setItem('sus_predict_token', data.access_token);
+      onEnter();
+    } catch (err) {
+      setErro(err.message || 'Erro ao autenticar.');
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   return (
     <div style={{
@@ -1753,13 +1864,47 @@ function LoginScreen({ onEnter }) {
             Entrar na plataforma
           </h2>
 
-          {/* perfil de demonstração */}
+          {/* formulário de acesso */}
+          <form onSubmit={handleSubmit}>
+            <input
+              type="email" required placeholder="E-mail" value={email}
+              onChange={e => setEmail(e.target.value)}
+              style={{
+                width: '100%', padding: '13px 16px', marginBottom: 10, background: '#FFFFFF',
+                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 14, color: '#1A1814',
+                boxSizing: 'border-box', outline: 'none',
+              }}
+            />
+            <input
+              type="password" required placeholder="Senha" value={senha}
+              onChange={e => setSenha(e.target.value)}
+              style={{
+                width: '100%', padding: '13px 16px', marginBottom: 14, background: '#FFFFFF',
+                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 14, color: '#1A1814',
+                boxSizing: 'border-box', outline: 'none',
+              }}
+            />
+            <button
+              type="submit" disabled={carregando}
+              style={{
+                width: '100%', padding: '13px 16px', background: '#1B5E6E', color: '#fff',
+                border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700,
+                cursor: carregando ? 'default' : 'pointer', opacity: carregando ? 0.7 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              {carregando ? 'Aguarde...' : (modo === 'login' ? 'Entrar' : 'Criar conta')}
+            </button>
+          </form>
+
+          {/* acesso rápido — usuário mockado, sem Supabase */}
           <button
-            onClick={onEnter}
+            type="button"
+            onClick={() => { localStorage.setItem('sus_predict_token', 'mock-token'); onEnter(); }}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left',
               padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E1D6',
-              borderRadius: 14, cursor: 'pointer', transition: 'all 0.15s', marginBottom: 14,
+              borderRadius: 14, cursor: 'pointer', transition: 'all 0.15s', margin: '14px 0',
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = '#4DB8A0'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(27,94,110,0.12)'; }}
@@ -1778,27 +1923,20 @@ function LoginScreen({ onEnter }) {
             <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#1B5E6E' }}>arrow_forward</span>
           </button>
 
-          {/* divisor */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '22px 0' }}>
-            <div style={{ flex: 1, height: 1, background: '#E5E1D6' }} />
-            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A8A39A' }}>ou</span>
-            <div style={{ flex: 1, height: 1, background: '#E5E1D6' }} />
+          {/* alternar login/cadastro */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '18px 0 4px' }}>
+            <button
+              type="button"
+              onClick={() => { setModo(modo === 'login' ? 'signup' : 'login'); setErro(''); }}
+              style={{
+                width: '100%', padding: '11px 16px', background: 'transparent', color: '#1B5E6E',
+                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 13, fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {modo === 'login' ? 'Não tem conta? Criar conta' : 'Já tem conta? Entrar'}
+            </button>
           </div>
-
-          {/* criar conta */}
-          <button
-            onClick={() => setErro('Estamos trabalhando na criação de contas. Por enquanto, continue como Márcia Oliveira.')}
-            style={{
-              width: '100%', padding: '13px 16px', background: '#FFFFFF', color: '#3D3A33',
-              border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 14, fontWeight: 600,
-              cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#F0EDE6'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#FFFFFF'; }}
-          >
-            <span className="material-symbols-rounded" style={{ fontSize: 18, color: '#6B665D' }}>person_add</span>
-            Criar conta
-          </button>
 
           {erro && (
             <div className="rise" style={{
@@ -1820,7 +1958,7 @@ function LoginScreen({ onEnter }) {
 }
 
 export default function App() {
-  const [authed, setAuthed] = useState(false);
+  const [authed, setAuthed] = useState(() => !!localStorage.getItem('sus_predict_token'));
   const [page, setPage] = useState('visao-geral');
   const [themeId, setThemeId] = useState('teal');
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
@@ -1832,12 +1970,12 @@ export default function App() {
       case 'visao-geral':   return <PageVisaoGeral />;
       case 'epidemiologia': return <PageEpidemiologia />;
       case 'internacoes':   return <PageInternacoes />;
-      case 'vacinal':       return <PagePlaceholder icon="💉" title="Cobertura Vacinal" description="Painel de cobertura vacinal por imunobiológico, faixa etária e UBS. Integração com SIPNI em desenvolvimento." />;
-      case 'superlotacao':  return <PagePlaceholder icon="🏥" title="Superlotação CNES" description="Monitoramento em tempo real de ocupação de leitos, UTI e pronto-socorros. Módulo em desenvolvimento." />;
-      case 'insumos':       return <PagePlaceholder icon="💊" title="Ruptura de Insumos" description="Rastreamento de estoque de medicamentos essenciais e alertas de ruptura por UBS." />;
-      case 'alertas':       return <PagePlaceholder icon="🔔" title="Central de Alertas" description="Todos os alertas ativos, histórico de notificações e configuração de thresholds." />;
+      case 'vacinal':       return <PagePlaceholder icon="vaccines" title="Cobertura Vacinal" description="Painel de cobertura vacinal por imunobiológico, faixa etária e UBS. Integração com SIPNI em desenvolvimento." />;
+      case 'superlotacao':  return <PagePlaceholder icon="local_hospital" title="Superlotação CNES" description="Monitoramento em tempo real de ocupação de leitos, UTI e pronto-socorros. Módulo em desenvolvimento." />;
+      case 'insumos':       return <PagePlaceholder icon="medication" title="Ruptura de Insumos" description="Rastreamento de estoque de medicamentos essenciais e alertas de ruptura por UBS." />;
+      case 'alertas':       return <PagePlaceholder icon="notifications" title="Central de Alertas" description="Todos os alertas ativos, histórico de notificações e configuração de thresholds." />;
       case 'configuracoes': return <PageConfiguracoes />;
-      case 'perfil':        return <PagePerfil />;
+      case 'perfil':        return <PagePerfil onLogout={() => { localStorage.removeItem('sus_predict_token'); setAuthed(false); }} />;
       default:              return <PageVisaoGeral />;
     }
   }

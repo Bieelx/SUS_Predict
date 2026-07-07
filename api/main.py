@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -62,6 +62,8 @@ from api.core.aggregation import (
 )
 from api.core.constants import ANO_MAXIMO_CONFIAVEL, ESTADOS_FALLBACK
 from api.core.db import delete_run, find_cached, find_latest_by_ibge, init_db, list_runs, save_resultado
+from api.core import auth as auth_core
+from api.core.dengue import router as dengue_router
 from api.core.export import csv_gz_bytes, slug_filename, xlsx_bytes
 from api.core.ibge import buscar_municipios, get_estados
 from api.core.prediction import PROPHET_OK, gerar_predicao
@@ -77,6 +79,8 @@ app.add_middleware(
     allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
+
+app.include_router(dengue_router)
 
 jobs: dict = {}
 TEMP_DIR = Path("./temp_data")
@@ -246,6 +250,11 @@ def processar_download(job_id: str, req: dict) -> None:
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
+class AuthRequest(BaseModel):
+    email:    str
+    password: str
+
+
 class DownloadRequest(BaseModel):
     sistema:    str
     uf:         str
@@ -269,6 +278,21 @@ def root():
         "prophet_ok": PROPHET_OK,
         "docs":       "/docs",
     }
+
+
+@app.post("/api/auth/signup")
+def auth_signup(req: AuthRequest):
+    return auth_core.signup(req.email, req.password)
+
+
+@app.post("/api/auth/login")
+def auth_login(req: AuthRequest):
+    return auth_core.login(req.email, req.password)
+
+
+@app.get("/api/auth/me")
+def auth_me(user: dict = Depends(auth_core.require_user)):
+    return user
 
 
 @app.get("/api/sistemas")
