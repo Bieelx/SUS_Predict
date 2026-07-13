@@ -1,5 +1,14 @@
 # Design — SusPredict
 
+> **Status: descreve o protótipo visual atual do `App.jsx` (dados mock), que o grupo
+> decidiu não reaproveitar.** A seção [Pages](#pages) abaixo (Visão Geral com 4 KPIs +
+> gráfico + gauge + mapa hexagonal + donut; Epidemiologia; Internações) está **superada**
+> pelo redesenho documentado em [docs/telas/](./docs/telas/README.md) — a Visão Geral em
+> particular é exatamente o padrão de BI descritivo que o redesenho corrige. Os tokens de
+> cor/tipografia/motion abaixo (`Color Strategy`, `Typography`, `Elevation`, `Motion`) podem
+> servir de ponto de partida visual para as telas novas, mas a estrutura de página não deve
+> ser seguida. Ver também a nota no topo do `CLAUDE.md`.
+
 ## Visão geral
 
 Plataforma analítica de saúde pública para gestores municipais. Mood: painel de inteligência operacional — denso em informação, mas sem ruído visual. Não é um relatório PDF interativo; é uma ferramenta de trabalho que o gestor olha várias vezes por dia.

@@ -67,26 +67,31 @@ fi
 #  1. VERIFICAÇÃO DO VENV (Python 3.12 obrigatório para PySUS)
 # ══════════════════════════════════════════════════════════════════════════════
 
-if [ ! -f "$VENV/bin/activate" ]; then
+# Detecta caminho do activate (Windows usa Scripts/, Linux/macOS usa bin/)
+if [ -f "$VENV/Scripts/activate" ]; then
+    ACTIVATE="$VENV/Scripts/activate"
+elif [ -f "$VENV/bin/activate" ]; then
+    ACTIVATE="$VENV/bin/activate"
+else
     err "venv/ não encontrado em: $VENV"
     echo ""
     info "Crie o ambiente virtual com Python 3.12 antes de continuar:"
     echo ""
-    echo "    # Via pyenv (recomendado):"
-    echo "    pyenv install 3.12.9"
-    echo "    pyenv local 3.12.9"
+    echo "    # Windows (Git Bash):"
+    echo "    /c/Users/\$USER/AppData/Local/Python/pythoncore-3.12-64/python.exe -m venv venv"
+    echo "    source venv/Scripts/activate"
+    echo "    pip install -r Requirements.txt"
+    echo ""
+    echo "    # Linux/macOS:"
     echo "    python3.12 -m venv venv"
     echo "    source venv/bin/activate"
     echo "    pip install -r Requirements.txt"
-    echo ""
-    echo "    # Via Homebrew (macOS):"
-    echo "    /opt/homebrew/opt/python@3.12/bin/python3.12 -m venv venv"
     echo ""
     exit 1
 fi
 
 # Ativa o venv
-source "$VENV/bin/activate"
+source "$ACTIVATE"
 
 # Confirma versão do Python
 PY_VERSION=$(python --version 2>&1)

@@ -15,7 +15,7 @@ openpyxl>=3.1.2
 
 # Pinado para compatibilidade entre PySUS (exige ==2.8.2) e Prophet (>=2.8.2).
 # 2.9.0.post0 é retrocompatível, mas o resolver do pip reclama sem esse pin.
-python-dateutil==2.9.0.post0
+python-dateutil==2.8.2
 
 # Nota: Prophet instala automaticamente pystan e cmdstanpy.
 # A primeira instalação pode demorar 5-10 min (compila Stan).

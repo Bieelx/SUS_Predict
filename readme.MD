@@ -170,7 +170,11 @@ Quando o frontend solicita `/api/download`:
 
 ## Interface (dashboard)
 
-O frontend tem:
+**Esta seção está desatualizada em relação ao `frontend/src/App.jsx` atual e ao redesenho
+em andamento — ver `CLAUDE.md` (seção "Redesenho de telas") e `docs/telas/` para o estado
+real do frontend e a especificação de telas em vigor.** O texto abaixo descreve uma versão
+anterior do dashboard (wizard + mapa de pins), mantido aqui só como referência histórica do
+fluxo de cache/Supabase, que continua válido no backend:
 
 - `Visão Geral`: cards e gráficos baseados somente em dados reais retornados pelo backend.
 - `Baixar Dados`: wizard para criar novas execuções.

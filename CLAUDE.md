@@ -5,6 +5,31 @@ Gabriel é o cientista de dados do grupo.
 
 ---
 
+## Redesenho de telas em andamento — leia antes de mexer no frontend
+
+O frontend (`frontend/src/App.jsx`) está passando por um redesenho completo de produto.
+**A fonte de verdade para qualquer tela nova ou alterada é `docs/telas/`**, não o código
+atual do `App.jsx` nem a seção "Frontend React" mais abaixo neste arquivo (que descreve a
+versão anterior, hoje obsoleta).
+
+Contexto: o `App.jsx` atual (~1860 linhas) é um protótipo visual de alta fidelidade com
+**dados 100% mockados** (arrays estáticos no topo do arquivo, sem nenhuma chamada à API) —
+inclui Visão Geral, Epidemiologia SINAN e Internações SIH já com layout e gráficos, mais
+Ruptura de Insumos/Alertas/Superlotação como placeholders "Em desenvolvimento". Decisão do
+grupo: **esse protótipo não será reaproveitado.** A Visão Geral em particular reproduz o
+padrão de BI descritivo (4 KPIs soltos + gráfico + gauge + mapa hexagonal + donut) que o
+redesenho existe para corrigir — o produto deve responder "eu preciso agir hoje, e em quê",
+não só mostrar dado.
+
+O redesenho está documentado tela por tela em `docs/telas/` (ver
+[docs/telas/README.md](./docs/telas/README.md)), com casos de uso, wireframes textuais e
+uma auditoria de consistência entre telas já validada com o grupo. `DESIGN.md` na raiz
+descreve o design system do protótipo antigo — os tokens visuais podem servir de ponto de
+partida, mas a estrutura de páginas ali (seção "Pages") está superada pelas telas em
+`docs/telas/`.
+
+---
+
 ## O que é este projeto
 
 Plataforma web para extração, análise preditiva e visualização de dados públicos de saúde do
@@ -108,7 +133,9 @@ versão. O `api/main.py` (FastAPI) pode rodar com qualquer versão >= 3.10.
 | CNES     | Estabelecimentos de saúde, leitos, CNPJ               | CODUFMUN       |
 | SIA      | Produção ambulatorial (apenas na interface web)       | —              |
 
-A interface web expõe SIM, SIH, SINASC e SIA. SINAN e CNES estão apenas no CLI (`datasus.py`).
+A API já expõe SINAN também (`/api/sistemas`, `/api/doencas`), mas o protótipo web atual
+não usa esses endpoints (dados mockados — ver seção de redesenho no topo deste arquivo).
+CNES segue disponível apenas no CLI (`datasus.py`).
 
 ---
 
@@ -118,12 +145,18 @@ A interface web expõe SIM, SIH, SINASC e SIA. SINAN e CNES estão apenas no CLI
 
 | Método | Rota                    | Descrição                                      |
 |--------|-------------------------|------------------------------------------------|
-| GET    | /api/sistemas           | Lista os 4 sistemas disponíveis                |
+| GET    | /api/sistemas           | Lista os 5 sistemas disponíveis (SIM, SIH, SINASC, SIA, SINAN) |
+| GET    | /api/doencas            | Lista agravos notificáveis do SINAN (requer PySUS) |
+| GET    | /api/capacidades        | Flags de runtime (`pysus_ok`, `prophet_ok`)     |
+| GET    | /api/ano_limite         | Ano máximo confiável por sistema                |
 | GET    | /api/estados            | Lista os 27 estados brasileiros                |
 | GET    | /api/cidades/{uf}       | Lista municípios pré-cadastrados por UF        |
 | POST   | /api/download           | Inicia job em background, retorna `job_id`     |
 | GET    | /api/status/{job_id}    | Status do job (pending/running/done/error)     |
 | GET    | /api/resultado/{job_id} | Resultado completo em JSON (só se done)        |
+| GET    | /api/overview/{ibge}    | Agrega últimos resultados de todos os sistemas para um município |
+| GET    | /api/runs               | Lista runs persistidos (SQLite/Supabase), para mapa/filtros |
+| GET    | /api/export/{job_id}    | Exporta resultado como XLSX                     |
 | DELETE | /api/cleanup/{job_id}   | Apaga temp_data/{job_id} e remove job da memória|
 
 ### Padrão de job assíncrono
@@ -150,17 +183,16 @@ O `api/main.py` adiciona o diretório raiz ao `sys.path` e importa `to_df` de `d
 
 ### Modelo preditivo
 
-Dois modelos com detecção automática em runtime (`gerar_predicao()`):
+Cascade Holt → OLS em `api/core/prediction.py` (`gerar_predicao()`). **Prophet foi
+removido do cascade** — em séries epidemiológicas com surtos dominantes (dengue 2024, por
+exemplo) ele superajusta os picos e distorce a previsão. Detalhe completo do pipeline
+(detecção de surto via MAD, limpeza da série, restauração dos valores reais) em
+[docs/03-arquitetura.md](./docs/03-arquitetura.md).
 
-1. **Prophet** (primário, se disponível e ≥ 3 pontos de dados):
-   - Sazonalidades desativadas para dados anuais
-   - `changepoint_prior_scale=0.05` (suaviza mudanças com poucos pontos)
-   - `uncertainty_samples=500` → retorna `yhat_lower` e `yhat_upper` (IC 80%)
-   - O frontend exibe banda de confiança como linhas tracejadas âmbar com baixa opacidade
-
-2. **OLS** (fallback, Python puro sem dependências):
-   - Regressão linear simples sobre anos × totais
-   - `lower` e `upper` retornados como `null` → frontend esconde banda de IC
+1. **Holt** (primário, ≥ 4 pontos limpos): suavização exponencial dupla em `log1p`, grid
+   search de α/β, IC 80% via margem proporcional ao horizonte
+2. **OLS** (fallback, < 4 pontos limpos): regressão linear simples em `log1p`, mesma lógica
+   de IC
 
 O campo `resultado.meta.modelo` informa ao frontend qual foi usado.
 O campo `resultado.meta.dados_reais` informa se os dados são do DATASUS ou sintéticos.
@@ -183,53 +215,20 @@ O frontend exibe badges coloridos no cabeçalho do dashboard para ambos.
 
 ---
 
-## Frontend React — `frontend/src/App.jsx`
+## Frontend React — `frontend/src/App.jsx` (em redesenho — ver seção no topo deste arquivo)
 
-Arquivo único de ~730 linhas. Stack: React 18 + Tailwind v3 + Recharts + Vite.
+Estado atual: arquivo único de ~1860 linhas, React 18 + Recharts + Vite (Tailwind não é
+mais o sistema de estilo predominante — o protótipo atual usa CSS-in-JS inline com
+variáveis de tema). Sidebar fixa com navegação por páginas (`visao-geral`,
+`epidemiologia`, `internacoes`, `vacinal`, `superlotacao`, `insumos`, `alertas`,
+`configuracoes`, `perfil`), chat flutuante do SusBot (`<FloatingChat>`) e gate de login
+simples (`authed` em `useState`, sem JWT real). **Todos os dados são mock** — nenhuma
+página faz `fetch`/`axios` para a API.
 
-### Máquina de estados
-
-Controlada por `step` (1–3) e `jobStatus` (`idle | running | done | error`):
-
-```
-jobStatus idle  + step 1 → Step1 (seleção de sistema)
-jobStatus idle  + step 2 → Step2 (localização + período)
-jobStatus idle  + step 3 → Step3 (confirmação)
-jobStatus running        → LoadingScreen (barra de progresso + checklist)
-jobStatus done           → Dashboard (4 gráficos + cards + cleanup)
-jobStatus error          → Tela de erro
-```
-
-### Componentes principais
-
-- `StepIndicator` — breadcrumb visual dos 3 passos do wizard
-- `Step1` — cards de seleção de sistema (SIM/SIH/SINASC/SIA)
-- `Step2` — selects de estado/cidade + inputs de ano, com IBGE automático
-- `Step3` — resumo dos parâmetros + botão de confirmação
-- `LoadingScreen` — barra de progresso + checklist de etapas animado
-- `Dashboard` — 4 gráficos Recharts + stat cards + botão cleanup
-- `CustomTooltip` — tooltip padronizado, formata números em pt-BR
-
-### Gráficos (Recharts)
-
-1. **LineChart** — série temporal + previsão (duas linhas: azul sólida = real, âmbar tracejada = previsto)
-2. **BarChart horizontal** — ranking top 10 UFs por volume
-3. **BarChart vertical** — distribuição por faixa etária (%)
-4. **PieChart donut** — distribuição por sexo (%) + top causas em barras inline
-
-O gráfico 1 usa dois `<Line>` no mesmo chart com ponto de conexão duplicado para a linha de
-previsão começar no último ponto real (transição suave).
-
-### Identidade visual por sistema
-
-Definida em `SISTEMA_META` no topo do App.jsx:
-```js
-SIM:    { accent: '#ef4444' }  // vermelho
-SIH:    { accent: '#3b82f6' }  // azul
-SINASC: { accent: '#10b981' }  // verde
-SIA:    { accent: '#8b5cf6' }  // roxo
-```
-Para mudar a cor de um sistema, alterar apenas este objeto.
+Isso **não é a especificação do produto** — é o protótipo visual que está sendo
+substituído. A especificação atual, tela por tela, está em `docs/telas/`. Ao implementar
+qualquer tela, seguir a estrutura e as regras documentadas lá (camadas, fluxo de estados,
+regras de dependência entre telas), não a estrutura do `App.jsx` hoje.
 
 ---
 
@@ -249,15 +248,26 @@ Para mudar a cor de um sistema, alterar apenas este objeto.
 - Não usar `npm run build` durante o desenvolvimento — só `npm run dev`
 - Não commitar a pasta `exports/` nem `api/temp_data/` (dados de saúde pública brutos)
 - Não hardcodar credenciais do Supabase — usar variáveis de ambiente quando implementar
-- Não armazenar jobs em banco de dados ainda — o dict em memória é suficiente para o MVP
+- O status de job em andamento (`pending/running/done/error`) segue em dict em memória —
+  não precisa de banco para isso. Resultados finalizados **já são persistidos**
+  (SQLite sempre; Supabase se configurado — ver `api/core/db.py`), então não confundir os
+  dois: job em voo é memória, resultado pronto é banco
 
 ---
 
 ## Próximos passos do projeto
 
+Lista viva — o detalhamento e a priorização atuais estão em
+[docs/README.md](./docs/README.md) (status por camada) e em `docs/telas/` (telas por
+tela). Resumo de alto nível:
+
 1. ✅ Conectar PySUS real ao `api/main.py` — implementado com detecção automática
-2. ✅ Substituir OLS por Prophet — implementado com fallback para OLS
-3. Configurar Supabase e descomentar o bloco de upload em `datasus.py`
-4. Integrar API do Gemini para geração de insights textuais automáticos no dashboard
-5. Adicionar mapa do Brasil por UF (choropleth) no dashboard
-6. Autenticação simples para o grupo conseguir usar sem expor a API publicamente
+2. ✅ Cascade Holt → OLS com detecção de surto (MAD) — implementado, Prophet removido
+3. ✅ Persistência SQLite + Supabase opcional (`api/core/db.py`) — implementado
+4. ✅ Redesenho de telas (Visão Geral, Insumos, Alertas, ETP, Análises nível 2) — desenhado
+   em `docs/telas/`, aguardando implementação
+5. Implementar as telas do redesenho no `App.jsx` (o protótipo mock atual será
+   descartado — ver seção de redesenho no topo deste arquivo)
+6. Integrar API do Gemini para geração de insights textuais automáticos (SusBot Fase 1,
+   Camada 2 de [docs/telas/01-visao-geral.md](./docs/telas/01-visao-geral.md))
+7. Autenticação simples para o grupo conseguir usar sem expor a API publicamente
