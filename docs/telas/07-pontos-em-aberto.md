@@ -12,21 +12,19 @@ prioridade — não é trabalho perdido, é escopo conscientemente adiado.
 
 ---
 
-## 1. Painel do SusBot (a conversa em si)
+## 1. Painel do SusBot (a conversa em si) — RESOLVIDO (desenho da tela)
 
-**O que já está decidido:** o SusBot é um ícone de chat flutuante, sempre visível, não um
-item de menu ([00-navegacao.md](./00-navegacao.md)). O texto que ele injeta
-automaticamente na Visão Geral (3-4 linhas de insight, Fase 1/Gemini) está especificado na
-Camada 2 de [01-visao-geral.md](./01-visao-geral.md).
+**Status: design da tela fechado em [08-painel-susbot.md](./08-painel-susbot.md).**
 
-**O que falta desenhar:** a experiência de *abrir* o chat e conversar — layout do painel,
-sugestões de pergunta iniciais, histórico de mensagens, como uma resposta referencia dado
-de outra tela (ex: "seu estoque de soro aguenta X dias" puxando de Insumos).
+Decisão do grupo: o painel de conversa entra nesta rodada (não fica só para Fase 2), mas
+com respostas de agente real (não mockadas) — o que empurrou a arquitetura do agente
+(acesso a banco, multi-agente) para um **spec de backend separado**, ainda não escrito.
+O documento 08 cobre apenas a experiência de tela: layout (painel lateral à direita),
+estado inicial (campo livre, sem sugestões), histórico persistido em banco, formato de
+resposta (texto + link para tela de origem) e loading/erro.
 
-**Por que ficou de fora até agora:** docs/02-produto.md já registra que a Fase 1 do MVP é
-só o texto automático — o painel de conversa completo é mais natural na Fase 2
-(LangGraph). Decisão a validar: um painel simples (perguntas pré-definidas + resposta
-fixa/mockada) entra nesta rodada de design, ou fica só para quando a Fase 2 for planejada?
+**Pendente (fora do escopo de tela):** arquitetura do agente/multi-agente com acesso a
+query no banco — precisa de brainstorming próprio antes de implementar.
 
 ## 2. Cadastro de Unidades
 

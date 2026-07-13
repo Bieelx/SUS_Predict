@@ -30,6 +30,7 @@ Revisar um arquivo por vez, na ordem numérica. Cada um termina com um status:
 | [05-casos-de-uso-e-testes.md](./05-casos-de-uso-e-testes.md) | Auditoria de consistência entre telas — casos de uso, cenários, testes | PROPOSTO |
 | [06-analises-nivel2.md](./06-analises-nivel2.md) | Epidemiologia, Internações, Superlotação — template comum + especialização | PROPOSTO |
 | [07-pontos-em-aberto.md](./07-pontos-em-aberto.md) | Telas ainda não desenhadas (SusBot painel, Cadastro de Unidades, utilitárias) | PARA VALIDAR |
+| [08-painel-susbot.md](./08-painel-susbot.md) | Painel de conversa do SusBot — layout, histórico, formato de resposta | PROPOSTO |
 
 ## Referência cruzada
 
