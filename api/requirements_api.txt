@@ -13,6 +13,10 @@ pandas>=2.0.0
 prophet>=1.1.5
 openpyxl>=3.1.2
 
+# Cadeia de certificados (evita SSL: CERTIFICATE_VERIFY_FAILED em chamadas
+# https ao Supabase — comum em Python instalado via python.org no macOS)
+certifi>=2024.2.2
+
 # Pinado para compatibilidade entre PySUS (exige ==2.8.2) e Prophet (>=2.8.2).
 # 2.9.0.post0 é retrocompatível, mas o resolver do pip reclama sem esse pin.
 python-dateutil==2.8.2

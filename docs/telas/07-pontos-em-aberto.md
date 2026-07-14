@@ -23,8 +23,12 @@ O documento 08 cobre apenas a experiência de tela: layout (painel lateral à di
 estado inicial (campo livre, sem sugestões), histórico persistido em banco, formato de
 resposta (texto + link para tela de origem) e loading/erro.
 
-**Pendente (fora do escopo de tela):** arquitetura do agente/multi-agente com acesso a
-query no banco — precisa de brainstorming próprio antes de implementar.
+**Arquitetura do agente:** fechada em [../06-agente-susbot.md](../06-agente-susbot.md) —
+um agente (não roteador multi-agente), ferramentas híbridas (parametrizadas + SQL
+controlado com allowlist), LangGraph + Gemini, streaming via SSE. Inclui a criação de
+tabelas novas de estoque e alertas (não existiam dado real algum). Isolamento por
+município fica como risco aceito nesta fase — depende de JWT completo (Fase 1
+pós-TCC).
 
 ## 2. Cadastro de Unidades
 

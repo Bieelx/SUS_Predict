@@ -39,3 +39,4 @@ Revisar um arquivo por vez, na ordem numérica. Cada um termina com um status:
 - Módulos, persona e roadmap: [../02-produto.md](../02-produto.md)
 - Endpoints e modelos preditivos disponíveis hoje: [../03-arquitetura.md](../03-arquitetura.md)
 - Limitações e tratamento dos dados do DATASUS: [../04-qualidade-dados.md](../04-qualidade-dados.md)
+- Arquitetura do agente SusBot (backend do painel de chat): [../06-agente-susbot.md](../06-agente-susbot.md)

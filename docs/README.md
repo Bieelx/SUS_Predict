@@ -12,6 +12,8 @@ Documentação técnica e de produto do SusPredict, plataforma SaaS de inteligê
 | [04 — Qualidade de Dados](./04-qualidade-dados.md) | Problemas conhecidos do DATASUS, camadas de tratamento, limitações |
 | [telas/ — Redesenho de telas](./telas/README.md) | **Fonte de verdade atual para o frontend** — telas desenhadas, validadas e testadas uma a uma (Visão Geral, Insumos, Alertas, ETP, Análises nível 2), substituindo o protótipo mock existente em `App.jsx` |
 | [05 — Análise de Dados](./05-analise-dados.md) | O que já existe por tela, o que falta, achado crítico (PySUS quebrado no ambiente atual) |
+| [06 — Arquitetura do Agente SusBot](./06-agente-susbot.md) | Ferramentas híbridas (parametrizadas + SQL controlado), LangGraph + Gemini, tabelas novas de estoque/alertas, risco de isolamento multi-tenant aceito nesta fase |
+| [07 — Briefing de Implementação do Chatbot](./07-briefing-implementacao-chatbot.md) | Insumo para a próxima sessão de brainstorming — gaps de schema, dependências, contrato de endpoint e testes antes de codar o SusBot |
 
 ## Foco do MVP — fluxo prioritário
 
@@ -33,7 +35,7 @@ Tudo o mais é visão de produto demonstrada no Figma, não código.
 | Módulo Ruptura de Insumos | Desenhado ([docs/telas/02](./telas/02-ruptura-insumos.md)) | Implementar: upload CSV/CRUD de estoque → cálculo dias restantes → alerta |
 | Gerador de ETP | Desenhado ([docs/telas/04](./telas/04-gerador-etp.md)) | Implementar: fluxo contextual em 4 etapas com revisão obrigatória |
 | Central de Alertas (3 tipos) | Desenhado ([docs/telas/03](./telas/03-central-alertas.md)) | Implementar fluxo de estados (Novo → Em andamento → Resolvido) no frontend + backend |
-| SusBot (pilar obrigatório) | Desenhado ([docs/telas/01](./telas/01-visao-geral.md), Camada 2) | Fase 1: Gemini insights textuais no dashboard → Fase 2: LangGraph completo |
+| SusBot (pilar obrigatório) | Desenhado (texto automático: [docs/telas/01](./telas/01-visao-geral.md), Camada 2; painel de chat: [docs/telas/08](./telas/08-painel-susbot.md); agente/backend: [docs/06](./06-agente-susbot.md)) | Implementar: texto automático (Gemini) + painel de conversa com agente LangGraph, ferramentas de estoque/epidemiologia/alertas |
 | Visão Geral dashboard | Redesenhado ([docs/telas/01](./telas/01-visao-geral.md)) | Implementar do zero — o protótipo mock atual (`App.jsx`) não será reaproveitado (era BI descritivo: 4 KPIs + mapa hexagonal, sem hierarquia de decisão) |
 
 ### Prioridade média — mostrar no Figma, não codificar agora

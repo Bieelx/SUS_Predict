@@ -106,6 +106,21 @@ if [ "$PY_MAJOR" -ne 3 ] || [ "$PY_MINOR" -ne 12 ]; then
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  1b. CERTIFICADOS SSL (evita erro ao chamar Supabase/APIs externas)
+# ══════════════════════════════════════════════════════════════════════════════
+# Pythons instalados via python.org no macOS não carregam a cadeia de certificados
+# do sistema, causando "SSL: CERTIFICATE_VERIFY_FAILED" em qualquer chamada https
+# feita via urllib (ex: api/core/db.py falando com o Supabase).
+
+python -c "import certifi" 2>/dev/null || pip install certifi -q
+CERT_PATH=$(python -c "import certifi; print(certifi.where())" 2>/dev/null)
+if [ -n "$CERT_PATH" ]; then
+    export SSL_CERT_FILE="$CERT_PATH"
+    export REQUESTS_CA_BUNDLE="$CERT_PATH"
+    ok "Certificados SSL configurados (certifi)"
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  2. CAPACIDADES DO BACKEND
 # ══════════════════════════════════════════════════════════════════════════════
 
