@@ -62,6 +62,10 @@ PySUS está indisponível — SIM +1,8%/ano, SIH +1,5%/ano, etc.), não vazias a
 CRUD manual. Isso garante que o agente sempre tem algo a responder na demo, mesmo sem
 um fluxo de cadastro de estoque implementado ainda.
 
+O `ibge6` aqui é a chave municipal interna do projeto, derivada do código IBGE do
+município e normalizada para 6 dígitos nesta base. O seed sintético deve ser
+determinístico por município, para a mesma localidade manter o mesmo cenário de demo.
+
 ## Decisão 2 — Um agente, múltiplas ferramentas (não multi-agente com roteador)
 
 Um único agente conversacional, não um roteador despachando para agentes especialistas.

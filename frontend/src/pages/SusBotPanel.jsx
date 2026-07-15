@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { MIcon } from '../shared/ui.jsx';
+import { API_BASE, MIcon } from '../shared/ui.jsx';
+import { conversarComSusbot, listarConversasSusbot, listarMensagensSusbot } from '../shared/susbotClient.js';
+import { getSusbotPageLabel } from '../shared/susbotContract.js';
 
 // ─── Tela 08 — Painel de Conversa do SusBot ────────────────────────────────────
 //
@@ -8,21 +10,8 @@ import { MIcon } from '../shared/ui.jsx';
 // o painel [x] apenas esconde, "Nova conversa" arquiva a atual no histórico e
 // abre uma em branco, nada é apagado. Ver docs/telas/08-painel-susbot.md.
 //
-// Mock-only: nenhum fetch. Respostas são geradas localmente por palavra-chave
-// (askSusBot) e o histórico é semeado com duas conversas pré-existentes.
-
-// ─── Rótulos de tela para o microtexto de contexto ("· enviado em Insumos") ───
-const PAGE_LABELS = {
-  'visao-geral': 'Visão Geral',
-  'alertas': 'Alertas',
-  'insumos': 'Insumos',
-  'epidemiologia': 'Epidemiologia',
-  'internacoes': 'Internações',
-  'superlotacao': 'Superlotação',
-  'documentos': 'Documentos',
-  'configuracoes': 'Configurações',
-  'perfil': 'Perfil',
-};
+// Integrado ao backend do SusBot via SSE. O layout continua o mesmo; o que saiu
+// foi o roteamento local de resposta por palavra-chave.
 
 let idSeq = 0;
 function uid(prefixo = 'm') {
@@ -30,62 +19,109 @@ function uid(prefixo = 'm') {
   return `${prefixo}-${idSeq}-${Date.now().toString(36)}`;
 }
 
-// ─── Motor de resposta mock (por palavra-chave) ────────────────────────────────
+const ERRO_SUSBOT_PADRAO = 'Não consegui consultar o SusBot agora. Tente novamente em instantes.';
+const SUSBOT_IBGE6_PADRAO = '351300';
 
-function detectarCategoria(perguntaLower) {
-  if (perguntaLower.includes('erro')) return 'erro';
-  if (['estoque', 'soro', 'dipirona'].some(k => perguntaLower.includes(k))) return 'estoque';
-  if (['dengue', 'surto'].some(k => perguntaLower.includes(k))) return 'epidemio';
-  if (perguntaLower.includes('alerta')) return 'alertas';
-  return 'geral';
+const SUSBOT_ROUTE_ALIASES = {
+  insumos: 'insumos',
+  '/insumos': 'insumos',
+  estoque: 'insumos',
+  estoque_farmacia: 'insumos',
+  'estoque-farmacia': 'insumos',
+  estoque_municipio: 'insumos',
+  'estoque-municipio': 'insumos',
+  'estoque_município': 'insumos',
+  alertas: 'alertas',
+  '/alertas': 'alertas',
+  epidemiologia: 'epidemiologia',
+  '/epidemiologia': 'epidemiologia',
+  internacoes: 'internacoes',
+  '/internacoes': 'internacoes',
+  superlotacao: 'superlotacao',
+  '/superlotacao': 'superlotacao',
+  'visao-geral': 'visao-geral',
+  '/visao-geral': 'visao-geral',
+};
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('sus_predict_token') || '';
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-const ETAPA_LABEL = {
-  estoque: 'consultando estoque...',
-  epidemio: 'consultando indicadores epidemiológicos...',
-  alertas: 'consultando alertas ativos...',
-  erro: 'consultando...',
-  geral: 'processando pergunta...',
-};
+function normalizarRota(rota) {
+  return String(rota || '').trim().replace(/^\/+/, '');
+}
 
-const RESPOSTAS = {
-  estoque: {
-    texto:
-      'Seu estoque de **Soro Fisiológico 1L** aguenta **28 dias** no consumo atual — dentro do limiar de segurança.\n\n' +
-      '**Dipirona 500mg** está em situação mais crítica: **22 dias** restantes, abaixo do limiar de reposição de 30 dias.',
-    link: { label: 'ver em Insumos →', page: 'insumos' },
-  },
-  epidemio: {
-    texto:
-      'Os casos notificados de **dengue** estão **+18%** em relação ao mês anterior. ' +
-      'O modelo preditivo aponta **surto previsto para março**, com confiança de 78%.',
-    link: { label: 'ver em Epidemiologia →', page: 'epidemiologia' },
-  },
-  alertas: {
-    texto:
-      'Você tem **3 novos alertas** aguardando triagem:\n' +
-      '- 1 ruptura crítica (Dipirona 500mg)\n' +
-      '- 1 surto previsto (dengue)\n' +
-      '- 1 ocupação acima do threshold (UTI Adulto)',
-    link: { label: 'ver em Alertas →', page: 'alertas' },
-  },
-  geral: {
-    texto:
-      'Ainda estou aprendendo essa. Posso ajudar com **estoque de insumos**, **tendências epidemiológicas** ' +
-      'ou o **resumo de alertas ativos**. Reformule e eu tento de novo!',
-    link: null,
-  },
-};
+function resolverRotaSusbot(rota) {
+  const normalizada = normalizarRota(rota).toLowerCase();
+  if (!normalizada) return '';
+  return SUSBOT_ROUTE_ALIASES[normalizada] || normalizada;
+}
 
-/**
- * Mock local — sem custo, funciona offline. Para ligar o backend do agente
- * (spec de arquitetura separado, fora do escopo desta tela), troque o corpo
- * por um fetch mantendo a mesma assinatura `async (categoria) => { texto, link }`.
- */
-async function askSusBot(categoria) {
-  await new Promise(r => setTimeout(r, 1200));
-  if (categoria === 'erro') throw new Error('falha simulada de demonstração');
-  return RESPOSTAS[categoria] || RESPOSTAS.geral;
+function normalizarIbge6(valor) {
+  const ibge6 = String(valor || '').trim().slice(0, 6);
+  return ibge6 || SUSBOT_IBGE6_PADRAO;
+}
+
+function criarLinkReferencia(rota, label) {
+  const pagina = resolverRotaSusbot(rota);
+  if (!pagina) return null;
+  const texto = label && !/estoque[_-]farmacia|estoque[_-]municipio|outra tela/i.test(String(label))
+    ? label
+    : `ver em ${getSusbotPageLabel(pagina)} →`;
+  return { label: texto, page: pagina };
+}
+
+function atualizarMensagem(thread, mensagemId, mapper) {
+  return {
+    ...thread,
+    mensagens: thread.mensagens.map(msg => (msg.id === mensagemId ? mapper(msg) : msg)),
+  };
+}
+
+function parseIsoDate(valor) {
+  const data = valor ? new Date(valor) : new Date();
+  return Number.isNaN(data.getTime()) ? new Date() : data;
+}
+
+function conversaParaThread(conversa, mensagens = []) {
+  return {
+    id: conversa.id,
+    conversaId: conversa.id,
+    titulo: conversa.titulo || '',
+    criadaEm: parseIsoDate(conversa.criada_em),
+    mensagens,
+  };
+}
+
+function mensagemBancoParaMensagens(row, pageFallback = 'visao-geral') {
+  const momento = parseIsoDate(row.criado_em);
+  return [
+    {
+      id: `${row.id}-user`,
+      autor: 'user',
+      texto: row.pergunta,
+      page: row.tela_origem || pageFallback,
+      ts: momento,
+    },
+    {
+      id: `${row.id}-bot`,
+      autor: 'bot',
+      texto: row.resposta,
+      link: criarLinkReferencia(row.referencia_rota),
+      ts: momento,
+    },
+  ];
+}
+
+function montarThreadPersistida(conversa, mensagens = [], pageFallback = 'visao-geral') {
+  return conversaParaThread(
+    conversa,
+    mensagens
+      .slice()
+      .reverse()
+      .flatMap(row => mensagemBancoParaMensagens(row, pageFallback)),
+  );
 }
 
 // ─── Markdown mínimo: **negrito** e listas "- item" ────────────────────────────
@@ -128,7 +164,7 @@ function renderMd(texto) {
   return blocos;
 }
 
-// ─── Data relativa mock ("há 2 dias") ──────────────────────────────────────────
+// ─── Data relativa ("há 2 dias") ───────────────────────────────────────────────
 
 function formatRelativo(data) {
   const diffMs = Date.now() - data.getTime();
@@ -145,46 +181,14 @@ function formatRelativo(data) {
 }
 
 function tituloDe(thread) {
+  if (thread.titulo) return thread.titulo;
   const primeira = thread.mensagens.find(m => m.autor === 'user');
   if (!primeira) return 'Nova conversa';
   return primeira.texto.length > 48 ? `${primeira.texto.slice(0, 48)}…` : primeira.texto;
 }
 
-// ─── Seed do histórico (2 conversas pré-existentes) ───────────────────────────
-
-function criarThreadSeed() {
-  const doisD = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-  const cincoD = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-
-  const thread1 = {
-    id: uid('t'),
-    criadaEm: doisD,
-    mensagens: [
-      { id: uid(), autor: 'user', texto: 'Quanto dura meu estoque de soro?', page: 'insumos', ts: doisD },
-      { id: uid(), autor: 'bot', texto: RESPOSTAS.estoque.texto, link: RESPOSTAS.estoque.link, ts: doisD },
-      { id: uid(), autor: 'user', texto: 'E a dipirona, também está ok?', page: 'insumos', ts: doisD },
-      {
-        id: uid(), autor: 'bot',
-        texto: 'A **Dipirona 500mg** está com **22 dias** restantes — abaixo do limiar de reposição, vale gerar um ETP.',
-        link: RESPOSTAS.estoque.link, ts: doisD,
-      },
-    ],
-  };
-
-  const thread2 = {
-    id: uid('t'),
-    criadaEm: cincoD,
-    mensagens: [
-      { id: uid(), autor: 'user', texto: 'Tendência de dengue este mês', page: 'epidemiologia', ts: cincoD },
-      { id: uid(), autor: 'bot', texto: RESPOSTAS.epidemio.texto, link: RESPOSTAS.epidemio.link, ts: cincoD },
-    ],
-  };
-
-  return [thread1, thread2];
-}
-
 function criarThreadVazia() {
-  return { id: uid('t'), criadaEm: new Date(), mensagens: [] };
+  return { id: uid('t'), criadaEm: new Date(), conversaId: null, titulo: '', mensagens: [] };
 }
 
 // ─── Subcomponentes ─────────────────────────────────────────────────────────
@@ -222,9 +226,34 @@ function TypingIndicator({ etapa }) {
   );
 }
 
+function EstadoPainel({ icone, titulo, texto, acao, tom = 'neutral' }) {
+  const cor = tom === 'danger' ? 'var(--bad, #8A2A38)' : 'var(--ink-400)';
+
+  return (
+    <div style={{
+      textAlign: 'center', padding: '28px 14px', color: cor,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+    }}>
+      <span style={{ display: 'flex', color: cor, opacity: tom === 'neutral' ? 0.65 : 1 }}>
+        <MIcon m={icone} size={28} />
+      </span>
+      <div style={{ maxWidth: 260 }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: tom === 'danger' ? cor : 'var(--ink-700)' }}>
+          {titulo}
+        </p>
+        <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.5, color: tom === 'danger' ? cor : 'var(--ink-400)' }}>
+          {texto}
+        </p>
+      </div>
+      {acao}
+    </div>
+  );
+}
+
 function Bolha({ msg, onNavigate }) {
   const isUser = msg.autor === 'user';
   const isErro = msg.autor === 'error';
+  const isStreaming = msg.autor === 'bot' && msg.streaming && !msg.texto;
 
   if (isErro) {
     return (
@@ -234,6 +263,7 @@ function Bolha({ msg, onNavigate }) {
           maxWidth: '84%', padding: '9px 13px', fontSize: 13, lineHeight: 1.55,
           borderRadius: '12px 12px 12px 4px', background: 'color-mix(in srgb, var(--bad, #8A2A38) 10%, var(--elev))',
           border: '1px solid color-mix(in srgb, var(--bad, #8A2A38) 30%, transparent)', color: 'var(--ink-700)',
+          overflowWrap: 'anywhere',
         }}>
           <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, color: 'var(--bad, #8A2A38)' }}>
             <MIcon m="error" size={14} /> Algo deu errado
@@ -263,14 +293,34 @@ function Bolha({ msg, onNavigate }) {
         background: isUser ? 'var(--primary-soft)' : 'var(--subtle)',
         border: isUser ? '1px solid var(--primary-soft-border)' : '1px solid transparent',
         color: 'var(--ink-900)',
+        overflowWrap: 'anywhere',
       }}>
-        {isUser ? <p style={{ margin: 0 }}>{msg.texto}</p> : renderMd(msg.texto)}
+        {isUser ? (
+          <p style={{ margin: 0 }}>{msg.texto}</p>
+        ) : isStreaming ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-400)' }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[0, 1, 2].map(i => (
+                <span
+                  key={i}
+                  style={{
+                    width: 5, height: 5, borderRadius: '50%', background: 'var(--ink-300)',
+                    animation: `dot-pulse 1.2s ease-in-out ${i * 0.18}s infinite`,
+                  }}
+                />
+              ))}
+            </div>
+            <span style={{ fontSize: 11.5 }}>{msg.status || 'digitando...'}</span>
+          </div>
+        ) : (
+          renderMd(msg.texto)
+        )}
         {isUser && (
           <p style={{
             margin: '5px 0 0', fontFamily: 'var(--ff-mono, monospace)', fontSize: 10.5,
             color: 'var(--ink-400)', textAlign: 'right',
           }}>
-            · enviado em {PAGE_LABELS[msg.page] || msg.page}
+            · enviado em {getSusbotPageLabel(msg.page)}
           </p>
         )}
         {!isUser && msg.link && (
@@ -305,7 +355,7 @@ function ItemHistorico({ thread, onAbrir }) {
     >
       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink-900)' }}>{titulo}</p>
       <p style={{ margin: 0, fontFamily: 'var(--ff-mono, monospace)', fontSize: 10.5, color: 'var(--ink-400)' }}>
-        {formatRelativo(thread.criadaEm)} · {thread.mensagens.filter(m => m.autor === 'user').length} pergunta(s)
+        {formatRelativo(thread.criadaEm)}
       </p>
     </div>
   );
@@ -313,17 +363,23 @@ function ItemHistorico({ thread, onAbrir }) {
 
 // ─── Componente principal ───────────────────────────────────────────────────
 
-export function SusBotPanel({ page = 'visao-geral', onNavigate }) {
+export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
   const [open, setOpen] = useState(false);
   const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history'
-  const [threads, setThreads] = useState(() => criarThreadSeed());
+  const [threads, setThreads] = useState([]);
   const [current, setCurrent] = useState(() => criarThreadVazia());
   const [input, setInput] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [etapa, setEtapa] = useState('');
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+  const [erroHistorico, setErroHistorico] = useState('');
+  const [carregandoConversaId, setCarregandoConversaId] = useState(null);
+  const [erroConversa, setErroConversa] = useState('');
 
   const fimRef = useRef(null);
   const inputRef = useRef(null);
+  const conversaLoadSeq = useRef(0);
+  const ibge6Atual = normalizarIbge6(ibge6);
 
   useEffect(() => {
     if (viewMode === 'chat') fimRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -333,8 +389,123 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate }) {
     if (open && viewMode === 'chat') inputRef.current?.focus();
   }, [open, viewMode, current.id]);
 
-  function adicionarMensagem(msg) {
-    setCurrent(c => ({ ...c, mensagens: [...c.mensagens, msg] }));
+  useEffect(() => {
+    if (!open || viewMode !== 'chat') return;
+    const el = inputRef.current;
+    if (!el) return;
+
+    el.style.height = '0px';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [input, open, viewMode]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const body = document.body;
+    const previousOverflow = body.style.overflow;
+    body.style.overflow = 'hidden';
+
+    return () => {
+      body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = e => {
+      if (e.key === 'Escape' && !enviando) setOpen(false);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, enviando]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelado = false;
+
+    async function carregarHistorico() {
+      setCarregandoHistorico(true);
+      setErroHistorico('');
+      try {
+        const data = await listarConversasSusbot({
+          baseUrl: API_BASE,
+          headers: getAuthHeaders(),
+          page: 1,
+          pageSize: 100,
+        });
+
+        if (cancelado) return;
+
+        const itens = Array.isArray(data?.itens) ? data.itens : [];
+        setThreads(
+          itens.map(conversa => conversaParaThread(conversa)),
+        );
+      } catch (error) {
+        if (cancelado) return;
+        setErroHistorico(error?.message || 'Não foi possível carregar o histórico.');
+      } finally {
+        if (!cancelado) setCarregandoHistorico(false);
+      }
+    }
+
+    void carregarHistorico();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [open]);
+
+  async function recarregarHistoricoSilencioso() {
+    try {
+      setErroHistorico('');
+      const data = await listarConversasSusbot({
+        baseUrl: API_BASE,
+        headers: getAuthHeaders(),
+        page: 1,
+        pageSize: 100,
+      });
+      const itens = Array.isArray(data?.itens) ? data.itens : [];
+      setThreads(itens.map(conversa => conversaParaThread(conversa)));
+    } catch {
+      // Não interrompe o fluxo principal do chat.
+    }
+  }
+
+  async function carregarConversa(conversa) {
+    const seq = ++conversaLoadSeq.current;
+    setCarregandoConversaId(conversa.id);
+    setErroConversa('');
+    setCurrent(conversa);
+
+    try {
+      const data = await listarMensagensSusbot({
+        conversaId: conversa.id,
+        baseUrl: API_BASE,
+        headers: getAuthHeaders(),
+        page: 1,
+        pageSize: 100,
+      });
+
+      if (conversaLoadSeq.current !== seq) return;
+
+      const mensagensBanco = Array.isArray(data?.itens) ? data.itens : [];
+      setCurrent(montarThreadPersistida(conversa, mensagensBanco, page));
+    } catch (error) {
+      if (conversaLoadSeq.current !== seq) return;
+      setErroConversa(error?.message || 'Não foi possível carregar esta conversa.');
+      setCurrent(conversa);
+    } finally {
+      if (conversaLoadSeq.current === seq) {
+        setCarregandoConversaId(null);
+      }
+    }
+  }
+
+  function atualizarMensagemAtual(mensagemId, mapper) {
+    setCurrent(c => atualizarMensagem(c, mensagemId, mapper));
   }
 
   async function enviar(textoForcado) {
@@ -342,20 +513,86 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate }) {
     if (!pergunta || enviando) return;
     setInput('');
 
-    const categoria = detectarCategoria(pergunta.toLowerCase());
-    adicionarMensagem({ id: uid(), autor: 'user', texto: pergunta, page, ts: new Date() });
+    const conversaIdAtual = current.conversaId || null;
+    const agora = new Date();
+    const mensagemUsuario = { id: uid(), autor: 'user', texto: pergunta, page, ts: agora };
+    const idResposta = uid();
+
+    setCurrent(c => ({
+      ...c,
+      criadaEm: c.criadaEm || agora,
+      mensagens: [
+        ...c.mensagens,
+        mensagemUsuario,
+        { id: idResposta, autor: 'bot', texto: '', status: 'Planejando resposta', streaming: true, ts: new Date() },
+      ],
+    }));
+
     setEnviando(true);
-    setEtapa(ETAPA_LABEL[categoria]);
+    setEtapa('digitando...');
+    setErroConversa('');
 
     try {
-      const resp = await askSusBot(categoria);
-      adicionarMensagem({ id: uid(), autor: 'bot', texto: resp.texto, link: resp.link, ts: new Date() });
-    } catch {
-      adicionarMensagem({
-        id: uid(), autor: 'error',
-        texto: 'Não consegui consultar os dados agora. Pode ser instabilidade temporária — tente de novo.',
-        perguntaOriginal: pergunta, onRetry: enviar, ts: new Date(),
+      const resp = await conversarComSusbot({
+        pergunta,
+        telaAtual: page,
+        tela_atual: page,
+        tela_origem: page,
+        conversaId: conversaIdAtual || undefined,
+        ibge6: ibge6Atual,
+        baseUrl: API_BASE,
+        headers: getAuthHeaders(),
+        onStatus: status => {
+          const mensagem = typeof status === 'string' ? status : status?.mensagem;
+          if (mensagem) setEtapa(mensagem);
+          const conversaId = typeof status === 'object' ? status?.conversa_id : null;
+          if (conversaId) {
+            setCurrent(c => ({ ...c, conversaId }));
+          }
+          atualizarMensagemAtual(idResposta, msg => ({
+            ...msg,
+            status: mensagem || msg.status,
+          }));
+        },
+        onToken: tokenParcial => {
+          atualizarMensagemAtual(idResposta, msg => ({
+            ...msg,
+            texto: `${msg.texto || ''}${tokenParcial}`,
+            status: msg.status || 'digitando...',
+            streaming: true,
+          }));
+        },
+        onReferencia: (rota, dadosReferencia) => {
+          atualizarMensagemAtual(idResposta, msg => ({
+            ...msg,
+            link: criarLinkReferencia(rota, dadosReferencia?.label) || msg.link,
+          }));
+        },
       });
+
+      if (resp.conversaId) {
+        setCurrent(c => ({ ...c, conversaId: resp.conversaId }));
+      }
+
+      atualizarMensagemAtual(idResposta, msg => ({
+        ...msg,
+        texto: resp.resposta || msg.texto,
+        streaming: false,
+        status: undefined,
+        link: criarLinkReferencia(resp.referenciaRota, resp.referenciaLabel) || msg.link || null,
+      }));
+      void recarregarHistoricoSilencioso();
+    } catch (error) {
+      atualizarMensagemAtual(idResposta, () => ({
+        id: uid(),
+        autor: 'error',
+        texto: error?.message?.includes('401') || /token|autentic|login/i.test(String(error?.message || ''))
+          ? 'Não consegui autenticar no SusBot. Entre novamente com uma conta válida.'
+          : ERRO_SUSBOT_PADRAO,
+        perguntaOriginal: pergunta,
+        onRetry: enviar,
+        ts: new Date(),
+      }));
     } finally {
       setEnviando(false);
       setEtapa('');
@@ -363,37 +600,69 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate }) {
   }
 
   function novaConversa() {
-    if (current.mensagens.length > 0) {
-      setThreads(ts => [current, ...ts]);
-    }
+    if (enviando) return;
     setCurrent(criarThreadVazia());
+    setErroConversa('');
     setViewMode('chat');
   }
 
   function abrirThread(threadId) {
+    if (enviando) return;
     const alvo = threads.find(t => t.id === threadId);
     if (!alvo) return;
-    setThreads(ts => {
-      const resto = ts.filter(t => t.id !== threadId);
-      return current.mensagens.length > 0 ? [current, ...resto] : resto;
-    });
-    setCurrent(alvo);
     setViewMode('chat');
+    void carregarConversa(alvo);
   }
 
   const semMensagens = current.mensagens.length === 0;
+  const carregandoConversaAtual = carregandoConversaId != null && carregandoConversaId === current.conversaId;
 
   return (
     <>
       <style>{`
         @keyframes susbotPanelIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+        .susbot-panel-shell {
+          width: min(420px, calc(100vw - 16px));
+          border-radius: 18px 0 0 18px;
+          overflow: hidden;
+        }
+
+        .susbot-panel-body {
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scrollbar-gutter: stable;
+        }
+
+        .susbot-panel-fab {
+          bottom: 24px;
+          right: 24px;
+        }
+
+        @media (max-width: 720px) {
+          .susbot-panel-shell {
+            width: calc(100vw - 12px);
+            top: 6px !important;
+            right: 6px !important;
+            bottom: 6px !important;
+            border-radius: 18px;
+          }
+
+          .susbot-panel-fab {
+            bottom: 16px;
+            right: 16px;
+          }
+        }
       `}</style>
 
       {/* Dock lateral — sempre montado, translada para fora quando fechado */}
       <div
         aria-hidden={!open}
+        role="dialog"
+        aria-label="Painel do SusBot"
+        className="susbot-panel-shell"
         style={{
-          position: 'fixed', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '92vw',
+          position: 'fixed', top: 0, right: 0, bottom: 0,
           background: 'var(--elev)', borderLeft: '1px solid var(--ink-100)',
           boxShadow: open ? '-10px 0 32px rgba(26,24,20,0.14)' : 'none',
           zIndex: 55, display: 'flex', flexDirection: 'column',
@@ -466,48 +735,92 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate }) {
 
         {/* Corpo — histórico ou conversa */}
         {viewMode === 'history' ? (
-          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px' }}>
-            {threads.length === 0 ? (
-              <p style={{ fontSize: 12.5, color: 'var(--ink-400)', textAlign: 'center', padding: '24px 0' }}>
-                Nenhuma conversa anterior ainda.
-              </p>
+          <div className="susbot-panel-body" style={{ flex: 1, padding: '4px 16px' }}>
+            {carregandoHistorico ? (
+              <EstadoPainel
+                icone="hourglass_empty"
+                titulo="Carregando histórico"
+                texto="Buscando suas conversas salvas."
+              />
+            ) : erroHistorico ? (
+              <EstadoPainel
+                icone="error"
+                titulo="Não foi possível carregar o histórico"
+                texto={erroHistorico}
+                tom="danger"
+                acao={(
+                  <button
+                    onClick={() => void recarregarHistoricoSilencioso()}
+                    style={{
+                      border: '1px solid color-mix(in srgb, var(--bad, #8A2A38) 22%, var(--ink-100))',
+                      background: 'var(--canvas)', borderRadius: 999, padding: '7px 12px', cursor: 'pointer',
+                      fontSize: 12, fontWeight: 700, color: 'var(--bad, #8A2A38)',
+                    }}
+                  >
+                    tentar novamente
+                  </button>
+                )}
+              />
+            ) : threads.length === 0 ? (
+              <EstadoPainel
+                icone="forum"
+                titulo="Nenhuma conversa ainda"
+                texto="Quando você fizer a primeira pergunta, ela aparece aqui no histórico."
+              />
             ) : (
               threads.map(t => <ItemHistorico key={t.id} thread={t} onAbrir={abrirThread} />)
             )}
           </div>
         ) : (
           <>
-            <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {semMensagens && !enviando && (
-                <div style={{ textAlign: 'center', padding: '32px 12px', color: 'var(--ink-300)' }}>
-                  <MIcon m="forum" size={28} />
-                  <p style={{ fontSize: 12.5, color: 'var(--ink-400)', marginTop: 8 }}>
-                    Pergunte algo sobre os dados desta tela — estoque, epidemiologia, alertas e mais.
-                  </p>
-                </div>
+            <div className="susbot-panel-body" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {carregandoConversaAtual ? (
+                <EstadoPainel
+                  icone="hourglass_empty"
+                  titulo="Carregando conversa"
+                  texto="Aguarde alguns instantes enquanto recuperamos as mensagens."
+                />
+              ) : erroConversa ? (
+                <EstadoPainel
+                  icone="error"
+                  titulo="Não foi possível abrir esta conversa"
+                  texto={erroConversa}
+                  tom="danger"
+                />
+              ) : semMensagens && !enviando && (
+                <EstadoPainel
+                  icone="forum"
+                  titulo="Comece uma conversa"
+                  texto="Pergunte sobre a tela atual ou sobre um dado que apareceu no dashboard."
+                />
               )}
 
               {current.mensagens.map(m => (
                 <Bolha key={m.id} msg={m} onNavigate={onNavigate} />
               ))}
-
-              {enviando && <TypingIndicator etapa={etapa} />}
               <div ref={fimRef} />
             </div>
 
             {/* Input */}
             <div style={{ padding: 12, borderTop: '1px solid var(--ink-100)', flexShrink: 0 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
+                <textarea
                   ref={inputRef}
                   value={input}
+                  rows={1}
                   onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') enviar(); }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      void enviar();
+                    }
+                  }}
                   placeholder="Pergunte ao SusBot..."
                   style={{
-                    flex: 1, fontSize: 13, padding: '10px 14px', borderRadius: 99,
+                    flex: 1, fontSize: 13, padding: '10px 14px', borderRadius: 18,
                     border: '1px solid var(--ink-100)', color: 'var(--ink-900)', outline: 'none',
-                    background: 'var(--canvas)',
+                    background: 'var(--canvas)', resize: 'none', overflow: 'hidden', lineHeight: 1.45,
+                    minHeight: 42, maxHeight: 120,
                   }}
                 />
                 <button
@@ -527,7 +840,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate }) {
                 </button>
               </div>
               <p style={{ fontSize: 9.5, color: 'var(--ink-300)', marginTop: 7, textAlign: 'center' }}>
-                SusBot pode cometer erros · respostas em modo demonstração
+                SusBot pode cometer erros · respostas via backend em tempo real
               </p>
             </div>
           </>
@@ -540,8 +853,9 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate }) {
         <button
           onClick={() => setOpen(true)}
           title="SusBot — assistente"
+          className="susbot-panel-fab"
           style={{
-            position: 'fixed', bottom: 24, right: 24, width: 56, height: 56, borderRadius: '50%',
+            position: 'fixed', width: 56, height: 56, borderRadius: '50%',
             background: 'linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%)',
             border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 6px 22px rgba(27,94,110,0.35)', zIndex: 50, transition: 'transform 0.15s',

@@ -1,0 +1,7 @@
+# SUS Predict — dependências de desenvolvimento
+# Use junto com `api/requirements_api.txt` quando for rodar testes.
+
+-r requirements_api.txt
+
+# Testes
+pytest>=8.0.0

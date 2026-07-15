@@ -73,7 +73,8 @@ DataSusScrapper/
 │
 ├── api/
 │   ├── main.py                ← backend FastAPI (modo de teste com dados simulados)
-│   ├── requirements_api.txt   ← fastapi, uvicorn, pydantic
+│   ├── requirements_api.txt    ← dependências de runtime da API
+│   ├── requirements_dev.txt    ← pytest + dependências de desenvolvimento
 │   └── temp_data/             ← criada em runtime, deletada pelo /api/cleanup
 │
 └── frontend/
@@ -99,6 +100,7 @@ bash start_dev.sh
 # Separado — Terminal 1: backend
 cd api
 pip install -r requirements_api.txt
+# Se for rodar testes: pip install -r requirements_dev.txt
 uvicorn main:app --reload --port 8000
 
 # Separado — Terminal 2: frontend
@@ -111,6 +113,9 @@ URLs:
 - Frontend → http://localhost:3000
 - API → http://localhost:8000
 - Docs da API → http://localhost:8000/docs
+
+Para usar o SusBot com Gemini, exporte também `GEMINI_API_KEY` antes de subir a API.
+Sem essa variável, o backend continua subindo, mas o agente fica sem o LLM real.
 
 ---
 

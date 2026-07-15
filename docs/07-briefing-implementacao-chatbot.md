@@ -27,6 +27,16 @@ construção, critérios de pronto).
 | Tabelas `estoque` e `alertas` nascem com **dado sintético** para demo | [06](./06-agente-susbot.md) |
 | Isolamento por município: **risco aceito nesta fase** (sem JWT completo ainda) | [06](./06-agente-susbot.md) |
 
+## Decisões complementares desta sessão
+
+- `ibge6` é a chave municipal interna do projeto, derivada do código IBGE do município e
+  normalizada para 6 dígitos nesta base.
+- O seed sintético de estoque/alertas deve ser determinístico por município, para a demo
+  permanecer estável entre execuções.
+- A persistência do chat guarda apenas conversas e mensagens finais, não o stream de
+  eventos SSE.
+- O fallback SQL pode consultar `estoque`, `alertas` e as tabelas de `datasus_*`.
+
 ## Estado atual do código (não precisa re-explorar)
 
 - `api/core/db.py`: SQLite sempre + Supabase opcional. Só tem tabelas de runs

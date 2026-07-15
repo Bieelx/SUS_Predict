@@ -24,14 +24,16 @@ injetado por closure, nunca escolhido pelo modelo) → router HTTP
   explícita, validado com `sqlglot` (parser real, não regex). Máximo 1 reformulação (2
   tentativas totais) antes de desistir.
 - Tabelas `estoque`/`alertas` nascem com dado sintético, gerado uma única vez por
-  `ibge6` (seed lazy no primeiro acesso àquele município — não um seed global de todos os
-  municípios possíveis, que seriam milhares).
+  `ibge6` com seed determinístico por município (mesmo município, mesma base demo; não um
+  seed global de todos os municípios possíveis, que seriam milhares).
 - Modelo: `gemini-2.5-flash` via `langchain-google-genai`. Chave em `GEMINI_API_KEY` (env).
 - Resposta ao usuário via SSE com eventos nomeados: `conversa_id`, `status`, `token`,
   `referencia`, `fim` — nunca texto puro sem tipo de evento.
 - Endpoint exige autenticação (`api.core.auth.require_user`).
 - `susbot_conversas.usuario` = `user_id` do Supabase GoTrue (`user["id"]` retornado por
   `require_user`).
+- `ibge6` = chave municipal interna do projeto, derivada do código IBGE do município e
+  normalizada para 6 dígitos nesta base. O modelo nunca escolhe esse valor.
 - Retorno das ferramentas: sempre dict com chave `encontrado: bool` — nunca string vazia
   ou `None` para "sem dado".
 - Frontend não faz parte deste plano (ver Task 9 — delegado ao pipeline de subagents já
@@ -543,17 +545,18 @@ CONDICOES_POR_TIPO = {
 }
 
 
-def _sorteio_ponderado(pares: list[tuple[str, float]]) -> str:
+def _sorteio_ponderado(rng: random.Random, pares: list[tuple[str, float]]) -> str:
     valores, pesos = zip(*pares)
-    return random.choices(valores, weights=pesos, k=1)[0]
+    return rng.choices(valores, weights=pesos, k=1)[0]
 
 
 def _seed_estoque(ibge6: str) -> None:
+    rng = random.Random(f"susbot-estoque:{ibge6}")
     agora = datetime.now(timezone.utc).isoformat()
     rows = []
     for item in ITENS_ESTOQUE:
-        consumo = round(random.uniform(2.0, 25.0), 1)
-        dias_restantes_alvo = random.uniform(3, 40)
+        consumo = round(rng.uniform(2.0, 25.0), 1)
+        dias_restantes_alvo = rng.uniform(3, 40)
         quantidade = round(consumo * dias_restantes_alvo, 1)
         rows.append({
             "ibge6": ibge6, "item": item,
@@ -564,17 +567,18 @@ def _seed_estoque(ibge6: str) -> None:
 
 
 def _seed_alertas(ibge6: str) -> None:
+    rng = random.Random(f"susbot-alertas:{ibge6}")
     agora = datetime.now(timezone.utc).isoformat()
-    n = random.randint(3, 6)
+    n = rng.randint(3, 6)
     rows = []
     for i in range(n):
-        tipo = random.choice(TIPOS_ALERTA)
-        condicao = random.choice(CONDICOES_POR_TIPO[tipo])
-        status = _sorteio_ponderado(STATUS_PESOS)
+        tipo = rng.choice(TIPOS_ALERTA)
+        condicao = rng.choice(CONDICOES_POR_TIPO[tipo])
+        status = _sorteio_ponderado(rng, STATUS_PESOS)
         rows.append({
             "id": f"{ibge6}-seed-{i}",
             "ibge6": ibge6, "tipo": tipo, "item_ou_condicao": condicao,
-            "severidade": random.choice(SEVERIDADES), "status": status,
+            "severidade": rng.choice(SEVERIDADES), "status": status,
             "descricao": DESCRICOES[tipo].format(cond=condicao),
             "criado_em": agora,
         })
@@ -587,6 +591,10 @@ def seed_municipio_se_vazio(ibge6: str) -> None:
     if not db.has_alertas(ibge6):
         _seed_alertas(ibge6)
 ```
+
+**Decisão desta sessão:** o seed sintético deve ser determinístico por município, não
+aleatório a cada execução. Isso mantém a demo estável e evita que o SusBot responda hoje
+uma coisa e amanhã outra para o mesmo `ibge6`.
 
 - [ ] **Step 4: Rodar e confirmar que passa**
 
@@ -932,7 +940,8 @@ def build_tools(ibge6: str) -> list:
         """Use apenas quando nenhuma das outras ferramentas cobre a pergunta. Gere um
         único SELECT contra as tabelas: estoque, alertas, datasus_runs, datasus_serie,
         datasus_sexo, datasus_faixa_etaria, datasus_top_causas. Sempre filtre por
-        ibge6 = '{ibge6}' quando a tabela tiver essa coluna."""
+        ibge6 = '{ibge6}' quando a tabela tiver essa coluna. O fallback pode cruzar
+        estoque e alertas juntos quando a pergunta exigir visão combinada."""
         if tentativas_sql["n"] >= MAX_TENTATIVAS_SQL:
             return {"encontrado": False, "motivo": "Número máximo de tentativas de consulta SQL excedido"}
         tentativas_sql["n"] += 1

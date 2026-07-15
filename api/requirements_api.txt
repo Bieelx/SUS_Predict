@@ -1,7 +1,8 @@
 # SUS Predict — Backend FastAPI
+# Dependências de runtime da API.
 # Instale no mesmo venv do projeto (Python 3.12):
 #   source ../venv/bin/activate
-#   pip install -r requirements_api.txt
+#   pip install -r api/requirements_api.txt
 
 # API
 fastapi>=0.109.0
@@ -12,6 +13,12 @@ pydantic>=2.5.0
 pandas>=2.0.0
 prophet>=1.1.5
 openpyxl>=3.1.2
+sqlglot>=25.0.0
+langgraph>=0.2.0
+langchain-google-genai>=2.0.0
+
+# Testes
+pytest>=8.0.0
 
 # Cadeia de certificados (evita SSL: CERTIFICATE_VERIFY_FAILED em chamadas
 # https ao Supabase — comum em Python instalado via python.org no macOS)

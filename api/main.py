@@ -67,6 +67,7 @@ from api.core.dengue import router as dengue_router
 from api.core.export import csv_gz_bytes, slug_filename, xlsx_bytes
 from api.core.ibge import buscar_municipios, get_estados
 from api.core.prediction import PROPHET_OK, gerar_predicao
+from api.core.susbot_router import router as susbot_router
 
 if PYSUS_OK:
     from api.core.download import baixar_ano, baixar_sinan, limpar_cache_pysus
@@ -76,11 +77,13 @@ if PYSUS_OK:
 app = FastAPI(title="SUS Predict API", version="2.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"], allow_headers=["*"],
 )
 
 app.include_router(dengue_router)
+app.include_router(susbot_router)
 
 jobs: dict = {}
 TEMP_DIR = Path("./temp_data")
@@ -288,6 +291,12 @@ def auth_signup(req: AuthRequest):
 @app.post("/api/auth/login")
 def auth_login(req: AuthRequest):
     return auth_core.login(req.email, req.password)
+
+
+@app.post("/api/auth/dev-login")
+def auth_dev_login(req: AuthRequest | None = None):
+    email = (req.email if req else "") or "marcia.oliveira@dev.local"
+    return auth_core.dev_login(email)
 
 
 @app.get("/api/auth/me")

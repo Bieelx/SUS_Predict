@@ -311,6 +311,8 @@ const SEMANTIC_TOKENS = {
   '--risk-alto': '#D94F4F', '--risk-medio': '#E8903A', '--risk-baixo': '#4A9B6F',
 };
 
+const MUNICIPIO_ATIVO_IBGE6 = '351300';
+
 export default function App() {
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('sus_predict_token'));
   const [page, setPage] = useState('visao-geral');
@@ -365,7 +367,7 @@ export default function App() {
           </main>
         </div>
         <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} />
-        <SusBotPanel page={page} onNavigate={setPage} />
+        <SusBotPanel page={page} onNavigate={setPage} ibge6={MUNICIPIO_ATIVO_IBGE6} />
       </div>
     </ThemeContext.Provider>
   );

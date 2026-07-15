@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import sqlite3
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -79,8 +80,48 @@ CREATE TABLE IF NOT EXISTS datasus_resultado (
     created_at     TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS estoque (
+    ibge6             TEXT NOT NULL,
+    item              TEXT NOT NULL,
+    quantidade_atual  REAL NOT NULL,
+    consumo_medio_dia REAL NOT NULL,
+    atualizado_em     TEXT NOT NULL,
+    PRIMARY KEY (ibge6, item)
+);
+
+CREATE TABLE IF NOT EXISTS alertas (
+    id               TEXT PRIMARY KEY,
+    ibge6            TEXT NOT NULL,
+    tipo             TEXT NOT NULL,
+    item_ou_condicao TEXT,
+    severidade       TEXT NOT NULL,
+    status           TEXT NOT NULL,
+    descricao        TEXT NOT NULL,
+    criado_em        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS susbot_conversas (
+    id        TEXT PRIMARY KEY,
+    usuario   TEXT NOT NULL,
+    titulo    TEXT NOT NULL,
+    criada_em TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS susbot_mensagens (
+    id              TEXT PRIMARY KEY,
+    conversa_id     TEXT NOT NULL REFERENCES susbot_conversas(id) ON DELETE CASCADE,
+    tela_origem     TEXT,
+    pergunta        TEXT NOT NULL,
+    resposta        TEXT NOT NULL,
+    referencia_rota TEXT,
+    criado_em       TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_runs_lookup  ON datasus_runs (sistema, uf, cidade, ano_ini, ano_fim);
 CREATE INDEX IF NOT EXISTS idx_runs_created ON datasus_runs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alertas_ibge_status ON alertas (ibge6, status);
+CREATE INDEX IF NOT EXISTS idx_conversas_usuario ON susbot_conversas (usuario, criada_em DESC);
+CREATE INDEX IF NOT EXISTS idx_mensagens_conversa ON susbot_mensagens (conversa_id, criado_em DESC);
 """
 
 
@@ -319,6 +360,233 @@ def delete_run(run_id: str) -> None:
         for table in ("datasus_serie", "datasus_sexo", "datasus_faixa_etaria",
                       "datasus_top_causas", "datasus_resultado", "datasus_runs"):
             con.execute(f"DELETE FROM {table} WHERE run_id = ?", (run_id,))
+
+
+def _clamp_page(page: int, page_size: int, max_page_size: int) -> tuple[int, int, int]:
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or max_page_size), max_page_size))
+    offset = (page - 1) * page_size
+    return page, page_size, offset
+
+
+def _row_dict(row: sqlite3.Row | None) -> dict | None:
+    return dict(row) if row is not None else None
+
+
+def upsert_estoque(rows: list[dict]) -> None:
+    if not rows:
+        return
+
+    payload = []
+    for row in rows:
+        payload.append({
+            "ibge6": str(row["ibge6"])[:6],
+            "item": row["item"],
+            "quantidade_atual": row["quantidade_atual"],
+            "consumo_medio_dia": row["consumo_medio_dia"],
+            "atualizado_em": row.get("atualizado_em") or datetime.now(timezone.utc).isoformat(),
+        })
+
+    with _conn() as con:
+        con.executemany("""
+            INSERT INTO estoque (ibge6, item, quantidade_atual, consumo_medio_dia, atualizado_em)
+            VALUES (:ibge6, :item, :quantidade_atual, :consumo_medio_dia, :atualizado_em)
+            ON CONFLICT(ibge6, item) DO UPDATE SET
+                quantidade_atual  = excluded.quantidade_atual,
+                consumo_medio_dia = excluded.consumo_medio_dia,
+                atualizado_em     = excluded.atualizado_em
+        """, payload)
+
+
+def get_estoque(ibge6: str, item: str | None = None) -> list[dict]:
+    with _conn() as con:
+        if item:
+            rows = con.execute("""
+                SELECT ibge6, item, quantidade_atual, consumo_medio_dia, atualizado_em
+                FROM estoque
+                WHERE ibge6 = ? AND item = ?
+                ORDER BY item ASC
+            """, (str(ibge6)[:6], item)).fetchall()
+        else:
+            rows = con.execute("""
+                SELECT ibge6, item, quantidade_atual, consumo_medio_dia, atualizado_em
+                FROM estoque
+                WHERE ibge6 = ?
+                ORDER BY item ASC
+            """, (str(ibge6)[:6],)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def has_estoque(ibge6: str) -> bool:
+    with _conn() as con:
+        row = con.execute("""
+            SELECT 1
+            FROM estoque
+            WHERE ibge6 = ?
+            LIMIT 1
+        """, (str(ibge6)[:6],)).fetchone()
+    return row is not None
+
+
+def insert_alertas(rows: list[dict]) -> None:
+    if not rows:
+        return
+
+    payload = []
+    for row in rows:
+        payload.append({
+            "id": row.get("id") or str(uuid.uuid4()),
+            "ibge6": str(row["ibge6"])[:6],
+            "tipo": row["tipo"],
+            "item_ou_condicao": row.get("item_ou_condicao"),
+            "severidade": row["severidade"],
+            "status": row["status"],
+            "descricao": row["descricao"],
+            "criado_em": row.get("criado_em") or datetime.now(timezone.utc).isoformat(),
+        })
+
+    with _conn() as con:
+        con.executemany("""
+            INSERT INTO alertas (id, ibge6, tipo, item_ou_condicao, severidade, status, descricao, criado_em)
+            VALUES (:id, :ibge6, :tipo, :item_ou_condicao, :severidade, :status, :descricao, :criado_em)
+            ON CONFLICT(id) DO UPDATE SET
+                ibge6            = excluded.ibge6,
+                tipo             = excluded.tipo,
+                item_ou_condicao = excluded.item_ou_condicao,
+                severidade       = excluded.severidade,
+                status           = excluded.status,
+                descricao        = excluded.descricao,
+                criado_em        = excluded.criado_em
+        """, payload)
+
+
+def get_alertas(ibge6: str, status: str | None = None, tipo: str | None = None) -> list[dict]:
+    sql = [
+        "SELECT id, ibge6, tipo, item_ou_condicao, severidade, status, descricao, criado_em",
+        "FROM alertas",
+        "WHERE ibge6 = ?",
+    ]
+    params: list = [str(ibge6)[:6]]
+    if status:
+        sql.append("AND status = ?")
+        params.append(status)
+    if tipo:
+        sql.append("AND tipo = ?")
+        params.append(tipo)
+    sql.append("ORDER BY criado_em DESC, id DESC")
+
+    with _conn() as con:
+        rows = con.execute("\n".join(sql), params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def has_alertas(ibge6: str) -> bool:
+    with _conn() as con:
+        row = con.execute("""
+            SELECT 1
+            FROM alertas
+            WHERE ibge6 = ?
+            LIMIT 1
+        """, (str(ibge6)[:6],)).fetchone()
+    return row is not None
+
+
+def criar_conversa(usuario: str, titulo: str) -> dict:
+    conversa = {
+        "id": str(uuid.uuid4()),
+        "usuario": usuario,
+        "titulo": titulo,
+        "criada_em": datetime.now(timezone.utc).isoformat(),
+    }
+    with _conn() as con:
+        con.execute("""
+            INSERT INTO susbot_conversas (id, usuario, titulo, criada_em)
+            VALUES (:id, :usuario, :titulo, :criada_em)
+        """, conversa)
+    return conversa
+
+
+def get_conversa(conversa_id: str) -> dict | None:
+    with _conn() as con:
+        row = con.execute("""
+            SELECT id, usuario, titulo, criada_em
+            FROM susbot_conversas
+            WHERE id = ?
+        """, (conversa_id,)).fetchone()
+    return _row_dict(row)
+
+
+def listar_conversas(usuario: str, page: int = 1, page_size: int = 20) -> list[dict]:
+    page, page_size, offset = _clamp_page(page, page_size, 100)
+    with _conn() as con:
+        rows = con.execute("""
+            SELECT id, usuario, titulo, criada_em
+            FROM susbot_conversas
+            WHERE usuario = ?
+            ORDER BY criada_em DESC, id DESC
+            LIMIT ? OFFSET ?
+        """, (usuario, page_size, offset)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def contar_conversas(usuario: str) -> int:
+    with _conn() as con:
+        row = con.execute(
+            "SELECT COUNT(*) AS total FROM susbot_conversas WHERE usuario = ?",
+            (usuario,),
+        ).fetchone()
+    return int(row["total"] if row else 0)
+
+
+def adicionar_mensagem(
+    conversa_id: str,
+    tela_origem: str | None,
+    pergunta: str,
+    resposta: str,
+    referencia_rota: str | None,
+) -> dict:
+    if not get_conversa(conversa_id):
+        raise ValueError(f"Conversa não encontrada: {conversa_id}")
+
+    mensagem = {
+        "id": str(uuid.uuid4()),
+        "conversa_id": conversa_id,
+        "tela_origem": tela_origem,
+        "pergunta": pergunta,
+        "resposta": resposta,
+        "referencia_rota": referencia_rota,
+        "criado_em": datetime.now(timezone.utc).isoformat(),
+    }
+    with _conn() as con:
+        con.execute("""
+            INSERT INTO susbot_mensagens
+                (id, conversa_id, tela_origem, pergunta, resposta, referencia_rota, criado_em)
+            VALUES
+                (:id, :conversa_id, :tela_origem, :pergunta, :resposta, :referencia_rota, :criado_em)
+        """, mensagem)
+    return mensagem
+
+
+def listar_mensagens(conversa_id: str, page: int = 1, page_size: int = 30) -> list[dict]:
+    page, page_size, offset = _clamp_page(page, page_size, 100)
+    with _conn() as con:
+        rows = con.execute("""
+            SELECT id, conversa_id, tela_origem, pergunta, resposta, referencia_rota, criado_em
+            FROM susbot_mensagens
+            WHERE conversa_id = ?
+            ORDER BY criado_em DESC, id DESC
+            LIMIT ? OFFSET ?
+        """, (conversa_id, page_size, offset)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def contar_mensagens(conversa_id: str) -> int:
+    with _conn() as con:
+        row = con.execute(
+            "SELECT COUNT(*) AS total FROM susbot_mensagens WHERE conversa_id = ?",
+            (conversa_id,),
+        ).fetchone()
+    return int(row["total"] if row else 0)
 
 
 # ── Supabase read-only query (curated tables, e.g. sih_dengue_*, sinan_dengue_*) ──

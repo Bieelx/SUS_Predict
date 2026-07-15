@@ -40,7 +40,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
 
   useEffect(() => {
     const token = localStorage.getItem('sus_predict_token');
-    if (!token || token === 'mock-token') { setCarregando(false); return; }
+    if (!token) { setCarregando(false); return; }
     fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Falha ao carregar perfil.');

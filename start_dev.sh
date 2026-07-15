@@ -185,6 +185,12 @@ if lsof -ti:3000 >/dev/null 2>&1; then
     sleep 1
 fi
 
+if lsof -ti:3001 >/dev/null 2>&1; then
+    warn "Porta 3001 já em uso — encerrando processo anterior..."
+    kill "$(lsof -ti:3001)" 2>/dev/null || true
+    sleep 1
+fi
+
 if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
     info "Instalando dependências do frontend (npm install)..."
     cd "$ROOT_DIR/frontend" && npm install --silent
@@ -192,7 +198,7 @@ if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
 fi
 
 cd "$ROOT_DIR/frontend"
-npm run dev -- --host 2>&1 &
+npm run dev -- --host --port 3000 --strictPort 2>&1 &
 FRONTEND_PID=$!
 cd "$ROOT_DIR"
 

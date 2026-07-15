@@ -47,6 +47,12 @@ Backend (API):
 pip install -r api/requirements_api.txt
 ```
 
+Desenvolvimento e testes:
+
+```bash
+pip install -r api/requirements_dev.txt
+```
+
 Extras do projeto (se você usa o CLI `datasus.py` ou outras libs do repo):
 
 ```bash
@@ -86,6 +92,8 @@ cd api
 pip install -r requirements_api.txt
 uvicorn main:app --reload --port 8000
 ```
+
+Se for rodar os testes nesse mesmo ambiente, instale também `api/requirements_dev.txt` uma vez.
 
 Frontend:
 
@@ -210,4 +218,3 @@ O frontend mostra o botão `Exportar XLSX` quando a análise está carregada.
 - Use `bash start_dev.sh` para evitar “esquecer” de ativar venv ou carregar `.env`.
 - Para forçar re-download (ignorando cache), envie `usar_cache=false` no `POST /api/download`.
 - Para manter o projeto seguro, nunca exponha `SUPABASE_SERVICE_ROLE_KEY`.
-

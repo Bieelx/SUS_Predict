@@ -14,6 +14,27 @@ export default function LoginScreen({ onEnter }) {
   const [senha, setSenha] = useState('');
   const [carregando, setCarregando] = useState(false);
 
+  async function loginDev() {
+    setErro('');
+    setCarregando(true);
+    try {
+      const resp = await fetch(`${API_BASE}/api/auth/dev-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'marcia.oliveira@dev.local', password: 'dev' }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Falha ao gerar login de desenvolvimento.');
+      if (!data.access_token) throw new Error('Resposta de login sem token.');
+      localStorage.setItem('sus_predict_token', data.access_token);
+      onEnter();
+    } catch (err) {
+      setErro(err.message || 'Erro ao autenticar.');
+    } finally {
+      setCarregando(false);
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setErro('');
@@ -165,10 +186,10 @@ export default function LoginScreen({ onEnter }) {
             </button>
           </form>
 
-          {/* acesso rápido — usuário mockado, sem Supabase */}
+          {/* acesso rápido — login de desenvolvimento */}
           <button
             type="button"
-            onClick={() => { localStorage.setItem('sus_predict_token', 'mock-token'); onEnter(); }}
+            onClick={loginDev}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left',
               padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E1D6',
@@ -185,8 +206,8 @@ export default function LoginScreen({ onEnter }) {
               fontSize: 15, fontWeight: 700, fontFamily: 'Inter Tight, sans-serif',
             }}>MO</span>
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#1A1814', lineHeight: 1.2 }}>Márcia Oliveira</span>
-              <span style={{ display: 'block', fontSize: 12, color: '#8A8579', marginTop: 2 }}>Gestora municipal · demonstração</span>
+              <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#1A1814', lineHeight: 1.2 }}>Entrar como dev</span>
+              <span style={{ display: 'block', fontSize: 12, color: '#8A8579', marginTop: 2 }}>Gera um token real para testar o SusBot</span>
             </span>
             <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#1B5E6E' }}>arrow_forward</span>
           </button>
