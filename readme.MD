@@ -1,6 +1,6 @@
 # 🏥 SUS Predict — FIAP TCC 2025/2026
 
-Aplicação web para **extrair dados públicos do DATASUS (via PySUS)**, **tratar/agregar** e **publicar no Supabase** de forma organizada, com um **dashboard React** para análise e previsão.
+Aplicação web para **extrair dados públicos do DATASUS (via PySUS)**, **tratar/agregar**, **publicar no Supabase** quando configurado e oferecer um **dashboard React** com análises, previsão e o **SusBot** (chat contextual).
 
 O foco atual do projeto é **São Paulo/SP** (município: **São Paulo**, IBGE **3550308**), mas a arquitetura já suporta evoluir para mais cidades.
 
@@ -9,6 +9,7 @@ O foco atual do projeto é **São Paulo/SP** (município: **São Paulo**, IBGE *
 - Você escolhe **categoria (SIM/SIH/SINASC/SIA/SINAN)**, localização e período.
 - O backend baixa os dados reais via **FTP do DATASUS** usando **PySUS** (Python 3.12).
 - O backend calcula agregações e previsão e retorna um `resultado.json`.
+- O backend também expõe o SusBot, que consulta conversas, estoque e alertas no banco local/Supabase quando disponíveis.
 - Se configurado, o backend sincroniza no **Supabase**:
 - Tabelas tratadas (pequenas): séries, distribuições, top causas.
 - Bruto compacto (opcional): CSV `.csv.gz` com colunas mínimas no **Storage**, respeitando um budget para caber no plano Free.
@@ -16,7 +17,7 @@ O foco atual do projeto é **São Paulo/SP** (município: **São Paulo**, IBGE *
 
 ## Stack
 
-- Backend: Python 3.12, FastAPI, PySUS, pandas, Prophet (opcional), openpyxl.
+- Backend: Python 3.12, FastAPI, PySUS, pandas, Gemini via `GEMINI_API_KEY` (opcional), openpyxl.
 - Frontend: React + Tailwind + Recharts (Vite).
 - Persistência: Supabase (Postgres + Storage).
 
@@ -29,6 +30,12 @@ O PySUS não funciona corretamente com Python 3.13+. Use **Python 3.12**.
 ### 2) Node.js
 
 Necessário para rodar o frontend (Vite).
+
+### 3) Chaves opcionais/necessárias por recurso
+
+- `GEMINI_API_KEY`: necessária para o SusBot responder com LLM real.
+- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`: opcionais, só se quiser sincronizar cache/persistência com Supabase.
+- `SUSBOT_DEV_AUTH_SECRET`: opcional, usado para assinar o login de desenvolvimento quando Supabase não estiver configurado.
 
 ## Instalação (local)
 
@@ -81,6 +88,7 @@ O script:
 - Instala dependências do backend se necessário.
 - Sobe FastAPI em `http://localhost:8000`.
 - Sobe frontend em `http://localhost:3000`.
+- Mata processos antigos nas portas `8000`, `3000` e `3001` antes de subir.
 
 ### Opção B) Separado
 
@@ -102,6 +110,14 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Auth de desenvolvimento
+
+Para testar o SusBot sem Supabase, use o botão **Entrar como dev** na tela de login.
+
+- Ele chama `POST /api/auth/dev-login`.
+- O backend gera um token local assinado.
+- Esse token é aceito em `GET /api/auth/me` e nas rotas do SusBot.
 
 ## Supabase (cache + organização)
 
@@ -159,6 +175,8 @@ SUPABASE_RAW_MAX_BYTES=250000000
 SUPABASE_ENABLE_CACHE_READ=true
 ```
 
+Se `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` não estiverem definidos, o projeto continua funcionando em modo local, usando SQLite e o login de desenvolvimento.
+
 ### Como funciona o upload no Supabase
 
 Quando um job termina com sucesso:
@@ -180,9 +198,16 @@ Quando o frontend solicita `/api/download`:
 
 **Esta seção está desatualizada em relação ao `frontend/src/App.jsx` atual e ao redesenho
 em andamento — ver `CLAUDE.md` (seção "Redesenho de telas") e `docs/telas/` para o estado
-real do frontend e a especificação de telas em vigor.** O texto abaixo descreve uma versão
-anterior do dashboard (wizard + mapa de pins), mantido aqui só como referência histórica do
-fluxo de cache/Supabase, que continua válido no backend:
+real do frontend e a especificação de telas em vigor.**
+
+Hoje o frontend monta:
+- Login/cadastro.
+- Dashboard das telas do redesenho.
+- Painel flutuante do SusBot.
+- Gerador de ETP.
+
+O texto abaixo descreve uma versão anterior do dashboard (wizard + mapa de pins), mantido aqui
+só como referência histórica do fluxo de cache/Supabase, que continua válido no backend:
 
 - `Visão Geral`: cards e gráficos baseados somente em dados reais retornados pelo backend.
 - `Baixar Dados`: wizard para criar novas execuções.
@@ -216,5 +241,6 @@ O frontend mostra o botão `Exportar XLSX` quando a análise está carregada.
 ## Dicas de desenvolvimento
 
 - Use `bash start_dev.sh` para evitar “esquecer” de ativar venv ou carregar `.env`.
+- Se o frontend abrir em outra porta, pare os processos antigos e rode `bash start_dev.sh` de novo.
 - Para forçar re-download (ignorando cache), envie `usar_cache=false` no `POST /api/download`.
 - Para manter o projeto seguro, nunca exponha `SUPABASE_SERVICE_ROLE_KEY`.
