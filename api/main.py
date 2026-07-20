@@ -256,6 +256,8 @@ def processar_download(job_id: str, req: dict) -> None:
 class AuthRequest(BaseModel):
     email:    str
     password: str
+    nome:     str = ""
+    cargo:    str = ""
 
 
 class DownloadRequest(BaseModel):
@@ -285,7 +287,8 @@ def root():
 
 @app.post("/api/auth/signup")
 def auth_signup(req: AuthRequest):
-    return auth_core.signup(req.email, req.password)
+    metadata = {k: v for k, v in {"nome": req.nome, "cargo": req.cargo}.items() if v}
+    return auth_core.signup(req.email, req.password, metadata or None)
 
 
 @app.post("/api/auth/login")

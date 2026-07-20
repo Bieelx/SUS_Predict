@@ -132,10 +132,13 @@ def _gotrue_request(path: str, body: dict, token: str | None = None) -> dict:
         raise HTTPException(e.code if e.code in (400, 401, 422) else 400, msg)
 
 
-def signup(email: str, password: str) -> dict:
+def signup(email: str, password: str, metadata: dict | None = None) -> dict:
     if not _supabase_configurado():
         return _dev_assinar_token(email)
-    return _gotrue_request("signup", {"email": email, "password": password})
+    body = {"email": email, "password": password}
+    if metadata:
+        body["data"] = metadata
+    return _gotrue_request("signup", body)
 
 
 def login(email: str, password: str) -> dict:
