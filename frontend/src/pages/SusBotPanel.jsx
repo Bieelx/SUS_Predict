@@ -19,7 +19,13 @@ function uid(prefixo = 'm') {
   return `${prefixo}-${idSeq}-${Date.now().toString(36)}`;
 }
 
-const ERRO_SUSBOT_PADRAO = 'Não consegui consultar o SusBot agora. Tente novamente em instantes.';
+const SUGESTOES = [
+  'Qual é o alerta mais urgente hoje?',
+  'Quais insumos rompem estoque nos próximos 30 dias?',
+  'Como está a tendência de dengue no município?',
+];
+
+const ERRO_SUSBOT_PADRAO ='Não consegui consultar o SusBot agora. Tente novamente em instantes.';
 const SUSBOT_IBGE6_PADRAO = '351300';
 
 const SUSBOT_ROUTE_ALIASES = {
@@ -193,36 +199,31 @@ function criarThreadVazia() {
 
 // ─── Subcomponentes ─────────────────────────────────────────────────────────
 
-function SusBotAvatar({ size = 28 }) {
+// Marca do bot: monograma tipográfico, não avatar de robô. O produto fala em
+// vozes editoriais (mono para meta, Inter Tight para título) — o assistente segue a
+// mesma gramática em vez do vocabulário genérico de chatbot.
+function SusBotMark({ size = 30 }) {
   return (
     <span style={{
-      width: size, height: size, borderRadius: '50%', background: 'var(--accent)',
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'white',
+      width: size, height: size, borderRadius: Math.round(size * 0.3),
+      background: 'var(--primary)', color: '#fff', flexShrink: 0,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--ff-mono, monospace)', fontWeight: 700,
+      fontSize: size * 0.38, letterSpacing: '0.02em',
     }}>
-      <MIcon m="smart_toy" size={size * 0.6} />
+      SB
     </span>
   );
 }
 
-function TypingIndicator({ etapa }) {
+// Cursor de digitação em vez dos três pontinhos.
+function Cursor() {
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <SusBotAvatar size={24} />
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '9px 13px',
-        background: 'var(--subtle)', borderRadius: '12px 12px 12px 4px',
-      }}>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {[0, 1, 2].map(i => (
-            <span key={i} style={{
-              width: 5, height: 5, borderRadius: '50%', background: 'var(--ink-300)',
-              animation: `dot-pulse 1.2s ease-in-out ${i * 0.18}s infinite`,
-            }} />
-          ))}
-        </div>
-        <span style={{ fontSize: 11.5, color: 'var(--ink-400)' }}>{etapa}</span>
-      </div>
-    </div>
+    <span style={{
+      display: 'inline-block', width: 7, height: 14, marginLeft: 1,
+      transform: 'translateY(2px)', background: 'var(--primary)',
+      animation: 'susbot-caret 1s steps(1) infinite',
+    }} />
   );
 }
 
@@ -250,92 +251,79 @@ function EstadoPainel({ icone, titulo, texto, acao, tom = 'neutral' }) {
   );
 }
 
+const ROTULO_META = {
+  margin: 0, fontFamily: 'var(--ff-mono, monospace)', fontSize: 9.5,
+  letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-400)',
+};
+
+// A resposta do bot não é balão: é um bloco de texto com régua lateral — o
+// mesmo idioma do card de insight na Visão Geral. A pergunta do usuário é um
+// bloco alinhado à direita, sem rabinho.
 function Bolha({ msg, onNavigate }) {
   const isUser = msg.autor === 'user';
   const isErro = msg.autor === 'error';
-  const isStreaming = msg.autor === 'bot' && msg.streaming && !msg.texto;
+  const isStreaming = msg.autor === 'bot' && msg.streaming;
 
-  if (isErro) {
+  if (isUser) {
     return (
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-        <SusBotAvatar size={24} />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
         <div style={{
-          maxWidth: '84%', padding: '9px 13px', fontSize: 13, lineHeight: 1.55,
-          borderRadius: '12px 12px 12px 4px', background: 'color-mix(in srgb, var(--bad, #8A2A38) 10%, var(--elev))',
-          border: '1px solid color-mix(in srgb, var(--bad, #8A2A38) 30%, transparent)', color: 'var(--ink-700)',
-          overflowWrap: 'anywhere',
+          maxWidth: '88%', padding: '9px 13px', borderRadius: 12,
+          background: 'var(--subtle)', border: '1px solid var(--ink-100)',
+          fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink-900)', overflowWrap: 'anywhere',
         }}>
-          <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, color: 'var(--bad, #8A2A38)' }}>
-            <MIcon m="error" size={14} /> Algo deu errado
-          </p>
-          <p style={{ margin: '4px 0 8px' }}>{msg.texto}</p>
-          <button
-            onClick={() => msg.onRetry?.(msg.perguntaOriginal)}
-            style={{
-              fontSize: 11.5, fontWeight: 700, color: 'var(--bad, #8A2A38)', background: 'none',
-              border: '1px solid color-mix(in srgb, var(--bad, #8A2A38) 40%, transparent)', borderRadius: 7,
-              padding: '4px 10px', cursor: 'pointer',
-            }}
-          >
-            tentar novamente
-          </button>
+          {msg.texto}
         </div>
+        <p style={{ ...ROTULO_META, paddingRight: 2 }}>{getSusbotPageLabel(msg.page)}</p>
       </div>
     );
   }
 
+  const cor = isErro ? 'var(--bad, #8A2A38)' : 'var(--accent)';
+
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexDirection: isUser ? 'row-reverse' : 'row' }}>
-      {!isUser && <SusBotAvatar size={24} />}
+    <div style={{ borderLeft: `2px solid ${cor}`, paddingLeft: 13 }}>
+      <p style={{ ...ROTULO_META, display: 'flex', alignItems: 'center', gap: 5, color: isErro ? cor : 'var(--ink-400)' }}>
+        {isErro && <MIcon m="error" size={12} />}
+        {isErro ? 'não foi possível responder' : 'SusBot'}
+      </p>
       <div style={{
-        maxWidth: '84%', padding: '9px 13px', fontSize: 13.5, lineHeight: 1.55,
-        borderRadius: isUser ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-        background: isUser ? 'var(--primary-soft)' : 'var(--subtle)',
-        border: isUser ? '1px solid var(--primary-soft-border)' : '1px solid transparent',
-        color: 'var(--ink-900)',
-        overflowWrap: 'anywhere',
+        marginTop: 5, fontSize: 13.5, lineHeight: 1.6,
+        color: 'var(--ink-700)', overflowWrap: 'anywhere',
       }}>
-        {isUser ? (
-          <p style={{ margin: 0 }}>{msg.texto}</p>
-        ) : isStreaming ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-400)' }}>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {[0, 1, 2].map(i => (
-                <span
-                  key={i}
-                  style={{
-                    width: 5, height: 5, borderRadius: '50%', background: 'var(--ink-300)',
-                    animation: `dot-pulse 1.2s ease-in-out ${i * 0.18}s infinite`,
-                  }}
-                />
-              ))}
-            </div>
-            <span style={{ fontSize: 11.5 }}>{msg.status || 'digitando...'}</span>
-          </div>
-        ) : (
-          renderMd(msg.texto)
-        )}
-        {isUser && (
-          <p style={{
-            margin: '5px 0 0', fontFamily: 'var(--ff-mono, monospace)', fontSize: 10.5,
-            color: 'var(--ink-400)', textAlign: 'right',
-          }}>
-            · enviado em {getSusbotPageLabel(msg.page)}
-          </p>
-        )}
-        {!isUser && msg.link && (
-          <button
-            onClick={() => onNavigate?.(msg.link.page)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8, padding: 0,
-              background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
-              color: 'var(--primary)',
-            }}
-          >
-            {msg.link.label}
-          </button>
-        )}
+        {isErro ? <p style={{ margin: 0 }}>{msg.texto}</p> : renderMd(msg.texto)}
+        {isStreaming && <Cursor />}
       </div>
+
+      {isStreaming && msg.status && (
+        <p style={{ ...ROTULO_META, marginTop: 6 }}>{msg.status}</p>
+      )}
+
+      {isErro && (
+        <button
+          onClick={() => msg.onRetry?.(msg.perguntaOriginal)}
+          style={{
+            marginTop: 8, fontSize: 11.5, fontWeight: 700, color: cor, background: 'none',
+            border: `1px solid color-mix(in srgb, ${cor} 40%, transparent)`, borderRadius: 8,
+            padding: '4px 10px', cursor: 'pointer',
+          }}
+        >
+          tentar novamente
+        </button>
+      )}
+
+      {!isErro && msg.link && (
+        <button
+          onClick={() => onNavigate?.(msg.link.page)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 10, padding: '5px 11px',
+            background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)',
+            borderRadius: 999, cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: 'var(--primary)',
+          }}
+        >
+          {msg.link.label}
+        </button>
+      )}
     </div>
   );
 }
@@ -363,7 +351,7 @@ function ItemHistorico({ thread, onAbrir }) {
 
 // ─── Componente principal ───────────────────────────────────────────────────
 
-export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
+export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChange }) {
   const [open, setOpen] = useState(false);
   const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history'
   const [threads, setThreads] = useState([]);
@@ -384,6 +372,10 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
   useEffect(() => {
     if (viewMode === 'chat') fimRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [current.mensagens, enviando, viewMode]);
+
+  // Avisa o shell para encolher o conteúdo principal — o painel é um card ao
+  // lado do conteúdo, não uma camada sobre ele.
+  useEffect(() => { onOpenChange?.(open); }, [open, onOpenChange]);
 
   useEffect(() => {
     if (open && viewMode === 'chat') inputRef.current?.focus();
@@ -620,11 +612,49 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
   return (
     <>
       <style>{`
-        @keyframes susbotPanelIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes susbot-caret { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+        @keyframes susbot-msg-in {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .susbot-msg { animation: susbot-msg-in .22s cubic-bezier(0.2,0.7,0.3,1) both; }
+
+        .susbot-composer {
+          border: 1px solid var(--ink-100);
+          border-radius: 14px;
+          background: var(--canvas);
+          transition: border-color .15s, box-shadow .15s;
+        }
+        .susbot-composer:focus-within {
+          border-color: var(--primary-soft-border);
+          box-shadow: 0 0 0 3px var(--primary-soft);
+        }
+
+        .susbot-chip {
+          text-align: left;
+          padding: 9px 12px;
+          border: 1px solid var(--ink-100);
+          border-radius: 10px;
+          background: var(--elev);
+          color: var(--ink-700);
+          font-size: 12.5;
+          line-height: 1.45;
+          cursor: pointer;
+          transition: border-color .15s, background .15s;
+        }
+        .susbot-chip:hover { border-color: var(--primary-soft-border); background: var(--primary-soft); }
+
+        .susbot-icon-btn {
+          background: none; border: none; cursor: pointer; color: var(--ink-500);
+          display: flex; padding: 6px; border-radius: 8; border-radius: 8px;
+          transition: background .15s, color .15s;
+        }
+        .susbot-icon-btn:hover { background: var(--subtle); color: var(--ink-900); }
 
         .susbot-panel-shell {
           width: min(420px, calc(100vw - 16px));
-          border-radius: 18px 0 0 18px;
+          border-radius: 18px;
           overflow: hidden;
         }
 
@@ -638,14 +668,14 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
           bottom: 24px;
           right: 24px;
         }
+        .susbot-panel-fab:hover { background: var(--primary-dark); }
 
         @media (max-width: 720px) {
           .susbot-panel-shell {
             width: calc(100vw - 12px);
-            top: 6px !important;
+            top: 66px !important;
             right: 6px !important;
             bottom: 6px !important;
-            border-radius: 18px;
           }
 
           .susbot-panel-fab {
@@ -662,43 +692,40 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
         aria-label="Painel do SusBot"
         className="susbot-panel-shell"
         style={{
-          position: 'fixed', top: 0, right: 0, bottom: 0,
-          background: 'var(--elev)', borderLeft: '1px solid var(--ink-100)',
-          boxShadow: open ? '-10px 0 32px rgba(26,24,20,0.14)' : 'none',
+          // Card destacado: afastado de todas as bordas, na mesma altura visual
+          // do card de conteúdo (topbar = 60px, respiro de 16px nas outras).
+          position: 'fixed', top: 76, right: 16, bottom: 16,
+          background: 'var(--content)', border: '1px solid var(--sb-border)',
+          boxShadow: open ? '0 8px 28px rgba(26,24,20,0.12)' : 'none',
           zIndex: 55, display: 'flex', flexDirection: 'column',
-          transform: open ? 'translateX(0)' : 'translateX(100%)',
+          transform: open ? 'translateX(0)' : 'translateX(calc(100% + 16px))',
           transition: 'transform .3s cubic-bezier(0.2,0.7,0.3,1)',
           pointerEvents: open ? 'auto' : 'none',
         }}
       >
         {/* Cabeçalho */}
         <div style={{
-          padding: '14px 16px', borderBottom: '1px solid var(--ink-100)', flexShrink: 0,
+          padding: '13px 14px 13px 16px', borderBottom: '1px solid var(--ink-100)', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
         }}>
           {viewMode === 'history' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button
-                onClick={() => setViewMode('chat')}
-                title="Voltar"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-500)', display: 'flex' }}
-              >
+              <button onClick={() => setViewMode('chat')} title="Voltar" className="susbot-icon-btn">
                 <MIcon m="arrow_back" size={19} />
               </button>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--ink-900)', fontFamily: 'Inter Tight, sans-serif' }}>
-                Histórico
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', fontFamily: 'var(--ff-tight)' }}>
+                Conversas
               </p>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <SusBotAvatar size={32} />
+              <SusBotMark size={30} />
               <div>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--ink-900)', lineHeight: 1.1, fontFamily: 'Inter Tight, sans-serif' }}>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', lineHeight: 1.15, fontFamily: 'var(--ff-tight)' }}>
                   SusBot
                 </p>
-                <p style={{ margin: '2px 0 0', fontSize: 10.5, color: 'var(--ink-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--good)', animation: 'dot-pulse 2.4s ease-in-out infinite' }} />
-                  assistente do SusPredict
+                <p style={{ ...ROTULO_META, marginTop: 2 }}>
+                  {getSusbotPageLabel(page)}
                 </p>
               </div>
             </div>
@@ -707,27 +734,15 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {viewMode === 'chat' && (
               <>
-                <button
-                  onClick={() => setViewMode('history')}
-                  title="Histórico de conversas"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-500)', display: 'flex', padding: 6, borderRadius: 8 }}
-                >
-                  <MIcon m="schedule" size={19} />
+                <button onClick={() => setViewMode('history')} title="Conversas anteriores" className="susbot-icon-btn">
+                  <MIcon m="history" size={19} />
                 </button>
-                <button
-                  onClick={novaConversa}
-                  title="Nova conversa"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-500)', display: 'flex', padding: 6, borderRadius: 8 }}
-                >
-                  <MIcon m="add" size={19} />
+                <button onClick={novaConversa} title="Nova conversa" className="susbot-icon-btn">
+                  <MIcon m="edit_square" size={19} />
                 </button>
               </>
             )}
-            <button
-              onClick={() => setOpen(false)}
-              title="Fechar (a conversa continua salva)"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-500)', display: 'flex', padding: 6, borderRadius: 8 }}
-            >
+            <button onClick={() => setOpen(false)} title="Fechar (a conversa continua salva)" className="susbot-icon-btn">
               <MIcon m="close" size={19} />
             </button>
           </div>
@@ -788,22 +803,37 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
                   tom="danger"
                 />
               ) : semMensagens && !enviando && (
-                <EstadoPainel
-                  icone="forum"
-                  titulo="Comece uma conversa"
-                  texto="Pergunte sobre a tela atual ou sobre um dado que apareceu no dashboard."
-                />
+                <div style={{ paddingTop: 10 }}>
+                  <p style={{
+                    margin: 0, fontFamily: 'var(--ff-tight)', fontWeight: 800,
+                    fontSize: 21, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--ink-900)',
+                  }}>
+                    O que você precisa decidir agora?
+                  </p>
+                  <p style={{ margin: '8px 0 18px', fontSize: 12.5, lineHeight: 1.5, color: 'var(--ink-400)' }}>
+                    Pergunte sobre {getSusbotPageLabel(page)} ou sobre qualquer dado do município.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {SUGESTOES.map(s => (
+                      <button key={s} className="susbot-chip" onClick={() => void enviar(s)}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
 
               {current.mensagens.map(m => (
-                <Bolha key={m.id} msg={m} onNavigate={onNavigate} />
+                <div key={m.id} className="susbot-msg">
+                  <Bolha msg={m} onNavigate={onNavigate} />
+                </div>
               ))}
               <div ref={fimRef} />
             </div>
 
             {/* Input */}
-            <div style={{ padding: 12, borderTop: '1px solid var(--ink-100)', flexShrink: 0 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ padding: '10px 12px 12px', flexShrink: 0 }}>
+              <div className="susbot-composer" style={{ padding: '10px 10px 8px 12px' }}>
                 <textarea
                   ref={inputRef}
                   value={input}
@@ -815,32 +845,36 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
                       void enviar();
                     }
                   }}
-                  placeholder="Pergunte ao SusBot..."
+                  placeholder="Pergunte sobre este município…"
                   style={{
-                    flex: 1, fontSize: 13, padding: '10px 14px', borderRadius: 18,
-                    border: '1px solid var(--ink-100)', color: 'var(--ink-900)', outline: 'none',
-                    background: 'var(--canvas)', resize: 'none', overflow: 'hidden', lineHeight: 1.45,
-                    minHeight: 42, maxHeight: 120,
+                    width: '100%', fontSize: 13.5, border: 'none', outline: 'none', padding: 0,
+                    color: 'var(--ink-900)', background: 'transparent', resize: 'none',
+                    overflow: 'hidden', lineHeight: 1.5, minHeight: 22, maxHeight: 120,
                   }}
                 />
-                <button
-                  onClick={() => enviar()}
-                  disabled={!input.trim() || enviando}
-                  title="Enviar"
-                  style={{
-                    width: 36, height: 36, borderRadius: '50%', border: 'none', flexShrink: 0,
-                    cursor: input.trim() && !enviando ? 'pointer' : 'default',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: input.trim() && !enviando ? 'var(--primary)' : 'var(--ink-100)',
-                    color: input.trim() && !enviando ? 'white' : 'var(--ink-400)',
-                    transition: 'background .15s',
-                  }}
-                >
-                  <MIcon m="send" size={17} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                  <p style={{ ...ROTULO_META, color: 'var(--ink-300)' }}>
+                    enter envia · shift+enter quebra linha
+                  </p>
+                  <button
+                    onClick={() => enviar()}
+                    disabled={!input.trim() || enviando}
+                    title="Enviar"
+                    style={{
+                      width: 30, height: 30, borderRadius: 9, border: 'none', flexShrink: 0,
+                      cursor: input.trim() && !enviando ? 'pointer' : 'default',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: input.trim() && !enviando ? 'var(--primary)' : 'var(--ink-100)',
+                      color: input.trim() && !enviando ? 'white' : 'var(--ink-300)',
+                      transition: 'background .15s',
+                    }}
+                  >
+                    <MIcon m="arrow_upward" size={17} />
+                  </button>
+                </div>
               </div>
-              <p style={{ fontSize: 9.5, color: 'var(--ink-300)', marginTop: 7, textAlign: 'center' }}>
-                SusBot pode cometer erros · respostas via backend em tempo real
+              <p style={{ ...ROTULO_META, color: 'var(--ink-300)', marginTop: 8, textAlign: 'center' }}>
+                respostas geradas · confira antes de decidir
               </p>
             </div>
           </>
@@ -855,17 +889,15 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6 }) {
           title="SusBot — assistente"
           className="susbot-panel-fab"
           style={{
-            position: 'fixed', width: 56, height: 56, borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%)',
-            border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 6px 22px rgba(27,94,110,0.35)', zIndex: 50, transition: 'transform 0.15s',
+            position: 'fixed', width: 48, height: 48, borderRadius: '50%',
+            background: 'var(--primary)', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', zIndex: 50,
+            boxShadow: '0 2px 10px rgba(26,24,20,0.14)',
+            transition: 'background .15s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
         >
-          <span style={{ color: 'white', display: 'flex' }}>
-            <MIcon m="smart_toy" size={26} />
-          </span>
+          <MIcon m="chat_bubble" size={20} />
         </button>
       )}
     </>

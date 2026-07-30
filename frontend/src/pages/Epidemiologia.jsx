@@ -582,7 +582,7 @@ export default function Epidemiologia({ onNavigate }) {
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4 }}>
           Epidemiologia{' '}
-          <span className="ff-serif" style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
+          <span style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
             — SINAN
           </span>
         </h1>

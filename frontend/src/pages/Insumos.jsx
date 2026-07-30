@@ -142,7 +142,7 @@ function Cabecalho({ view, onAtualizarEstoque, onVoltar }) {
       <div>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4 }}>
           Insumos{' '}
-          <span className="ff-serif" style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
+          <span style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
             — {MUNICIPIO.nome}, {MUNICIPIO.uf}
           </span>
         </h1>

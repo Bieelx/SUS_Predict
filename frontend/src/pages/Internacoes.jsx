@@ -444,7 +444,7 @@ export default function Internacoes({ onNavigate }) {
           color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4,
         }}>
           Internações{' '}
-          <span className="ff-serif" style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
+          <span style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
             — {MUNICIPIO.nome}, {MUNICIPIO.uf}
           </span>
         </h1>

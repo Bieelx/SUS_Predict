@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800;900&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -62,7 +62,6 @@
     /* Font families */
     --ff-tight: 'Inter Tight', 'Inter', ui-sans-serif, system-ui, sans-serif;
     --ff-body:  'Inter', ui-sans-serif, system-ui, sans-serif;
-    --ff-serif: 'Instrument Serif', Georgia, serif;
     --ff-mono:  'JetBrains Mono', ui-monospace, monospace;
   }
 
@@ -94,18 +93,30 @@
     color: var(--ink-900);
   }
 
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: var(--subtle); }
+  /* Scrollbar em overlay: sem track (o fundo do card aparece através) e thumb
+     translúcido, que assume a cor de qualquer superfície em vez de trazer um
+     bege próprio. Largura 12px com borda transparente de 4px = trilho de 4px
+     visível com área de clique confortável. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(26, 24, 20, 0.22) transparent;
+  }
+
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: var(--ink-200);
+    background: rgba(26, 24, 20, 0.18);
+    border: 4px solid transparent;
+    background-clip: content-box;
     border-radius: 999px;
   }
-  ::-webkit-scrollbar-thumb:hover { background: var(--ink-400); }
+  ::-webkit-scrollbar-thumb:hover  { background: rgba(26, 24, 20, 0.34); background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:active { background: rgba(26, 24, 20, 0.46); background-clip: content-box; }
 }
 
 @layer utilities {
   .ff-tight { font-family: var(--ff-tight); }
-  .ff-serif { font-family: var(--ff-serif); font-style: italic; }
   .ff-mono  { font-family: var(--ff-mono); }
 
   .eyebrow {

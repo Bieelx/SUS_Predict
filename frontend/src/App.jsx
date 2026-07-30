@@ -318,6 +318,7 @@ export default function App() {
   const [page, setPage] = useState('visao-geral');
   const [themeId, setThemeId] = useState('teal');
   const [etpOrigem, setEtpOrigem] = useState(null);
+  const [chatAberto, setChatAberto] = useState(false);
   const [documentos, setDocumentos] = useState(DOCUMENTOS_INICIAIS);
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
 
@@ -354,12 +355,31 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={{ themeId, setThemeId }}>
-      <div style={{ ...SEMANTIC_TOKENS, ...themeVars, display: 'flex', minHeight: '100vh', background: '#F6F5F2' }}>
+      {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
+          (esquerda da sidebar, gap central, respiro do painel do SusBot). */}
+      <div style={{ ...SEMANTIC_TOKENS, ...themeVars, display: 'flex', minHeight: '100vh', background: SB }}>
         <Sidebar current={page} onNav={setPage} />
         <div style={{ marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column' }}>
           <Topbar current={page} />
-          <main style={{ position: 'fixed', top: 60, right: 0, left: 220, bottom: 0, background: SB }}>
-            <div style={{ height: '100%', background: '#F1F4F3', borderTopLeftRadius: 20, border: '1px solid var(--sb-border)', borderRight: 'none', borderBottom: 'none', boxShadow: '-2px -2px 8px rgba(0,0,0,0.04)', overflowY: 'auto' }}>
+          {/* Com o chat aberto o conteúdo encolhe e se solta das bordas — os dois
+              viram cards irmãos sobre o canvas, em vez de o chat sobrepor o app.
+              452 = 420 do painel + 16 de respiro de cada lado. */}
+          <main style={{
+            position: 'fixed', top: 60, left: 220, bottom: 0, background: SB,
+            right: chatAberto ? 452 : 0,
+            transition: 'right .3s cubic-bezier(0.2,0.7,0.3,1)',
+          }}>
+            <div style={{
+              height: chatAberto ? 'calc(100% - 32px)' : '100%',
+              margin: chatAberto ? '16px 0 16px 16px' : 0,
+              background: '#F1F4F3',
+              borderRadius: chatAberto ? 18 : '20px 0 0 0',
+              border: '1px solid var(--sb-border)',
+              borderRight: chatAberto ? '1px solid var(--sb-border)' : 'none',
+              borderBottom: chatAberto ? '1px solid var(--sb-border)' : 'none',
+              boxShadow: chatAberto ? '0 8px 28px rgba(26,24,20,0.12)' : '-2px -2px 8px rgba(0,0,0,0.04)',
+              overflowY: 'auto',
+            }}>
               <div style={{ padding: '28px 36px', maxWidth: 1600, margin: '0 auto' }}>
                 {render()}
               </div>
@@ -367,7 +387,7 @@ export default function App() {
           </main>
         </div>
         <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} />
-        <SusBotPanel page={page} onNavigate={setPage} ibge6={MUNICIPIO_ATIVO_IBGE6} />
+        <SusBotPanel page={page} onNavigate={setPage} ibge6={MUNICIPIO_ATIVO_IBGE6} onOpenChange={setChatAberto} />
       </div>
     </ThemeContext.Provider>
   );
