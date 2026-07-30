@@ -102,7 +102,7 @@ export default function LoginScreen({ onEnter }) {
         {/* meio: headline */}
         <div style={{ position: 'relative', maxWidth: 460 }}>
           <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 10, fontWeight: 700,
+            display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11, fontWeight: 700,
             letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8FCFC0',
             background: 'rgba(77,184,160,0.12)', border: '1px solid rgba(77,184,160,0.3)',
             padding: '5px 11px', borderRadius: 999, marginBottom: 22,
@@ -128,7 +128,7 @@ export default function LoginScreen({ onEnter }) {
           <div style={{ display: 'flex', gap: 36, marginTop: 36 }}>
             {[['5.570', 'municípios'], ['6', 'bases SUS'], ['Prophet', '+ OLS']].map(([v, l]) => (
               <div key={l}>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>{v}</div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>{v}</div>
                 <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7FA8A2', marginTop: 6 }}>{l}</div>
               </div>
             ))}
@@ -146,7 +146,7 @@ export default function LoginScreen({ onEnter }) {
         flex: '1 1 48%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32,
       }}>
         <div style={{ width: '100%', maxWidth: 380 }}>
-          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#6B665D', margin: '0 0 6px' }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#6B665D', margin: '0 0 6px' }}>
             Bem-vinda de volta
           </p>
           <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', margin: '0 0 28px', letterSpacing: '-0.01em' }}>
@@ -160,7 +160,7 @@ export default function LoginScreen({ onEnter }) {
               onChange={e => setEmail(e.target.value)}
               style={{
                 width: '100%', padding: '13px 16px', marginBottom: 10, background: '#FFFFFF',
-                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 14, color: '#1A1814',
+                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 15, color: '#1A1814',
                 boxSizing: 'border-box', outline: 'none',
               }}
             />
@@ -169,7 +169,7 @@ export default function LoginScreen({ onEnter }) {
               onChange={e => setSenha(e.target.value)}
               style={{
                 width: '100%', padding: '13px 16px', marginBottom: 14, background: '#FFFFFF',
-                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 14, color: '#1A1814',
+                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 15, color: '#1A1814',
                 boxSizing: 'border-box', outline: 'none',
               }}
             />
@@ -177,7 +177,7 @@ export default function LoginScreen({ onEnter }) {
               type="submit" disabled={carregando}
               style={{
                 width: '100%', padding: '13px 16px', background: '#1B5E6E', color: '#fff',
-                border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700,
+                border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700,
                 cursor: carregando ? 'default' : 'pointer', opacity: carregando ? 0.7 : 1,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}
@@ -207,7 +207,7 @@ export default function LoginScreen({ onEnter }) {
             }}>MO</span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#1A1814', lineHeight: 1.2 }}>Entrar como dev</span>
-              <span style={{ display: 'block', fontSize: 12, color: '#8A8579', marginTop: 2 }}>Gera um token real para testar o SusBot</span>
+              <span style={{ display: 'block', fontSize: 13, color: '#8A8579', marginTop: 2 }}>Gera um token real para testar o SusBot</span>
             </span>
             <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#1B5E6E' }}>arrow_forward</span>
           </button>
@@ -232,12 +232,12 @@ export default function LoginScreen({ onEnter }) {
               marginTop: 18, padding: '13px 15px', background: '#FBF1E3', border: '1px solid #ECDCC2',
               borderRadius: 12, display: 'flex', gap: 11, alignItems: 'flex-start',
             }}>
-              <span className="material-symbols-rounded" style={{ fontSize: 19, color: '#A6580F', flexShrink: 0 }}>construction</span>
+              <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#A6580F', flexShrink: 0 }}>construction</span>
               <span style={{ color: '#7A4A12', fontSize: 13, lineHeight: 1.5 }}>{erro}</span>
             </div>
           )}
 
-          <p style={{ marginTop: 28, fontSize: 11.5, color: '#A8A39A', textAlign: 'center', lineHeight: 1.5 }}>
+          <p style={{ marginTop: 28, fontSize: 11, color: '#A8A39A', textAlign: 'center', lineHeight: 1.5 }}>
             Ao continuar você concorda com o uso de dados públicos<br />conforme a política de privacidade do SUS Predict.
           </p>
         </div>

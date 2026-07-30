@@ -208,21 +208,21 @@ function exportarCSV(nomeArquivo, cabecalho, linhas) {
 
 const estiloBotaoPrimario = {
   padding: '9px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'var(--primary)', color: 'white', fontSize: 12.5, fontWeight: 700,
+  background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700,
   display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
 };
 
 const estiloBotaoOutline = {
-  padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+  padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700,
   border: '1px solid var(--ink-100)', background: 'var(--elev)', color: 'var(--ink-700)',
   display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
 };
 
 const estiloTh = {
-  textAlign: 'left', padding: '10px 14px', fontSize: 10.5, fontWeight: 700,
+  textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 700,
   textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)',
 };
-const estiloTd = { padding: '11px 14px', fontSize: 12.5, color: 'var(--ink-900)' };
+const estiloTd = { padding: '11px 14px', fontSize: 13, color: 'var(--ink-900)' };
 const estiloTdMono = { ...estiloTd, fontFamily: 'JetBrains Mono, monospace' };
 
 // ─── Sub-componentes ────────────────────────────────────────────────────────
@@ -230,7 +230,7 @@ const estiloTdMono = { ...estiloTd, fontFamily: 'JetBrains Mono, monospace' };
 function CampoSelect({ label, value, onChange, options, disabled }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
         {label}
       </span>
       <select
@@ -239,7 +239,7 @@ function CampoSelect({ label, value, onChange, options, disabled }) {
         onChange={e => onChange(e.target.value)}
         style={{
           padding: '8px 30px 8px 10px', borderRadius: 7, border: '1px solid var(--ink-100)',
-          fontSize: 12.5, fontWeight: 600, color: 'var(--ink-900)', background: 'var(--elev)',
+          fontSize: 13, fontWeight: 600, color: 'var(--ink-900)', background: 'var(--elev)',
           cursor: disabled ? 'default' : 'pointer', minWidth: 152, opacity: disabled ? 0.6 : 1,
         }}
       >
@@ -295,10 +295,10 @@ function BarraFiltro({ draft, onChangeDraft, carregando, onRecalcular, onExporta
 function StatInline({ valor, label }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 23, fontWeight: 800, color: 'var(--ink-900)' }}>
+      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)' }}>
         {valor}
       </span>
-      <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-500)' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-500)' }}>{label}</span>
     </div>
   );
 }
@@ -329,7 +329,7 @@ function LegendaLinha({ itens }) {
           <span style={{
             width: 16, height: it.tracejado ? 0 : 2.5, borderTop: it.tracejado ? `2px dashed ${it.cor}` : `2.5px solid ${it.cor}`,
           }} />
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-500)' }}>{it.label}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-500)' }}>{it.label}</span>
         </div>
       ))}
     </div>
@@ -339,7 +339,7 @@ function LegendaLinha({ itens }) {
 function TooltipSazonalidade({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
   return (
-    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '8px 12px', fontSize: 11, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
       <p style={{ fontWeight: 700, color: 'var(--ink-900)', marginBottom: 4 }}>{label}</p>
       {payload.map(p => p.value != null && (
         <p key={p.dataKey} style={{ color: 'var(--ink-500)', margin: '2px 0' }}>
@@ -384,13 +384,13 @@ function PorCidade({ dados }) {
       <SectionTitle>Por cidade</SectionTitle>
       {dados.map(c => (
         <div key={c.nome} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 13 }}>
-          <div style={{ width: 92, flexShrink: 0, fontSize: 11.5, fontWeight: c.destaque ? 800 : 600, color: c.destaque ? 'var(--ink-900)' : 'var(--ink-500)' }}>
+          <div style={{ width: 92, flexShrink: 0, fontSize: 11, fontWeight: c.destaque ? 800 : 600, color: c.destaque ? 'var(--ink-900)' : 'var(--ink-500)' }}>
             {c.nome}
           </div>
           <div style={{ flex: 1, height: 9, borderRadius: 99, background: 'var(--ink-100)', overflow: 'hidden' }}>
             <div style={{ width: `${(c.casos / max) * 100}%`, height: '100%', borderRadius: 99, background: c.destaque ? 'var(--primary)' : 'var(--accent)' }} />
           </div>
-          <div style={{ width: 52, flexShrink: 0, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5, fontWeight: 700, color: 'var(--ink-900)' }}>
+          <div style={{ width: 52, flexShrink: 0, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: 'var(--ink-900)' }}>
             {c.casos.toLocaleString('pt-BR')}
           </div>
         </div>
@@ -402,7 +402,7 @@ function PorCidade({ dados }) {
 function TooltipBarra({ active, payload, label, sufixo }) {
   if (!active || !payload || !payload.length) return null;
   return (
-    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '7px 11px', fontSize: 11.5, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '7px 11px', fontSize: 11, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
       <p style={{ fontWeight: 700, color: 'var(--ink-900)', margin: 0 }}>{label}{sufixo || ''}</p>
       <p style={{ color: 'var(--ink-500)', margin: '2px 0 0' }}>
         {payload[0].value.toLocaleString('pt-BR')} casos
@@ -418,8 +418,8 @@ function FaixaEtaria({ dados }) {
       <ResponsiveContainer width="100%" height={186}>
         <BarChart data={dados} margin={{ top: 4, right: 6, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--ink-100)" vertical={false} />
-          <XAxis dataKey="faixa" tick={{ fontSize: 10.5, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
-          <YAxis tick={{ fontSize: 10.5, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={46} />
+          <XAxis dataKey="faixa" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={46} />
           <Tooltip content={<TooltipBarra />} cursor={{ fill: 'var(--subtle)' }} />
           <Bar dataKey="casos" fill="var(--primary)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
         </BarChart>
@@ -440,15 +440,15 @@ function Genero({ dados }) {
             <Pie data={dados} dataKey="pct" nameKey="genero" innerRadius={40} outerRadius={62} paddingAngle={2} isAnimationActive={false}>
               {dados.map((d, i) => <Cell key={d.genero} fill={CORES_GENERO[i % CORES_GENERO.length]} stroke="none" />)}
             </Pie>
-            <Tooltip formatter={(v, n) => [`${v}%`, n]} contentStyle={{ fontSize: 11.5, borderRadius: 8, border: '1px solid var(--ink-100)' }} />
+            <Tooltip formatter={(v, n) => [`${v}%`, n]} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--ink-100)' }} />
           </PieChart>
         </ResponsiveContainer>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
           {dados.map((d, i) => (
             <div key={d.genero} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <span style={{ width: 9, height: 9, borderRadius: '50%', background: CORES_GENERO[i % CORES_GENERO.length] }} />
-              <span style={{ fontSize: 12, color: 'var(--ink-700)', fontWeight: 600 }}>{d.genero}</span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: 'var(--ink-900)' }}>{d.pct}%</span>
+              <span style={{ fontSize: 13, color: 'var(--ink-700)', fontWeight: 600 }}>{d.genero}</span>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: 'var(--ink-900)' }}>{d.pct}%</span>
             </div>
           ))}
         </div>
@@ -461,7 +461,7 @@ function TooltipDesfecho({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
   const rotulos = { leves: 'Leves', hospitalizacoes: 'Hospitalizações', obitos: 'Óbitos' };
   return (
-    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '8px 12px', fontSize: 11, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
       <p style={{ fontWeight: 700, color: 'var(--ink-900)', marginBottom: 4 }}>{label}</p>
       {payload.slice().reverse().map(p => (
         <p key={p.dataKey} style={{ color: 'var(--ink-500)', margin: '2px 0' }}>
@@ -500,7 +500,7 @@ function TabelaDetalhada({ linhas, onExportar }) {
   return (
     <Card style={{ marginTop: 20 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '18px 20px 4px' }}>
-        <h2 style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 14, fontWeight: 700, color: 'var(--ink-900)', margin: 0 }}>
+        <h2 style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', margin: 0 }}>
           Casos por competência
         </h2>
         <button

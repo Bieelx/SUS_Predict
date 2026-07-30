@@ -39,7 +39,7 @@ const RASCUNHOS_INICIAIS = {
 
 const estiloBotaoPrimario = {
   padding: '9px 17px', borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'var(--primary)', color: 'white', fontSize: 12.5, fontWeight: 700,
+  background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700,
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
 
@@ -48,7 +48,7 @@ const estiloBotaoPrimarioDesabilitado = {
 };
 
 const estiloBotaoOutline = {
-  padding: '9px 17px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+  padding: '9px 17px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700,
   border: '1px solid var(--ink-100)', background: 'var(--elev)', color: 'var(--ink-700)',
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
@@ -69,13 +69,13 @@ function Stepper({ etapaAtual }) {
             <span style={{
               width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 10.5, fontWeight: 800,
+              fontSize: 11, fontWeight: 800,
               background: estado === 'futura' ? 'var(--ink-100)' : 'var(--primary)',
               color: estado === 'futura' ? 'var(--ink-400)' : 'white',
             }}>
               {estado === 'concluida' ? <MIcon m="check" size={13} /> : e.id}
             </span>
-            <span style={{ fontSize: 12, fontWeight: estado === 'atual' ? 700 : 600, color: cor }}>
+            <span style={{ fontSize: 13, fontWeight: estado === 'atual' ? 700 : 600, color: cor }}>
               {e.label}
             </span>
           </div>
@@ -90,10 +90,10 @@ function Stepper({ etapaAtual }) {
 function CampoLeitura({ label, valor }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <p style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)', margin: '0 0 4px' }}>
+      <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)', margin: '0 0 4px' }}>
         {label}
       </p>
-      <p style={{ fontSize: 13.5, color: 'var(--ink-900)', margin: 0, lineHeight: 1.5 }}>
+      <p style={{ fontSize: 13, color: 'var(--ink-900)', margin: 0, lineHeight: 1.5 }}>
         {valor}
       </p>
     </div>
@@ -116,11 +116,11 @@ function Etapa1DadosSistema({ item }) {
         valor={`${qtd6meses.toLocaleString('pt-BR')} unidades`}
       />
       <div style={{ marginBottom: 4 }}>
-        <p style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)', margin: '0 0 4px' }}>
+        <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)', margin: '0 0 4px' }}>
           Referência legal aplicável
         </p>
-        <p style={{ fontSize: 13.5, color: 'var(--ink-900)', margin: 0 }}>{REFERENCIA_LEGAL}</p>
-        <p style={{ fontSize: 10.5, color: 'var(--ink-400)', margin: '3px 0 0', fontStyle: 'italic' }}>
+        <p style={{ fontSize: 13, color: 'var(--ink-900)', margin: 0 }}>{REFERENCIA_LEGAL}</p>
+        <p style={{ fontSize: 11, color: 'var(--ink-400)', margin: '3px 0 0', fontStyle: 'italic' }}>
           referência genérica — não substitui parecer jurídico
         </p>
       </div>
@@ -134,7 +134,7 @@ function Etapa1DadosSistema({ item }) {
           <span style={{ color: 'var(--warn)', display: 'flex', marginTop: 1 }}>
             <MIcon m="warning" size={16} />
           </span>
-          <span style={{ fontSize: 12, color: 'var(--ink-700)' }}>
+          <span style={{ fontSize: 13, color: 'var(--ink-700)' }}>
             Estoque atualizado há {item.atualizadoHaDias} dias — confiança reduzida.
             Isso não impede a geração do ETP; avalie se o dado ainda é confiável antes de avançar.
           </span>
@@ -149,7 +149,7 @@ function Etapa1DadosSistema({ item }) {
 function CampoTexto({ label, value, onChange }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 16 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
         {label}
       </span>
       <input
@@ -168,7 +168,7 @@ function CampoTexto({ label, value, onChange }) {
 function Etapa2DadosSecretaria({ dados, onChange }) {
   return (
     <div>
-      <p style={{ fontSize: 12.5, color: 'var(--ink-500)', margin: '0 0 18px', lineHeight: 1.6 }}>
+      <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: '0 0 18px', lineHeight: 1.6 }}>
         Dados que o sistema não tem acesso automático — preenchimento parcial é aceitável
         para deixar um rascunho e continuar depois.
       </p>
@@ -184,7 +184,7 @@ function Etapa2DadosSecretaria({ dados, onChange }) {
 function Etapa3Revisao({ texto, onTextoChange, aprovado, onAprovadoChange }) {
   return (
     <div>
-      <p style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)', margin: '0 0 8px' }}>
+      <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)', margin: '0 0 8px' }}>
         Justificativa técnica (editável)
       </p>
       <textarea
@@ -197,7 +197,7 @@ function Etapa3Revisao({ texto, onTextoChange, aprovado, onAprovadoChange }) {
           resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box',
         }}
       />
-      <p style={{ fontSize: 10.5, color: 'var(--ink-400)', margin: '6px 0 16px', fontStyle: 'italic' }}>
+      <p style={{ fontSize: 11, color: 'var(--ink-400)', margin: '6px 0 16px', fontStyle: 'italic' }}>
         texto gerado com apoio de IA — revisão humana obrigatória
       </p>
 
@@ -252,7 +252,7 @@ function ToastEtpGerado({ toast, onClose }) {
           ETP gerado — {toast.nome}
         </span>
       </div>
-      <button onClick={() => baixarEtpPdf(toast)} style={{ ...estiloBotaoPrimario, padding: '7px 13px', fontSize: 11.5 }}>
+      <button onClick={() => baixarEtpPdf(toast)} style={{ ...estiloBotaoPrimario, padding: '7px 13px', fontSize: 11 }}>
         <MIcon m="download" size={14} /> Baixar PDF
       </button>
       <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', display: 'flex' }}>
@@ -442,7 +442,7 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento }) {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 26px', borderBottom: '1px solid var(--ink-100)', flexShrink: 0 }}>
-              <h3 id="etp-modal-titulo" style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 16.5, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
+              <h3 id="etp-modal-titulo" style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
                 Gerar ETP — {origem.item.nome}
               </h3>
               <button onClick={fechar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', display: 'flex' }}>

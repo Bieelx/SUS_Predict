@@ -15,29 +15,29 @@ const RASCUNHO_SORO = { nome: 'Soro fisiológico 1L', diasRestantes: 28, consumo
 
 const estiloBotaoPrimario = {
   padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'var(--primary)', color: 'white', fontSize: 11.5, fontWeight: 700,
+  background: 'var(--primary)', color: 'white', fontSize: 11, fontWeight: 700,
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
 
 const estiloBotaoOutline = {
-  padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 11.5, fontWeight: 700,
+  padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 700,
   border: '1px solid var(--ink-100)', background: 'var(--elev)', color: 'var(--ink-700)',
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
 
 const estiloTh = {
-  textAlign: 'left', padding: '10px 18px', fontSize: 10.5, fontWeight: 700,
+  textAlign: 'left', padding: '10px 18px', fontSize: 11, fontWeight: 700,
   textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)',
 };
 
-const estiloTd = { padding: '13px 18px', fontSize: 12.5, color: 'var(--ink-900)' };
+const estiloTd = { padding: '13px 18px', fontSize: 13, color: 'var(--ink-900)' };
 
 function StatusChip({ status }) {
   const cor = STATUS_COR[status];
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', padding: '3px 9px', borderRadius: 999,
-      fontSize: 10.5, fontWeight: 700, background: cor + '22', color: cor,
+      fontSize: 11, fontWeight: 700, background: cor + '22', color: cor,
     }}>
       {STATUS_LABEL[status]}
     </span>

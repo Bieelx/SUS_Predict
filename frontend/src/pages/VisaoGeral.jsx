@@ -133,7 +133,7 @@ function BannerStatus({ onNavigate }) {
               índice {STATUS.indice}/100
             </span>
           </div>
-          <p style={{ fontSize: 14, color: 'var(--ink-700)', margin: 0 }}>{STATUS.frase}</p>
+          <p style={{ fontSize: 15, color: 'var(--ink-700)', margin: 0 }}>{STATUS.frase}</p>
         </div>
       </div>
       <button
@@ -151,7 +151,10 @@ function BannerStatus({ onNavigate }) {
 
 function BlocoSusBot() {
   return (
-    <div style={{ borderLeft: '3px solid var(--accent)', paddingLeft: 18, marginBottom: 28, maxWidth: '78ch' }}>
+    <div style={{
+      background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)',
+      borderRadius: 12, padding: '16px 18px', marginBottom: 28, maxWidth: '78ch',
+    }}>
       <p className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
         <MIcon m="smart_toy" size={14} /> SusBot
       </p>
@@ -167,7 +170,7 @@ function BotaoAlerta({ children, primario, onClick }) {
     <button
       onClick={onClick}
       style={{
-        flexShrink: 0, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+        flexShrink: 0, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700,
         border: primario ? 'none' : '1px solid var(--primary)',
         background: primario ? 'var(--primary)' : 'transparent',
         color: primario ? 'white' : 'var(--primary)',
@@ -196,10 +199,10 @@ function LinhaAlerta({ alerta, isLast, onNavigate, onGerarEtp }) {
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, minWidth: 0 }}>
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: dotCor, flexShrink: 0 }} />
-        <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink-900)', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-900)', whiteSpace: 'nowrap' }}>
           {alerta.titulo}
         </span>
-        <span style={{ fontSize: 12, color: 'var(--ink-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span style={{ fontSize: 13, color: 'var(--ink-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {alerta.evidencia}
         </span>
       </div>
@@ -229,7 +232,7 @@ function AlertasPrioritarios({ onNavigate, onGerarEtp }) {
         onClick={() => onNavigate('alertas')}
         style={{
           marginTop: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-          fontSize: 12.5, fontWeight: 600, color: 'var(--primary)',
+          fontSize: 13, fontWeight: 600, color: 'var(--primary)',
         }}
       >
         Ver todos na Central de Alertas →
@@ -247,7 +250,7 @@ function TooltipDengue({ active, payload, label }) {
   return (
     <div style={{
       background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8,
-      padding: '8px 12px', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      padding: '8px 12px', fontSize: 13, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     }}>
       <p style={{ fontWeight: 700, color: 'var(--ink-900)', marginBottom: 2 }}>{label}</p>
       <p style={{ color: 'var(--ink-500)' }}>
@@ -268,10 +271,10 @@ function CardPrevisaoDengue() {
         <ComposedChart data={DENGUE_SERIE} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--ink-100)" vertical={false} />
           <XAxis
-            dataKey="mes" tick={{ fontSize: 10, fill: 'var(--ink-400)' }}
+            dataKey="mes" tick={{ fontSize: 11, fill: 'var(--ink-400)' }}
             axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} interval={1}
           />
-          <YAxis tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={40} />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={40} />
           <Tooltip content={<TooltipDengue />} />
           <Area type="monotone" dataKey="icBaixo" stackId="ic" stroke="none" fill="transparent" isAnimationActive={false} />
           <Area type="monotone" dataKey="icRange" stackId="ic" stroke="none" fill="var(--accent)" fillOpacity={0.16} isAnimationActive={false} />
@@ -293,20 +296,24 @@ function CardPrevisaoDengue() {
   );
 }
 
-function CardRankingRegional() {
-  const max = Math.max(...RANKING_REGIONAL.map(r => r.valor));
+// Escala fixa 0–100, não normalizada pelo maior valor: com `/max` o primeiro
+// colocado desenhava sempre a barra cheia e lia como "risco máximo", além de
+// impedir comparação entre municípios ao longo do tempo.
+function CardRankingRegional({ municipio }) {
   return (
     <Card className="p-5">
       <SectionTitle>Ranking regional de risco</SectionTitle>
       <p style={{ fontSize: 11, color: 'var(--ink-400)', marginTop: -10, marginBottom: 14 }}>
-        Regional de Saúde de Cotia
+        Regional de Saúde de {municipio.nome} · índice 0–100
       </p>
       <div>
-        {RANKING_REGIONAL.map(r => (
+        {RANKING_REGIONAL.map(item => {
+          const r = { ...item, voce: item.nome === municipio.nome };
+          return (
           <div key={r.nome} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{
               width: 104, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 11.5, fontWeight: r.voce ? 700 : 500, color: 'var(--ink-900)',
+              fontSize: 11, fontWeight: r.voce ? 700 : 500, color: 'var(--ink-900)',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
               {r.nome}
@@ -314,18 +321,19 @@ function CardRankingRegional() {
             </div>
             <div style={{ flex: 1, height: 8, borderRadius: 99, background: 'var(--ink-100)', overflow: 'hidden' }}>
               <div style={{
-                width: `${(r.valor / max) * 100}%`, height: '100%', borderRadius: 99,
+                width: `${r.valor}%`, height: '100%', borderRadius: 99,
                 background: corFaixaRisco(r.valor),
               }} />
             </div>
             <div style={{
               width: 36, flexShrink: 0, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 12, fontWeight: r.voce ? 700 : 500, color: 'var(--ink-900)',
+              fontSize: 13, fontWeight: r.voce ? 700 : 500, color: 'var(--ink-900)',
             }}>
-              {r.valor.toLocaleString('pt-BR')}%
+              {r.valor.toLocaleString('pt-BR')}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );
@@ -333,7 +341,9 @@ function CardRankingRegional() {
 
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-export default function VisaoGeral({ onNavigate, onGerarEtp }) {
+// O município deixou de aparecer no <h1>: ele é contexto global do app e agora
+// vive no seletor da topbar, visível em todas as telas.
+export default function VisaoGeral({ onNavigate, onGerarEtp, municipio = MUNICIPIO }) {
   return (
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
@@ -341,10 +351,7 @@ export default function VisaoGeral({ onNavigate, onGerarEtp }) {
           fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800,
           color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4,
         }}>
-          Visão Geral{' '}
-          <span style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
-            — {MUNICIPIO.nome}, {MUNICIPIO.uf}
-          </span>
+          Visão Geral
         </h1>
         <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: 0 }}>
           Em 30 segundos: o que precisa da sua decisão agora.
@@ -357,7 +364,7 @@ export default function VisaoGeral({ onNavigate, onGerarEtp }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
         <CardPrevisaoDengue />
-        <CardRankingRegional />
+        <CardRankingRegional municipio={municipio} />
       </div>
     </div>
   );

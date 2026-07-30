@@ -74,7 +74,7 @@ export function Card({ children, className = '', style = {} }) {
 export function SectionTitle({ children, action }) {
   return (
     <div className="flex items-baseline justify-between mb-4">
-      <h2 style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1814', margin: 0 }}>
+      <h2 style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814', margin: 0 }}>
         {children}
       </h2>
       {action && (
@@ -88,16 +88,18 @@ export function SectionTitle({ children, action }) {
 
 export function Badge({ label, color }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: color + '22', color }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: color + '22', color }}>
       {label}
     </span>
   );
 }
 
 // Ícone Material Symbols (Google Fonts). `m` = nome do ícone.
+// aria-hidden porque o glifo é o próprio nome do ícone em texto: sem isso o
+// leitor de tela anuncia "grid_view Visão Geral".
 export function MIcon({ m, size = 19 }) {
   return (
-    <span className="material-symbols-rounded" style={{ fontSize: size, lineHeight: 1 }}>
+    <span className="material-symbols-rounded" aria-hidden="true" style={{ fontSize: size, lineHeight: 1 }}>
       {m}
     </span>
   );

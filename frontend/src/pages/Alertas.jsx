@@ -198,7 +198,7 @@ function ChipFiltro({ ativo, onClick, children }) {
     <button
       onClick={onClick}
       style={{
-        padding: '5px 13px', borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+        padding: '5px 13px', borderRadius: 99, fontSize: 13, fontWeight: 600, cursor: 'pointer',
         background: ativo ? 'var(--primary)' : 'transparent',
         color: ativo ? 'white' : 'var(--ink-500)',
         border: ativo ? '1px solid var(--primary)' : '1px solid var(--ink-200)',
@@ -215,7 +215,7 @@ function ChipEstado({ status, cor }) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 4,
-        fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
+        fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
         color: cor, background: `color-mix(in srgb, ${cor} 16%, var(--elev))`,
         border: `1px solid color-mix(in srgb, ${cor} 35%, transparent)`, whiteSpace: 'nowrap',
       }}>
@@ -226,7 +226,7 @@ function ChipEstado({ status, cor }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 4,
-      fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
+      fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
       color: 'var(--warn)', background: 'color-mix(in srgb, var(--warn) 14%, var(--elev))',
       border: '1px solid color-mix(in srgb, var(--warn) 30%, transparent)', whiteSpace: 'nowrap',
     }}>
@@ -241,7 +241,7 @@ function BotaoAcao({ alerta, onAcao }) {
     <button
       onClick={(e) => onAcao(e, alerta)}
       style={{
-        flexShrink: 0, padding: '7px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 700,
+        flexShrink: 0, padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700,
         cursor: 'pointer', whiteSpace: 'nowrap',
         background: primario ? 'var(--primary)' : 'var(--primary-soft)',
         color: primario ? 'white' : 'var(--primary)',
@@ -285,16 +285,16 @@ function LinhaAlerta({ alerta, onAbrir, onAcao }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <MIcon m={TIPO_ICONE[alerta.tipo]} size={15} />
-          <p style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink-900)', margin: 0 }}>{alerta.titulo}</p>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-900)', margin: 0 }}>{alerta.titulo}</p>
         </div>
-        <p style={{ fontSize: 12.5, color: 'var(--ink-500)', margin: '3px 0 0' }}>{alerta.evidencia}</p>
-        <p style={{ fontFamily: 'var(--ff-mono, monospace)', fontSize: 10.5, color: 'var(--ink-300)', margin: '5px 0 0' }}>
+        <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: '3px 0 0' }}>{alerta.evidencia}</p>
+        <p style={{ fontFamily: 'var(--ff-mono, monospace)', fontSize: 11, color: 'var(--ink-300)', margin: '5px 0 0' }}>
           {alerta.origem} · {alerta.tempo}
         </p>
         {destaque && (
           <p style={{
             display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, padding: '3px 8px',
-            borderRadius: 5, fontSize: 10.5, fontWeight: 700, color: 'var(--warn)',
+            borderRadius: 5, fontSize: 11, fontWeight: 700, color: 'var(--warn)',
             background: 'color-mix(in srgb, var(--warn) 12%, var(--elev))',
           }}>
             <MIcon m="schedule" size={12} />
@@ -329,10 +329,10 @@ function LinhaHistorico({ item, onAbrir }) {
       }}
     >
       <MIcon m={TIPO_ICONE[item.tipo]} size={14} />
-      <p style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-400)', margin: 0 }}>
+      <p style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink-400)', margin: 0 }}>
         {item.titulo}
       </p>
-      <p style={{ fontFamily: 'var(--ff-mono, monospace)', fontSize: 10.5, color: 'var(--ink-300)', margin: 0, flexShrink: 0 }}>
+      <p style={{ fontFamily: 'var(--ff-mono, monospace)', fontSize: 11, color: 'var(--ink-300)', margin: 0, flexShrink: 0 }}>
         surgiu {item.surgiu} · agido {item.agido} · resolvido {item.resolvido}
       </p>
     </div>
@@ -348,8 +348,8 @@ function GraficoDrawer({ detalhe }) {
         <ResponsiveContainer width="100%" height={170}>
           <ComposedChart data={detalhe.serie} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
             <CartesianGrid stroke="var(--ink-50)" vertical={false} />
-            <XAxis dataKey="semana" tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
-            <YAxis tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="semana" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--ink-100)' }} />
             {/* banda de confiança: pinta 0→max, depois "apaga" 0→min por cima com a cor de fundo */}
             <Area type="monotone" dataKey="max" stroke="none" fill="var(--info)" fillOpacity={0.14} isAnimationActive={false} />
@@ -357,7 +357,7 @@ function GraficoDrawer({ detalhe }) {
             <Line type="monotone" dataKey="casos" stroke="var(--info)" strokeWidth={2.2} dot={false} isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
-        <p style={{ fontSize: 10.5, color: 'var(--ink-400)', textAlign: 'center', marginTop: 2 }}>
+        <p style={{ fontSize: 11, color: 'var(--ink-400)', textAlign: 'center', marginTop: 2 }}>
           modelo Holt · confiança {detalhe.probabilidade}%
         </p>
       </>
@@ -369,10 +369,10 @@ function GraficoDrawer({ detalhe }) {
       <ResponsiveContainer width="100%" height={170}>
         <LineChart data={detalhe.serie} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
           <CartesianGrid stroke="var(--ink-50)" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} />
           <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--ink-100)' }} />
-          <ReferenceLine y={detalhe.limiar} stroke="var(--warn)" strokeDasharray="4 3" label={{ value: 'limiar de reposição', position: 'insideTopRight', fontSize: 9.5, fill: 'var(--warn)' }} />
+          <ReferenceLine y={detalhe.limiar} stroke="var(--warn)" strokeDasharray="4 3" label={{ value: 'limiar de reposição', position: 'insideTopRight', fontSize: 11, fill: 'var(--warn)' }} />
           <Line type="monotone" dataKey="estoque" stroke="var(--risk-alto)" strokeWidth={2.2} dot={{ r: 2.5 }} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
@@ -384,10 +384,10 @@ function GraficoDrawer({ detalhe }) {
       <ResponsiveContainer width="100%" height={170}>
         <LineChart data={detalhe.serie} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
           <CartesianGrid stroke="var(--ink-50)" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
-          <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
+          <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} />
           <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--ink-100)' }} />
-          <ReferenceLine y={detalhe.threshold} stroke="var(--bad)" strokeDasharray="4 3" label={{ value: `threshold ${detalhe.threshold}%`, position: 'insideTopRight', fontSize: 9.5, fill: 'var(--bad)' }} />
+          <ReferenceLine y={detalhe.threshold} stroke="var(--bad)" strokeDasharray="4 3" label={{ value: `threshold ${detalhe.threshold}%`, position: 'insideTopRight', fontSize: 11, fill: 'var(--bad)' }} />
           <Line type="monotone" dataKey="ocupacao" stroke="var(--risk-medio)" strokeWidth={2.2} dot={{ r: 2.5 }} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
@@ -407,8 +407,8 @@ function Timeline({ passos }) {
             {i < passos.length - 1 && <span style={{ width: 1.5, flex: 1, background: 'var(--ink-100)', minHeight: 24 }} />}
           </div>
           <div style={{ paddingBottom: 16 }}>
-            <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-900)', margin: 0 }}>{p.rotulo}</p>
-            <p style={{ fontSize: 11.5, color: 'var(--ink-500)', margin: '2px 0 0' }}>{p.data}</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-900)', margin: 0 }}>{p.rotulo}</p>
+            <p style={{ fontSize: 11, color: 'var(--ink-500)', margin: '2px 0 0' }}>{p.data}</p>
           </div>
         </div>
       ))}
@@ -493,17 +493,17 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
           <span>
             <strong style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink-900)' }}>{nNovos.toLocaleString('pt-BR')}</strong>{' '}
-            <span style={{ fontSize: 12.5, color: 'var(--ink-500)' }}>novos</span>
+            <span style={{ fontSize: 13, color: 'var(--ink-500)' }}>novos</span>
           </span>
           <span style={{ color: 'var(--ink-200)' }}>·</span>
           <span>
             <strong style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink-900)' }}>{nAndamento.toLocaleString('pt-BR')}</strong>{' '}
-            <span style={{ fontSize: 12.5, color: 'var(--ink-500)' }}>em andamento</span>
+            <span style={{ fontSize: 13, color: 'var(--ink-500)' }}>em andamento</span>
           </span>
           <span style={{ color: 'var(--ink-200)' }}>·</span>
           <span>
             <strong style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink-900)' }}>{nResolvidos.toLocaleString('pt-BR')}</strong>{' '}
-            <span style={{ fontSize: 12.5, color: 'var(--ink-500)' }}>resolvidos</span>
+            <span style={{ fontSize: 13, color: 'var(--ink-500)' }}>resolvidos</span>
           </span>
         </div>
       </div>
@@ -546,7 +546,7 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
         {historicoAberto && (
           <div style={{ marginTop: 12 }}>
             {historicoFiltrado.length === 0 ? (
-              <p style={{ fontSize: 12.5, color: 'var(--ink-400)', padding: '10px 0' }}>Nenhum item resolvido para este filtro.</p>
+              <p style={{ fontSize: 13, color: 'var(--ink-400)', padding: '10px 0' }}>Nenhum item resolvido para este filtro.</p>
             ) : (
               historicoFiltrado.map(h => (
                 <LinhaHistorico key={h.id} item={h} onAbrir={abrirDrawerHistorico} />
@@ -581,10 +581,10 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
                   <div>
                     <ChipEstado status={alertaAtivoDrawer.status} cor={(SEVERIDADE[alertaAtivoDrawer.severidade] || SEVERIDADE.alerta).cor} />
-                    <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 17, fontWeight: 800, color: 'var(--ink-900)', margin: '8px 0 0' }}>
+                    <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 20, fontWeight: 800, color: 'var(--ink-900)', margin: '8px 0 0' }}>
                       {alertaAtivoDrawer.titulo}
                     </h2>
-                    <p style={{ fontFamily: 'var(--ff-mono, monospace)', fontSize: 10.5, color: 'var(--ink-300)', margin: '4px 0 0' }}>
+                    <p style={{ fontFamily: 'var(--ff-mono, monospace)', fontSize: 11, color: 'var(--ink-300)', margin: '4px 0 0' }}>
                       {alertaAtivoDrawer.origem} · {alertaAtivoDrawer.tempo}
                     </p>
                   </div>
@@ -593,7 +593,7 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
                   </button>
                 </div>
 
-                <p style={{ fontSize: 12.5, color: 'var(--ink-500)', lineHeight: 1.5, marginBottom: 16 }}>
+                <p style={{ fontSize: 13, color: 'var(--ink-500)', lineHeight: 1.5, marginBottom: 16 }}>
                   {alertaAtivoDrawer.detalhe.texto}
                 </p>
 
@@ -601,7 +601,7 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
                   <GraficoDrawer detalhe={alertaAtivoDrawer.detalhe} />
                 </div>
 
-                <p style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-700)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-700)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
                   Linha do tempo do alerta
                 </p>
                 <Timeline passos={alertaAtivoDrawer.timeline} />
@@ -618,16 +618,16 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
                   <div>
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 4,
-                      fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
+                      fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
                       color: 'var(--good)', background: 'color-mix(in srgb, var(--good) 14%, var(--elev))',
                       border: '1px solid color-mix(in srgb, var(--good) 30%, transparent)',
                     }}>
                       Resolvido
                     </span>
-                    <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 17, fontWeight: 800, color: 'var(--ink-900)', margin: '8px 0 0' }}>
+                    <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 20, fontWeight: 800, color: 'var(--ink-900)', margin: '8px 0 0' }}>
                       {itemHistoricoDrawer.titulo}
                     </h2>
-                    <p style={{ fontFamily: 'var(--ff-mono, monospace)', fontSize: 10.5, color: 'var(--ink-300)', margin: '4px 0 0' }}>
+                    <p style={{ fontFamily: 'var(--ff-mono, monospace)', fontSize: 11, color: 'var(--ink-300)', margin: '4px 0 0' }}>
                       {TIPO_LABEL[itemHistoricoDrawer.tipo]}
                     </p>
                   </div>
@@ -636,11 +636,11 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
                   </button>
                 </div>
 
-                <p style={{ fontSize: 12.5, color: 'var(--ink-500)', lineHeight: 1.5, marginBottom: 20 }}>
+                <p style={{ fontSize: 13, color: 'var(--ink-500)', lineHeight: 1.5, marginBottom: 20 }}>
                   Alerta reconfirmado como resolvido pelo sistema em {itemHistoricoDrawer.resolvido} — condição de origem não existe mais no dado.
                 </p>
 
-                <p style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-700)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-700)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
                   Linha do tempo do alerta
                 </p>
                 <Timeline passos={[

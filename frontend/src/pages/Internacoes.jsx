@@ -141,21 +141,21 @@ function exportarTabelaAih() {
 
 const estiloBotaoPrimario = {
   padding: '8px 15px', borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'var(--primary)', color: 'white', fontSize: 12.5, fontWeight: 700,
+  background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700,
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
 
 const estiloBotaoOutline = {
-  padding: '8px 15px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+  padding: '8px 15px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700,
   border: '1px solid var(--ink-100)', background: 'var(--elev)', color: 'var(--ink-700)',
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
 
 const estiloTh = {
-  textAlign: 'left', padding: '10px 14px', fontSize: 10.5, fontWeight: 700,
+  textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 700,
   textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)',
 };
-const estiloTd = { padding: '11px 14px', fontSize: 12.5, color: 'var(--ink-900)' };
+const estiloTd = { padding: '11px 14px', fontSize: 13, color: 'var(--ink-900)' };
 const estiloTdMono = { ...estiloTd, fontFamily: 'JetBrains Mono, monospace' };
 
 // ─── Sub-componentes ────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ const estiloTdMono = { ...estiloTd, fontFamily: 'JetBrains Mono, monospace' };
 function SelectFiltro({ label, value, onChange, options }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
         {label}
       </span>
       <select
@@ -171,7 +171,7 @@ function SelectFiltro({ label, value, onChange, options }) {
         onChange={e => onChange(e.target.value)}
         style={{
           padding: '7px 10px', borderRadius: 8, border: '1px solid var(--ink-100)',
-          fontSize: 12.5, color: 'var(--ink-900)', background: 'var(--elev)', minWidth: 168,
+          fontSize: 13, color: 'var(--ink-900)', background: 'var(--elev)', minWidth: 168,
           cursor: 'pointer',
         }}
       >
@@ -223,7 +223,7 @@ function ParteKpi({ valor, label }) {
 
 function KpisResumo() {
   return (
-    <p style={{ fontSize: 15.5, lineHeight: 1.8, margin: '0 0 24px' }}>
+    <p style={{ fontSize: 15, lineHeight: 1.8, margin: '0 0 24px' }}>
       <ParteKpi valor={TOTAL_INTERNACOES.toLocaleString('pt-BR')} label="internações" />
       <span style={{ color: 'var(--ink-300)', margin: '0 12px' }}>·</span>
       <ParteKpi valor={PERMANENCIA_MEDIA.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} label="dias permanência média" />
@@ -242,7 +242,7 @@ function TooltipInternacoes({ active, payload, label }) {
   return (
     <div style={{
       background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8,
-      padding: '8px 12px', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      padding: '8px 12px', fontSize: 13, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     }}>
       <p style={{ fontWeight: 700, color: 'var(--ink-900)', marginBottom: 4 }}>{label}</p>
       <p style={{ color: 'var(--ink-500)', margin: '0 0 2px' }}>
@@ -262,12 +262,12 @@ function GraficoCentral() {
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart data={MENSAL} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--ink-100)" vertical={false} />
-          <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
+          <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
           <YAxis
-            yAxisId="left" tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={40}
+            yAxisId="left" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={40}
           />
           <YAxis
-            yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={false}
+            yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false}
             tickLine={false} width={56} tickFormatter={v => `${(v / 1000).toLocaleString('pt-BR')}k`}
           />
           <Tooltip content={<TooltipInternacoes />} />
@@ -297,8 +297,8 @@ function CardGruposCausa() {
       {GRUPOS_CAUSA.slice().sort((a, b) => b.volume - a.volume).map(g => (
         <div key={g.grupo} style={{ marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 5, gap: 8 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-900)' }}>{g.grupo}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--ink-500)', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-900)' }}>{g.grupo}</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-500)', whiteSpace: 'nowrap' }}>
               <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: 'var(--ink-900)' }}>
                 {g.volume.toLocaleString('pt-BR')}
               </span>{' '}
@@ -321,13 +321,13 @@ function CardPermanenciaPorGrupo() {
       <SectionTitle>Permanência média por grupo</SectionTitle>
       {GRUPOS_CAUSA.slice().sort((a, b) => b.permanenciaMedia - a.permanenciaMedia).map(g => (
         <div key={g.grupo} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 13 }}>
-          <div style={{ width: 108, flexShrink: 0, fontSize: 11.5, fontWeight: 600, color: 'var(--ink-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ width: 108, flexShrink: 0, fontSize: 11, fontWeight: 600, color: 'var(--ink-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {g.grupo}
           </div>
           <div style={{ flex: 1, height: 8, borderRadius: 99, background: 'var(--ink-100)', overflow: 'hidden' }}>
             <div style={{ width: `${(g.permanenciaMedia / max) * 100}%`, height: '100%', borderRadius: 99, background: 'var(--accent)' }} />
           </div>
-          <div style={{ width: 46, flexShrink: 0, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: 'var(--ink-900)' }}>
+          <div style={{ width: 46, flexShrink: 0, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: 'var(--ink-900)' }}>
             {g.permanenciaMedia.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} d
           </div>
         </div>
@@ -355,10 +355,10 @@ function CardOrigemAih() {
           {ORIGEM_AIH.map(o => (
             <div key={o.origem} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
               <span style={{ width: 9, height: 9, borderRadius: '50%', background: o.cor, flexShrink: 0 }} />
-              <span style={{ fontSize: 11.5, color: 'var(--ink-700)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span style={{ fontSize: 11, color: 'var(--ink-700)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {o.origem}
               </span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5, fontWeight: 700, color: 'var(--ink-900)' }}>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: 'var(--ink-900)' }}>
                 {o.pct}%
               </span>
             </div>

@@ -6,8 +6,8 @@ import { Card, API_BASE } from '../shared/ui.jsx';
 function LocalCardHead({ title, hint }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4, paddingBottom: 12, borderBottom: '1px solid #EFEBE0' }}>
-      <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1814' }}>{title}</h2>
-      {hint && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A8A39A' }}>{hint}</span>}
+      <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>{title}</h2>
+      {hint && <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A8A39A' }}>{hint}</span>}
     </div>
   );
 }
@@ -77,11 +77,11 @@ export default function PagePerfil({ onNavigate, onLogout }) {
           {/* Cartão de identidade */}
           <Card className="p-5">
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18 }}>
-              <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-dark) 0%, var(--accent) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+              <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-dark) 0%, var(--accent) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: 'white', flexShrink: 0 }}>
                 {carregando ? '···' : iniciais}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 22, fontWeight: 800, color: '#1A1814', lineHeight: 1.1, marginBottom: 4 }}>{carregando ? 'Carregando…' : nome}</h2>
+                <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 20, fontWeight: 800, color: '#1A1814', lineHeight: 1.1, marginBottom: 4 }}>{carregando ? 'Carregando…' : nome}</h2>
                 <p style={{ fontSize: 13, color: '#8A8579', marginBottom: 12 }}>{email}</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {['Admin', 'Aprovador de ETP', 'Gestão de UBS'].map(p => (
@@ -91,7 +91,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
                 <button style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)', cursor: 'pointer' }}>
-                  <span className="material-symbols-rounded" style={{ fontSize: 17 }}>edit</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 20 }}>edit</span>
                   Editar perfil
                 </button>
                 <button style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#3D3A33', background: '#FFFFFF', border: '1px solid #E5E1D6', cursor: 'pointer' }}>
@@ -104,20 +104,20 @@ export default function PagePerfil({ onNavigate, onLogout }) {
           {/* Atividades recentes */}
           <Card className="p-5">
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-              <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1814' }}>Atividades recentes</h2>
+              <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>Atividades recentes</h2>
               <span style={{ fontSize: 11, color: '#A8A39A' }}>últimos 7 dias</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {PERFIL_ATIVIDADES.map((a, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: i < PERFIL_ATIVIDADES.length - 1 ? '1px solid #EFEBE0' : 'none', cursor: 'pointer' }}>
                   <span style={{ width: 32, height: 32, borderRadius: 8, background: a.cor + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: a.cor }}>
-                    <span className="material-symbols-rounded" style={{ fontSize: 18 }}>{a.icon}</span>
+                    <span className="material-symbols-rounded" style={{ fontSize: 20 }}>{a.icon}</span>
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 13, fontWeight: 500, color: '#1A1814', lineHeight: 1.3 }}>{a.titulo}</p>
                     <p style={{ fontSize: 11, color: '#8A8579', marginTop: 1 }}>{a.tempo}</p>
                   </div>
-                  <span className="material-symbols-rounded" style={{ fontSize: 18, color: '#C9C4BA', flexShrink: 0 }}>chevron_right</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#C9C4BA', flexShrink: 0 }}>chevron_right</span>
                 </div>
               ))}
             </div>
@@ -132,7 +132,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
             {perfilCadastro.map(r => (
               <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 0', fontSize: 13, borderBottom: '1px solid #F5F2EB' }}>
                 <span style={{ color: '#6B665D', flexShrink: 0 }}>{r.k}</span>
-                <span style={{ fontWeight: 600, color: '#1A1814', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, textAlign: 'right' }}>{r.v}</span>
+                <span style={{ fontWeight: 600, color: '#1A1814', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, textAlign: 'right' }}>{r.v}</span>
               </div>
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0 2px', fontSize: 13 }}>
@@ -149,13 +149,13 @@ export default function PagePerfil({ onNavigate, onLogout }) {
             {PERFIL_UBSS.map((u, i) => (
               <div key={u.nome} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: i < PERFIL_UBSS.length - 1 ? '1px solid #EFEBE0' : 'none' }}>
                 <span style={{ width: 32, height: 32, borderRadius: 8, background: '#F0EDE6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#6B665D' }}>
-                  <span className="material-symbols-rounded" style={{ fontSize: 18 }}>local_hospital</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 20 }}>local_hospital</span>
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: '#1A1814', lineHeight: 1.3 }}>{u.nome}</p>
                   <p style={{ fontSize: 11, color: '#8A8579' }}>{u.leitos}</p>
                 </div>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 600, color: '#D94F4F', background: '#D94F4F18', flexShrink: 0 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600, color: '#D94F4F', background: '#D94F4F18', flexShrink: 0 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#D94F4F' }} />
                   {u.status}
                 </span>
@@ -168,7 +168,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: '#1A1814', marginBottom: 2 }}>Sair do SusPredict</p>
-                <p style={{ fontSize: 11.5, color: '#8A8579', lineHeight: 1.4 }}>Você será desconectado em todos os dispositivos.</p>
+                <p style={{ fontSize: 11, color: '#8A8579', lineHeight: 1.4 }}>Você será desconectado em todos os dispositivos.</p>
               </div>
               <button onClick={onLogout} style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#D94F4F', background: '#D94F4F12', border: '1px solid #D94F4F33', cursor: 'pointer', flexShrink: 0 }}>
                 Sair

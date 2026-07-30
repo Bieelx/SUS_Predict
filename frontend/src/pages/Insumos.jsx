@@ -106,12 +106,12 @@ function gerarSerieProjecao(item) {
 
 const estiloBotaoPrimario = {
   padding: '8px 15px', borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'var(--primary)', color: 'white', fontSize: 12.5, fontWeight: 700,
+  background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700,
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
 
 const estiloBotaoOutline = {
-  padding: '8px 15px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+  padding: '8px 15px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700,
   border: '1px solid var(--ink-100)', background: 'var(--elev)', color: 'var(--ink-700)',
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
@@ -124,11 +124,11 @@ function Cabecalho({ view, onAtualizarEstoque, onVoltar }) {
       <div style={{ marginBottom: 22 }}>
         <button
           onClick={onVoltar}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--primary)', marginBottom: 10 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, fontWeight: 600, color: 'var(--primary)', marginBottom: 10 }}
         >
           ← Voltar
         </button>
-        <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 24, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', margin: 0 }}>
+        <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', margin: 0 }}>
           Gestão de Estoque
         </h1>
         <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: '4px 0 0' }}>
@@ -160,7 +160,7 @@ function Cabecalho({ view, onAtualizarEstoque, onVoltar }) {
 function StatInline({ valor, label, cor }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 25, fontWeight: 800, color: cor }}>
+      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 26, fontWeight: 800, color: cor }}>
         {valor}
       </span>
       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-700)' }}>{label}</span>
@@ -184,7 +184,7 @@ function ResumoExecutivo({ criticos, alertas }) {
           <span style={{ color: 'var(--good)', display: 'flex' }}>
             <MIcon m="savings" size={19} />
           </span>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 21, fontWeight: 800, color: 'var(--good)' }}>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 800, color: 'var(--good)' }}>
             R$ {ECONOMIA_ESTIMADA.toLocaleString('pt-BR')}
           </span>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-700)' }}>economia estimada agindo agora</span>
@@ -206,7 +206,7 @@ function SegmentedControl({ value, onChange, options }) {
           onClick={() => onChange(opt.value)}
           style={{
             padding: '6px 15px', borderRadius: 7, border: 'none', cursor: 'pointer',
-            fontSize: 12.5, fontWeight: 700, transition: 'all 0.12s',
+            fontSize: 13, fontWeight: 700, transition: 'all 0.12s',
             background: value === opt.value ? 'var(--primary)' : 'transparent',
             color: value === opt.value ? 'white' : 'var(--ink-500)',
           }}
@@ -252,7 +252,7 @@ function LinhaItem({ item, isLast, onAbrirDrawer, onGerarEtp }) {
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: cor, flexShrink: 0 }} />
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink-900)' }}>{item.nome}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-900)' }}>{item.nome}</span>
             {item.etpGeradoEm && <Badge label={`ETP gerado em ${item.etpGeradoEm}`} color="var(--info)" />}
           </div>
           <p style={{
@@ -269,12 +269,12 @@ function LinhaItem({ item, isLast, onAbrirDrawer, onGerarEtp }) {
         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 15, fontWeight: 700, color: cor, width: 58, textAlign: 'right' }}>
           {dias} d
         </span>
-        <span style={{ fontSize: 12, color: 'var(--ink-500)', width: 68, textAlign: 'right' }}>
+        <span style={{ fontSize: 13, color: 'var(--ink-500)', width: 68, textAlign: 'right' }}>
           {item.consumoSemanal.toLocaleString('pt-BR')}/sem
         </span>
         <button
           onClick={e => { e.stopPropagation(); onGerarEtp(item); }}
-          style={{ ...estiloBotaoPrimario, padding: '6px 13px', fontSize: 11.5 }}
+          style={{ ...estiloBotaoPrimario, padding: '6px 13px', fontSize: 11 }}
         >
           Gerar ETP
         </button>
@@ -308,13 +308,13 @@ function BarrasPorSetor() {
       </p>
       {SETORES_CONSUMO.slice().sort((a, b) => b.consumoSemanal - a.consumoSemanal).map(s => (
         <div key={s.setor} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-          <div style={{ width: 150, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-900)' }}>
+          <div style={{ width: 150, flexShrink: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink-900)' }}>
             {s.setor}
           </div>
           <div style={{ flex: 1, height: 10, borderRadius: 99, background: 'var(--ink-100)', overflow: 'hidden' }}>
             <div style={{ width: `${(s.consumoSemanal / max) * 100}%`, height: '100%', borderRadius: 99, background: 'var(--primary)' }} />
           </div>
-          <div style={{ width: 74, flexShrink: 0, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: 'var(--ink-900)' }}>
+          <div style={{ width: 74, flexShrink: 0, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: 'var(--ink-900)' }}>
             {s.consumoSemanal.toLocaleString('pt-BR')}/sem
           </div>
         </div>
@@ -328,7 +328,7 @@ function TooltipProjecao({ active, payload, label }) {
   const valor = payload[0]?.value;
   if (valor == null) return null;
   return (
-    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '8px 12px', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '8px 12px', fontSize: 13, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
       <p style={{ fontWeight: 700, color: 'var(--ink-900)', marginBottom: 2 }}>semana {label}</p>
       <p style={{ color: 'var(--ink-500)' }}>
         Estoque projetado:{' '}
@@ -372,7 +372,7 @@ function DrawerDetalhe({ item, onClose, onGerarEtp }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, paddingRight: 30 }}>
           <span style={{ width: 11, height: 11, borderRadius: '50%', background: cor, flexShrink: 0 }} />
-          <h3 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 18, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
+          <h3 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 20, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
             {item.nome}
           </h3>
         </div>
@@ -386,10 +386,10 @@ function DrawerDetalhe({ item, onClose, onGerarEtp }) {
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={serie} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--ink-100)" vertical={false} />
-            <XAxis dataKey="semana" tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} interval={3} />
-            <YAxis tick={{ fontSize: 10, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={44} />
+            <XAxis dataKey="semana" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} interval={3} />
+            <YAxis tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={44} />
             <Tooltip content={<TooltipProjecao />} />
-            <ReferenceLine y={0} stroke="var(--bad)" strokeDasharray="4 3" label={{ value: 'ruptura', position: 'insideBottomRight', fontSize: 10, fill: 'var(--bad)' }} />
+            <ReferenceLine y={0} stroke="var(--bad)" strokeDasharray="4 3" label={{ value: 'ruptura', position: 'insideBottomRight', fontSize: 11, fill: 'var(--bad)' }} />
             <Line type="monotone" dataKey="estoque" stroke={cor} strokeWidth={2.5} dot={false} isAnimationActive={false} />
             <ReferenceDot x={semanaRuptura} y={0} r={5} fill="var(--bad)" stroke="var(--elev)" strokeWidth={2} />
           </LineChart>
@@ -399,7 +399,7 @@ function DrawerDetalhe({ item, onClose, onGerarEtp }) {
           <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-400)', margin: '0 0 6px' }}>
             Composição do cálculo
           </p>
-          <p style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink-700)', margin: 0 }}>
+          <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--ink-700)', margin: 0 }}>
             Estoque atual ({item.qtdAtual.toLocaleString('pt-BR')} {item.unidade}) ÷ consumo médio
             ({item.consumoSemanal.toLocaleString('pt-BR')}/sem, ajustado pela previsão epidemiológica
             do modelo Holt/OLS) = <strong style={{ color: 'var(--ink-900)' }}>{dias} dias restantes</strong> até a ruptura.
@@ -407,20 +407,20 @@ function DrawerDetalhe({ item, onClose, onGerarEtp }) {
         </div>
 
         <div style={{ marginBottom: 22 }}>
-          <p style={{ fontSize: 12, color: 'var(--ink-500)', margin: '0 0 4px' }}>
+          <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: '0 0 4px' }}>
             Última atualização: <strong style={{ color: 'var(--ink-900)' }}>{dataDeHaDias(item.atualizadoHaDias)}</strong>
             {' '}({item.atualizadoHaDias} dias atrás)
           </p>
-          <p style={{ fontSize: 12, color: 'var(--ink-500)', margin: 0 }}>
+          <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: 0 }}>
             Origem do dado: <strong style={{ color: 'var(--ink-900)' }}>{ORIGEM_LABEL[item.origem]}</strong>
           </p>
           {desatualizado && (
-            <p style={{ fontSize: 12, color: 'var(--warn)', display: 'flex', alignItems: 'center', gap: 4, margin: '8px 0 0' }}>
+            <p style={{ fontSize: 13, color: 'var(--warn)', display: 'flex', alignItems: 'center', gap: 4, margin: '8px 0 0' }}>
               <MIcon m="warning" size={13} /> Estoque desatualizado há mais de {LIMIAR_DESATUALIZADO} dias — confiança reduzida.
             </p>
           )}
           {item.etpGeradoEm && (
-            <p style={{ fontSize: 12, color: 'var(--info)', margin: '8px 0 0' }}>
+            <p style={{ fontSize: 13, color: 'var(--info)', margin: '8px 0 0' }}>
               ETP já gerado em {item.etpGeradoEm} para este item.
             </p>
           )}
@@ -467,7 +467,7 @@ function EstadoVazio({ onEnviarPlanilha, onCadastrarManual }) {
 function CampoTexto({ label, value, onChange, type = 'text' }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
         {label}
       </span>
       <input
@@ -476,7 +476,7 @@ function CampoTexto({ label, value, onChange, type = 'text' }) {
         onChange={e => onChange(e.target.value)}
         style={{
           padding: '8px 10px', borderRadius: 7, border: '1px solid var(--ink-100)',
-          fontSize: 12.5, color: 'var(--ink-900)', background: 'var(--elev)',
+          fontSize: 13, color: 'var(--ink-900)', background: 'var(--elev)',
         }}
       />
     </label>
@@ -546,10 +546,10 @@ function PreviewDiffUpload({ vazio, onConfirmar, onCancelar }) {
 }
 
 const estiloTh = {
-  textAlign: 'left', padding: '10px 14px', fontSize: 10.5, fontWeight: 700,
+  textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 700,
   textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)',
 };
-const estiloTd = { padding: '12px 14px', fontSize: 12.5, color: 'var(--ink-900)' };
+const estiloTd = { padding: '12px 14px', fontSize: 13, color: 'var(--ink-900)' };
 const estiloTdMono = { ...estiloTd, fontFamily: 'JetBrains Mono, monospace' };
 
 function AcoesLinha({ item, onEditar, onExcluir }) {
@@ -558,16 +558,16 @@ function AcoesLinha({ item, onEditar, onExcluir }) {
   if (confirmando) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--bad)' }}>Confirmar exclusão?</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--bad)' }}>Confirmar exclusão?</span>
         <button
           onClick={() => { onExcluir(item.id); setConfirmando(false); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11.5, fontWeight: 700, color: 'var(--bad)' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 700, color: 'var(--bad)' }}
         >
           Sim
         </button>
         <button
           onClick={() => setConfirmando(false)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11.5, fontWeight: 700, color: 'var(--ink-500)' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 700, color: 'var(--ink-500)' }}
         >
           Cancelar
         </button>
@@ -619,7 +619,7 @@ function TabelaEstoque({ itens, onEditar, onExcluir }) {
             ))}
             {itens.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: '28px 14px', textAlign: 'center', fontSize: 12.5, color: 'var(--ink-400)' }}>
+                <td colSpan={7} style={{ padding: '28px 14px', textAlign: 'center', fontSize: 13, color: 'var(--ink-400)' }}>
                   Nenhum item cadastrado ainda.
                 </td>
               </tr>

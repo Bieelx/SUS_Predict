@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { THEMES, ThemeContext, MIcon, LogoIcon } from './shared/ui.jsx';
 
 import LoginScreen from './pages/Login.jsx';
@@ -53,15 +53,15 @@ function NavItemTier1({ item, active, onClick }) {
   return (
     <button
       onClick={onClick}
+      className="nav-item"
+      aria-current={active ? 'page' : undefined}
       style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
         padding: '7px 10px', textAlign: 'left', border: 'none', cursor: 'pointer',
-        borderRadius: 10, marginBottom: 2, position: 'relative', transition: 'all 0.12s',
+        borderRadius: 10, marginBottom: 2, position: 'relative',
         background: active ? 'white' : 'transparent',
         boxShadow: active ? '0 1px 6px rgba(44,74,71,0.15)' : 'none',
       }}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.35)'; }}
-      onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
     >
       {active && (
         <span style={{ position: 'absolute', left: -10, top: '22%', bottom: '22%', width: 3, borderRadius: '0 3px 3px 0', background: 'var(--sb-accent-bar)' }} />
@@ -76,14 +76,14 @@ function NavItemTier1({ item, active, onClick }) {
       }}>
         <MIcon m={item.icon} />
       </span>
-      <span style={{ fontSize: 13, fontWeight: active ? 600 : 500, flex: 1, color: active ? 'var(--sb-strong)' : SB_TEXT, lineHeight: 1.2 }}>
+      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: active ? 600 : 500, flex: 1, color: active ? 'var(--sb-strong)' : SB_TEXT, lineHeight: 1.2 }}>
         {item.label}
       </span>
       {item.badge && (
         <span style={{
           minWidth: 18, height: 18, borderRadius: 99, background: '#D94F4F', color: 'white',
-          fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          padding: '0 4px',
+          fontSize: 'var(--fs-xs)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 5px',
         }}>
           {item.badge}
         </span>
@@ -98,46 +98,46 @@ function NavItemTier2({ item, active, onClick }) {
   return (
     <button
       onClick={onClick}
+      className="nav-item-2"
+      aria-current={active ? 'page' : undefined}
       style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 9,
         padding: '5px 10px 5px 14px', textAlign: 'left', border: 'none', cursor: 'pointer',
-        borderRadius: 8, marginBottom: 1, position: 'relative', transition: 'all 0.12s',
+        borderRadius: 8, marginBottom: 1, position: 'relative',
         background: active ? 'rgba(255,255,255,0.55)' : 'transparent',
       }}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.25)'; }}
-      onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
     >
       <MIcon m={item.icon} size={15} />
-      <span style={{ fontSize: 12, fontWeight: active ? 600 : 500, flex: 1, color: active ? 'var(--sb-strong)' : SB_TEXT, lineHeight: 1.2 }}>
+      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: active ? 600 : 500, flex: 1, color: active ? 'var(--sb-strong)' : SB_TEXT, lineHeight: 1.2 }}>
         {item.label}
       </span>
     </button>
   );
 }
 
-function SidebarFooterAction({ item, active, onClick, compact = false }) {
+function SidebarFooterAction({ item, active, onClick }) {
   return (
     <button
       onClick={onClick}
+      className="nav-footer"
+      aria-current={active ? 'page' : undefined}
       style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-        padding: compact ? '8px 10px' : '10px 12px', textAlign: 'left', border: 'none',
-        cursor: 'pointer', borderRadius: 12, position: 'relative', transition: 'all 0.12s',
+        padding: '8px 10px', textAlign: 'left', border: 'none',
+        cursor: 'pointer', borderRadius: 12, position: 'relative',
         background: active ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.18)',
         boxShadow: active ? '0 1px 6px rgba(44,74,71,0.12)' : 'none',
       }}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.3)'; }}
-      onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.18)'; }}
     >
       <span style={{
-        width: compact ? 24 : 28, height: compact ? 24 : 28, borderRadius: 8, flexShrink: 0,
+        width: 24, height: 24, borderRadius: 8, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: active ? ICON_BG_ACTIVE : 'rgba(255,255,255,0.35)',
         color: active ? ICON_FG_ACTIVE : ICON_FG,
       }}>
-        <MIcon m={item.icon} size={compact ? 16 : 17} />
+        <MIcon m={item.icon} size={16} />
       </span>
-      <span style={{ fontSize: compact ? 12 : 13, fontWeight: active ? 700 : 600, flex: 1, color: active ? 'var(--sb-strong)' : SB_TEXT, lineHeight: 1.15 }}>
+      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: active ? 700 : 600, flex: 1, color: active ? 'var(--sb-strong)' : SB_TEXT, lineHeight: 1.15 }}>
         {item.label}
       </span>
       <MIcon m="chevron_right" size={18} />
@@ -145,20 +145,35 @@ function SidebarFooterAction({ item, active, onClick, compact = false }) {
   );
 }
 
-function Sidebar({ current, onNav }) {
-  const [analisesOpen, setAnalisesOpen] = useState(false);
-  const analysesVisible = analisesOpen;
+function Sidebar({ current, onNav, aberta }) {
+  // Abre já expandido quando a página ativa é de Análises — chegar em
+  // Epidemiologia por um link de card e não ver o item destacado no menu é
+  // desorientador. Reabre também quando a navegação vem de fora da sidebar.
+  const emAnalises = NAV_ANALISES.some(i => i.id === current);
+  const [analisesOpen, setAnalisesOpen] = useState(emAnalises);
+  useEffect(() => { if (emAnalises) setAnalisesOpen(true); }, [emAnalises]);
+
+  // Recolhida, a sidebar continua montada e só translada para fora (o menu não
+  // remonta, o estado de ANÁLISES sobrevive). `inert` tira os botões da ordem de
+  // Tab e do leitor de tela enquanto ela está fora da tela.
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current) ref.current.inert = !aberta; }, [aberta]);
 
   return (
-    <aside style={{
-      position: 'fixed', left: 0, top: 0, width: 220, height: '100vh',
-      background: SB, display: 'flex', flexDirection: 'column', zIndex: 30,
-    }}>
+    <aside
+      ref={ref}
+      style={{
+        position: 'fixed', left: 0, top: 0, width: 'var(--sb-w)', height: '100dvh',
+        background: SB, display: 'flex', flexDirection: 'column', zIndex: 30,
+        transform: aberta ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform .3s cubic-bezier(0.2,0.7,0.3,1)',
+      }}
+    >
       {/* Logo */}
-      <div style={{ height: 60, boxSizing: 'border-box', padding: '0 20px', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--sb-border)' }}>
+      <div style={{ height: 'var(--topbar-h)', boxSizing: 'border-box', padding: '0 20px', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--sb-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <LogoIcon size={34} />
-          <p style={{ fontFamily: 'Inter Tight, sans-serif', fontWeight: 800, fontSize: 16, color: 'var(--sb-strong)', lineHeight: 1 }}>
+          <p style={{ fontFamily: 'var(--ff-tight)', fontWeight: 800, fontSize: 'var(--fs-md)', color: 'var(--sb-strong)', lineHeight: 1 }}>
             SusPredict
           </p>
         </div>
@@ -168,7 +183,7 @@ function Sidebar({ current, onNav }) {
       <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
         {/* OPERACIONAL — nível 1 */}
         <div style={{ marginBottom: 18 }}>
-          <p style={{ padding: '0 10px', marginBottom: 4, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.12em', color: SB_SECTION }}>
+          <p className="eyebrow" style={{ padding: '0 10px', marginBottom: 4, color: SB_SECTION }}>
             OPERACIONAL
           </p>
           {NAV_OPERACIONAL.map(item => (
@@ -176,21 +191,23 @@ function Sidebar({ current, onNav }) {
           ))}
         </div>
 
-        {/* ANÁLISES — colapsável por padrão */}
+        {/* ANÁLISES — colapsável */}
         <div style={{ marginBottom: 10 }}>
           <button
             onClick={() => setAnalisesOpen(prev => !prev)}
+            className="nav-item-2"
+            aria-expanded={analisesOpen}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '0 10px', marginBottom: 4, border: 'none', background: 'transparent',
-              cursor: 'pointer', color: SB_SECTION,
+              padding: '2px 10px', marginBottom: 4, border: 'none', background: 'transparent',
+              cursor: 'pointer', color: SB_SECTION, borderRadius: 8,
             }}
           >
-            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.12em' }}>ANÁLISES</span>
-            <MIcon m={analysesVisible ? 'expand_less' : 'expand_more'} size={16} />
+            <span className="eyebrow" style={{ color: 'inherit' }}>ANÁLISES</span>
+            <MIcon m={analisesOpen ? 'expand_less' : 'expand_more'} size={16} />
           </button>
-          {analysesVisible && NAV_ANALISES.map(item => (
-            <NavItemTier2 key={item.id} item={item} active={current === item.id} onClick={() => { setAnalisesOpen(true); onNav(item.id); }} />
+          {analisesOpen && NAV_ANALISES.map(item => (
+            <NavItemTier2 key={item.id} item={item} active={current === item.id} onClick={() => onNav(item.id)} />
           ))}
         </div>
 
@@ -205,34 +222,32 @@ function Sidebar({ current, onNav }) {
       <div style={{ padding: '12px 20px 18px', borderTop: '1px solid rgba(44,74,71,0.12)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3DB887', flexShrink: 0, animation: 'dot-pulse 2.4s ease-in-out infinite' }} />
-          <span style={{ fontSize: 10.5, color: SB_SECTION }}>Dados em sincronia · há 8 min</span>
+          <span style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION }}>Dados em sincronia · há 8 min</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <SidebarFooterAction
             item={{ id: 'configuracoes', label: 'Configurações', icon: 'settings' }}
             active={current === 'configuracoes'}
             onClick={() => onNav('configuracoes')}
-            compact
           />
           <button
             onClick={() => onNav('perfil')}
+            className="nav-footer"
+            aria-current={current === 'perfil' ? 'page' : undefined}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
               textAlign: 'left', border: 'none', cursor: 'pointer', borderRadius: 14, position: 'relative',
-              transition: 'all 0.12s', background: current === 'perfil' ? 'rgba(255,255,255,0.66)' : 'rgba(255,255,255,0.24)',
+              background: current === 'perfil' ? 'rgba(255,255,255,0.66)' : 'rgba(255,255,255,0.24)',
               boxShadow: current === 'perfil' ? '0 1px 6px rgba(44,74,71,0.12)' : 'none',
             }}
-            onMouseEnter={e => { if (current !== 'perfil') e.currentTarget.style.background = 'rgba(255,255,255,0.34)'; }}
-            onMouseLeave={e => { if (current !== 'perfil') e.currentTarget.style.background = 'rgba(255,255,255,0.24)'; }}
           >
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--sb-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--sb-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'white', flexShrink: 0 }}>
               MO
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--sb-strong)', lineHeight: 1.2, margin: 0 }}>Márcia Oliveira</p>
-              <p style={{ fontSize: 10, color: SB_SECTION, margin: 0 }}>SMS · ADMIN</p>
+              <p style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--sb-strong)', lineHeight: 1.2, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Márcia Oliveira</p>
+              <p style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION, margin: 0 }}>SMS · ADMIN</p>
             </div>
-            <MIcon m="chevron_right" size={18} />
           </button>
         </div>
       </div>
@@ -241,55 +256,85 @@ function Sidebar({ current, onNav }) {
 }
 
 // ─── Topbar ───────────────────────────────────────────────────────────────────
+//
+// Carrega o contexto global do app — qual município está sendo analisado — em vez
+// do breadcrumb anterior. O breadcrumb repetia em terceiro lugar o que a sidebar
+// (item ativo) e o <h1> da página já diziam, e nenhum nível dele era clicável.
+// A busca e o botão de "aplicativos" saíram: eram controles sem handler.
 
-const CRUMBS = {
-  'visao-geral':    ['Operacional', 'Visão Geral'],
-  'alertas':        ['Operacional', 'Alertas'],
-  'insumos':        ['Operacional', 'Insumos'],
-  'epidemiologia':  ['Análises', 'Epidemiologia'],
-  'internacoes':    ['Análises', 'Internações'],
-  'superlotacao':   ['Análises', 'Superlotação'],
-  'documentos':     ['Documentos', 'ETPs gerados'],
-  'configuracoes':  ['Sistema', 'Configurações'],
-  'perfil':         ['Sistema', 'Perfil'],
-};
-
-function Topbar({ current }) {
-  const crumbs = CRUMBS[current] || ['Início'];
+function Topbar({ municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar }) {
   return (
-    <header style={{ position: 'fixed', top: 0, right: 0, left: 220, height: 60, background: SB, borderBottom: '1px solid var(--sb-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 36px', zIndex: 20 }}>
-      <nav style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {crumbs.map((c, i) => (
-          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {i > 0 && <span style={{ color: SB_SECTION, fontSize: 12 }}>/</span>}
-            <span style={{ fontSize: 12, fontWeight: i === crumbs.length - 1 ? 600 : 400, color: i === crumbs.length - 1 ? 'var(--sb-strong)' : SB_TEXT }}>{c}</span>
+    <header style={{
+      position: 'fixed', top: 0, right: 0, height: 'var(--topbar-h)',
+      left: sidebarAberta ? 'var(--sb-w)' : 0,
+      transition: 'left .3s cubic-bezier(0.2,0.7,0.3,1)',
+      background: SB, borderBottom: '1px solid var(--sb-border)', display: 'flex',
+      alignItems: 'center', justifyContent: 'space-between', padding: '0 20px 0 24px', zIndex: 20,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {/* Controle da sidebar. Fica na topbar, não flutuando na calha: assim
+            ocupa o mesmo ponto nos dois estados (recolher e trazer de volta são
+            o mesmo botão), não cobre conteúdo e não exige abrir espaço extra de
+            um lado só — a calha do card segue simétrica. */}
+        <button
+          onClick={onToggleSidebar}
+          className="topbar-btn"
+          aria-label={sidebarAberta ? 'Recolher o menu' : 'Mostrar o menu'}
+          aria-expanded={sidebarAberta}
+          title={sidebarAberta ? 'Recolher o menu' : 'Mostrar o menu'}
+          style={{
+            width: 32, height: 32, borderRadius: 8, border: '1px solid var(--sb-border)',
+            background: 'var(--elev)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', cursor: 'pointer', color: 'var(--ink-500)', flexShrink: 0,
+          }}
+        >
+          <MIcon m={sidebarAberta ? 'left_panel_close' : 'left_panel_open'} size={18} />
+        </button>
+
+        {/* Com o menu recolhido a marca perde a casa dela, então volta aqui —
+            o app nunca fica sem identificação no canto superior esquerdo. */}
+        {!sidebarAberta && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <LogoIcon size={28} />
+            <p style={{ fontFamily: 'var(--ff-tight)', fontWeight: 800, fontSize: 'var(--fs-sm)', color: 'var(--sb-strong)', lineHeight: 1, margin: 0 }}>
+              SusPredict
+            </p>
+            <span style={{ width: 1, height: 20, background: 'var(--sb-border)', marginLeft: 5 }} />
+          </div>
+        )}
+
+        <span className="eyebrow" style={{ color: SB_SECTION }}>Município</span>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <select
+            className="topbar-select"
+            aria-label="Município em análise"
+            value={municipio.ibge6}
+            onChange={e => onTrocarMunicipio(municipios.find(m => m.ibge6 === e.target.value))}
+          >
+            {municipios.map(m => (
+              <option key={m.ibge6} value={m.ibge6}>{m.nome} · {m.uf}</option>
+            ))}
+          </select>
+          <span style={{ position: 'absolute', right: 8, pointerEvents: 'none', color: 'var(--ink-400)', display: 'flex' }}>
+            <MIcon m="expand_more" size={16} />
           </span>
-        ))}
-      </nav>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            placeholder="Buscar dados, relatórios..."
-            style={{ width: 260, padding: '6px 12px 6px 32px', fontSize: 12, borderRadius: 8, border: '1px solid var(--sb-border)', background: '#FFFFFF', color: '#3D3A33', outline: 'none' }}
-          />
-          <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="#A8A39A" strokeWidth="1.5">
-            <circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14" strokeLinecap="round"/>
-          </svg>
         </div>
-        <button aria-label="Aplicativos" style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--sb-border)', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#6B665D" strokeWidth="1.5">
-            <rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/>
-            <rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>
-          </svg>
-        </button>
-        <button aria-label="Notificações" style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--sb-border)', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}>
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#6B665D" strokeWidth="1.5">
-            <path d="M8 1a4 4 0 014 4v3l1.5 2.5h-11L4 8V5a4 4 0 014-4zM6.5 13.5a1.5 1.5 0 003 0"/>
-          </svg>
-          <span style={{ position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: '50%', background: '#D94F4F', color: 'white', fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>3</span>
-        </button>
       </div>
+
+      {/* Sino navega para a Central de Alertas. O badge de contagem vive só na
+          sidebar — dois contadores idênticos na mesma tela era ruído. */}
+      <button
+        onClick={() => onNavigate('alertas')}
+        aria-label="Ir para a Central de Alertas"
+        className="topbar-btn"
+        style={{
+          width: 32, height: 32, borderRadius: 8, border: '1px solid var(--sb-border)',
+          background: 'var(--elev)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', cursor: 'pointer', color: 'var(--ink-500)',
+        }}
+      >
+        <MIcon m="notifications" size={18} />
+      </button>
     </header>
   );
 }
@@ -311,7 +356,17 @@ const SEMANTIC_TOKENS = {
   '--risk-alto': '#D94F4F', '--risk-medio': '#E8903A', '--risk-baixo': '#4A9B6F',
 };
 
-const MUNICIPIO_ATIVO_IBGE6 = '351300';
+// Municípios da regional de saúde de Cotia — mock, mesmo conjunto do ranking
+// regional da Visão Geral. Vira chamada a /api/cidades/{uf} quando a tela plugar.
+const MUNICIPIOS = [
+  { ibge6: '351300', nome: 'Cotia',              uf: 'SP' },
+  { ibge6: '352220', nome: 'Itapevi',            uf: 'SP' },
+  { ibge6: '353440', nome: 'Osasco',             uf: 'SP' },
+  { ibge6: '351060', nome: 'Carapicuíba',        uf: 'SP' },
+  { ibge6: '351500', nome: 'Embu das Artes',     uf: 'SP' },
+  { ibge6: '350570', nome: 'Barueri',            uf: 'SP' },
+  { ibge6: '355700', nome: 'Vargem Grande Pta.', uf: 'SP' },
+];
 
 export default function App() {
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('sus_predict_token'));
@@ -319,6 +374,15 @@ export default function App() {
   const [themeId, setThemeId] = useState('teal');
   const [etpOrigem, setEtpOrigem] = useState(null);
   const [chatAberto, setChatAberto] = useState(false);
+  // Preferência de tela cheia é do posto, não da sessão: quem trabalha com o
+  // menu recolhido não quer recolher de novo a cada login.
+  const [sidebarAberta, setSidebarAberta] = useState(
+    () => localStorage.getItem('sus_predict_sidebar') !== 'oculta',
+  );
+  useEffect(() => {
+    localStorage.setItem('sus_predict_sidebar', sidebarAberta ? 'visivel' : 'oculta');
+  }, [sidebarAberta]);
+  const [municipio, setMunicipio] = useState(MUNICIPIOS[0]);
   const [documentos, setDocumentos] = useState(DOCUMENTOS_INICIAIS);
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
 
@@ -340,7 +404,7 @@ export default function App() {
 
   function render() {
     switch (page) {
-      case 'visao-geral':   return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} />;
+      case 'visao-geral':   return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} municipio={municipio} />;
       case 'alertas':       return <Alertas onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} />;
       case 'insumos':       return <Insumos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} />;
       case 'documentos':    return <Documentos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} documentos={documentos} />;
@@ -349,7 +413,7 @@ export default function App() {
       case 'superlotacao':  return <Superlotacao onNavigate={setPage} />;
       case 'configuracoes': return <PageConfiguracoes onNavigate={setPage} />;
       case 'perfil':        return <PagePerfil onNavigate={setPage} onLogout={() => { localStorage.removeItem('sus_predict_token'); setAuthed(false); }} />;
-      default:              return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} />;
+      default:              return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} municipio={municipio} />;
     }
   }
 
@@ -357,37 +421,54 @@ export default function App() {
     <ThemeContext.Provider value={{ themeId, setThemeId }}>
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
           (esquerda da sidebar, gap central, respiro do painel do SusBot). */}
-      <div style={{ ...SEMANTIC_TOKENS, ...themeVars, display: 'flex', minHeight: '100vh', background: SB }}>
-        <Sidebar current={page} onNav={setPage} />
-        <div style={{ marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <Topbar current={page} />
-          {/* Com o chat aberto o conteúdo encolhe e se solta das bordas — os dois
-              viram cards irmãos sobre o canvas, em vez de o chat sobrepor o app.
-              452 = 420 do painel + 16 de respiro de cada lado. */}
-          <main style={{
-            position: 'fixed', top: 60, left: 220, bottom: 0, background: SB,
-            right: chatAberto ? 452 : 0,
-            transition: 'right .3s cubic-bezier(0.2,0.7,0.3,1)',
+      <div style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
+        <Sidebar current={page} onNav={setPage} aberta={sidebarAberta} />
+        <Topbar
+          municipio={municipio}
+          municipios={MUNICIPIOS}
+          onTrocarMunicipio={setMunicipio}
+          onNavigate={setPage}
+          sidebarAberta={sidebarAberta}
+          onToggleSidebar={() => setSidebarAberta(v => !v)}
+        />
+        {/* Uma linguagem visual só: o conteúdo é sempre um card destacado do
+            canvas, com o mesmo respiro do painel do SusBot. Abrir o chat mexe
+            em uma propriedade só (`right`) — o card não muda de identidade, e o
+            FAB flutua sobre a calha, não sobre texto rolável. */}
+        <main style={{
+          position: 'fixed', top: 'var(--topbar-h)', bottom: 0, background: SB,
+          left: sidebarAberta ? 'var(--sb-w)' : 0,
+          right: chatAberto ? 'var(--chat-inset)' : 0,
+          transition: 'left .3s cubic-bezier(0.2,0.7,0.3,1), right .3s cubic-bezier(0.2,0.7,0.3,1)',
+        }}>
+          {/* Duas camadas de propósito: a de fora arredonda e recorta, a de
+              dentro rola. Com `border-radius` e `overflow-y: auto` no MESMO
+              elemento, o Firefox pinta a barra de rolagem no scrollport, que
+              não é recortado pelo raio — os cantos direitos saem retos (o
+              Chrome recorta a ::-webkit-scrollbar, por isso lá não aparece).
+              Com o recorte em um pai `overflow: hidden`, a barra fica dentro da
+              área já arredondada e os quatro cantos valem em qualquer motor. */}
+          <div style={{
+            height: 'calc(100% - var(--gap) * 2)',
+            margin: 'var(--gap)',
+            background: 'var(--content)',
+            borderRadius: 18,
+            border: '1px solid var(--sb-border)',
+            boxShadow: '0 8px 28px rgba(26,24,20,0.12)',
+            overflow: 'hidden',
           }}>
-            <div style={{
-              height: chatAberto ? 'calc(100% - 32px)' : '100%',
-              margin: chatAberto ? '16px 0 16px 16px' : 0,
-              background: '#F1F4F3',
-              borderRadius: chatAberto ? 18 : '20px 0 0 0',
-              border: '1px solid var(--sb-border)',
-              borderRight: chatAberto ? '1px solid var(--sb-border)' : 'none',
-              borderBottom: chatAberto ? '1px solid var(--sb-border)' : 'none',
-              boxShadow: chatAberto ? '0 8px 28px rgba(26,24,20,0.12)' : '-2px -2px 8px rgba(0,0,0,0.04)',
-              overflowY: 'auto',
-            }}>
-              <div style={{ padding: '28px 36px', maxWidth: 1600, margin: '0 auto' }}>
+            <div style={{ height: '100%', overflowY: 'auto' }}>
+              {/* Folga extra embaixo: o FAB do SusBot flutua sobre o canto
+                  inferior direito do card, e sem isso o último bloco de conteúdo
+                  fica embaixo dele quando a página chega ao fim da rolagem. */}
+              <div style={{ padding: '28px 36px 84px', maxWidth: 1600, margin: '0 auto' }}>
                 {render()}
               </div>
             </div>
-          </main>
-        </div>
+          </div>
+        </main>
         <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} />
-        <SusBotPanel page={page} onNavigate={setPage} ibge6={MUNICIPIO_ATIVO_IBGE6} onOpenChange={setChatAberto} />
+        <SusBotPanel page={page} onNavigate={setPage} ibge6={municipio.ibge6} onOpenChange={setChatAberto} />
       </div>
     </ThemeContext.Provider>
   );

@@ -195,7 +195,7 @@ function SeloNaoTempoReal() {
       <span style={{ color: 'var(--ink-500)', display: 'flex', flexShrink: 0 }}>
         <MIcon m="info" size={16} />
       </span>
-      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-500)', margin: 0 }}>
+      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-500)', margin: 0 }}>
         Projeção baseada em dados históricos (SIH + CNES) — não é monitoramento em tempo real.
       </p>
     </div>
@@ -205,7 +205,7 @@ function SeloNaoTempoReal() {
 function FiltroSelect({ label, value, onChange, options, disabled }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
         {label}
       </span>
       <select
@@ -214,7 +214,7 @@ function FiltroSelect({ label, value, onChange, options, disabled }) {
         disabled={disabled}
         style={{
           padding: '7px 10px', borderRadius: 8, border: '1px solid var(--ink-100)',
-          fontSize: 12.5, fontWeight: 600, color: 'var(--ink-900)', background: 'var(--elev)',
+          fontSize: 13, fontWeight: 600, color: 'var(--ink-900)', background: 'var(--elev)',
           minWidth: 176, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1,
         }}
       >
@@ -226,12 +226,12 @@ function FiltroSelect({ label, value, onChange, options, disabled }) {
 
 const estiloBotaoPrimario = {
   padding: '9px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'var(--primary)', color: 'white', fontSize: 12.5, fontWeight: 700,
+  background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700,
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
 
 const estiloBotaoOutline = {
-  padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+  padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700,
   border: '1px solid var(--ink-100)', background: 'var(--elev)', color: 'var(--ink-700)',
   display: 'inline-flex', alignItems: 'center', gap: 6,
 };
@@ -265,21 +265,21 @@ function KpisResumo({ kpis }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 14, marginBottom: 22 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 25, fontWeight: 800, color: 'var(--risk-alto)' }}>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 26, fontWeight: 800, color: 'var(--risk-alto)' }}>
           {kpis.unidadesEmRisco} de {kpis.totalUnidades}
         </span>
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-700)' }}>unidades em risco de superlotação</span>
       </div>
       <span style={{ width: 1, height: 32, background: 'var(--ink-100)', margin: '0 30px' }} />
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 25, fontWeight: 800, color: 'var(--ink-900)' }}>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)' }}>
           {kpis.ocupacaoMediaProjetada}%
         </span>
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-700)' }}>taxa de ocupação projetada média</span>
       </div>
       <span style={{ width: 1, height: 32, background: 'var(--ink-100)', margin: '0 30px' }} />
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 25, fontWeight: 800, color: 'var(--ink-900)' }}>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)' }}>
           {kpis.horizonte}
         </span>
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-700)' }}>horizonte de projeção</span>
@@ -291,7 +291,7 @@ function KpisResumo({ kpis }) {
 function TooltipOcupacao({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
   return (
-    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '9px 12px', fontSize: 11.5, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+    <div style={{ background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8, padding: '9px 12px', fontSize: 11, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
       <p style={{ fontWeight: 700, color: 'var(--ink-900)', marginBottom: 4 }}>{label}</p>
       {payload.map(p => (
         <p key={p.dataKey} style={{ color: p.color, margin: '2px 0' }}>
@@ -314,22 +314,22 @@ function GraficoOcupacao({ filtros }) {
     <Card className="p-5" style={{ marginBottom: 20 }}>
       <SectionTitle>Projeção de ocupação por unidade — 90 dias</SectionTitle>
       {linhasVisiveis.length === 0 ? (
-        <p style={{ fontSize: 12.5, color: 'var(--ink-400)', textAlign: 'center', padding: '40px 0' }}>
+        <p style={{ fontSize: 13, color: 'var(--ink-400)', textAlign: 'center', padding: '40px 0' }}>
           Nenhuma unidade corresponde a este filtro.
         </p>
       ) : (
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={SERIE_OCUPACAO} margin={{ top: 6, right: 16, left: -12, bottom: 0 }}>
             <CartesianGrid stroke="var(--ink-50)" vertical={false} />
-            <XAxis dataKey="semana" tick={{ fontSize: 10.5, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
-            <YAxis domain={[50, 100]} tick={{ fontSize: 10.5, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={38} />
+            <XAxis dataKey="semana" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
+            <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={38} />
             <Tooltip content={<TooltipOcupacao />} />
-            <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 10 }} />
+            <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
             <ReferenceLine
               y={THRESHOLD}
               stroke="var(--risk-alto)"
               strokeDasharray="5 4"
-              label={{ value: `limite ${THRESHOLD}%`, position: 'insideTopRight', fontSize: 10.5, fill: 'var(--risk-alto)', fontWeight: 700 }}
+              label={{ value: `limite ${THRESHOLD}%`, position: 'insideTopRight', fontSize: 11, fill: 'var(--risk-alto)', fontWeight: 700 }}
             />
             {linhasVisiveis.map(l => (
               <Line key={l.key} type="monotone" dataKey={l.key} name={l.nome} stroke={l.cor} strokeWidth={2.4} dot={false} isAnimationActive={false} />
@@ -347,7 +347,7 @@ function RankingRisco({ dados }) {
     <Card className="p-5">
       <SectionTitle>Ranking de unidades por risco de saturação</SectionTitle>
       {dados.length === 0 && (
-        <p style={{ fontSize: 12.5, color: 'var(--ink-400)', textAlign: 'center', padding: '24px 0' }}>
+        <p style={{ fontSize: 13, color: 'var(--ink-400)', textAlign: 'center', padding: '24px 0' }}>
           Nenhuma unidade corresponde a este filtro.
         </p>
       )}
@@ -356,8 +356,8 @@ function RankingRisco({ dados }) {
         return (
           <div key={r.nome} style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-900)' }}>{r.nome}</span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12.5, fontWeight: 700, color: cor }}>{r.pct}%</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-900)' }}>{r.nome}</span>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: cor }}>{r.pct}%</span>
             </div>
             <div style={{ height: 9, borderRadius: 99, background: 'var(--ink-100)', overflow: 'hidden' }}>
               <div style={{ width: `${(r.pct / max) * 100}%`, height: '100%', borderRadius: 99, background: cor }} />
@@ -374,7 +374,7 @@ function DonutSetor({ dados }) {
     <Card className="p-5">
       <SectionTitle>Distribuição por setor</SectionTitle>
       {dados.length === 0 ? (
-        <p style={{ fontSize: 12.5, color: 'var(--ink-400)', textAlign: 'center', padding: '24px 0' }}>
+        <p style={{ fontSize: 13, color: 'var(--ink-400)', textAlign: 'center', padding: '24px 0' }}>
           Nenhuma unidade corresponde a este filtro.
         </p>
       ) : (
@@ -395,7 +395,7 @@ function DonutSetor({ dados }) {
                 </Pie>
                 <Tooltip
                   formatter={(value, name) => [`${value}%`, name]}
-                  contentStyle={{ fontSize: 11.5, borderRadius: 8, border: '1px solid var(--ink-100)' }}
+                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--ink-100)' }}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -404,8 +404,8 @@ function DonutSetor({ dados }) {
             {dados.map(d => (
               <div key={d.setor} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 9, height: 9, borderRadius: '50%', background: d.cor, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: 'var(--ink-700)', flex: 1 }}>{d.setor}</span>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: 'var(--ink-900)' }}>{d.pct}%</span>
+                <span style={{ fontSize: 13, color: 'var(--ink-700)', flex: 1 }}>{d.setor}</span>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: 'var(--ink-900)' }}>{d.pct}%</span>
               </div>
             ))}
           </div>
@@ -416,20 +416,20 @@ function DonutSetor({ dados }) {
 }
 
 const estiloTh = {
-  textAlign: 'left', padding: '10px 14px', fontSize: 10.5, fontWeight: 700,
+  textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 700,
   textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)',
 };
-const estiloTd = { padding: '12px 14px', fontSize: 12.5, color: 'var(--ink-900)' };
+const estiloTd = { padding: '12px 14px', fontSize: 13, color: 'var(--ink-900)' };
 const estiloTdMono = { ...estiloTd, fontFamily: 'JetBrains Mono, monospace' };
 
 function TabelaUnidades({ unidades, onExportar }) {
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 0' }}>
-        <h2 style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 14, fontWeight: 700, color: 'var(--ink-900)', margin: 0 }}>
+        <h2 style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', margin: 0 }}>
           Unidades com risco de saturação
         </h2>
-        <button onClick={onExportar} style={{ ...estiloBotaoOutline, padding: '6px 12px', fontSize: 11.5 }}>
+        <button onClick={onExportar} style={{ ...estiloBotaoOutline, padding: '6px 12px', fontSize: 11 }}>
           <MIcon m="grid_on" size={14} /> .xlsx
         </button>
       </div>
@@ -463,7 +463,7 @@ function TabelaUnidades({ unidades, onExportar }) {
             })}
             {unidades.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: '28px 14px', textAlign: 'center', fontSize: 12.5, color: 'var(--ink-400)' }}>
+                <td colSpan={7} style={{ padding: '28px 14px', textAlign: 'center', fontSize: 13, color: 'var(--ink-400)' }}>
                   Nenhuma unidade corresponde a este filtro.
                 </td>
               </tr>

@@ -63,6 +63,25 @@
     --ff-tight: 'Inter Tight', 'Inter', ui-sans-serif, system-ui, sans-serif;
     --ff-body:  'Inter', ui-sans-serif, system-ui, sans-serif;
     --ff-mono:  'JetBrains Mono', ui-monospace, monospace;
+
+    /* Escala tipográfica — 5 passos, razão ~1.25. Qualquer tamanho novo deve
+       cair em um destes; meio-pixel de diferença não é hierarquia, é acaso. */
+    --fs-xs: 11px;   /* eyebrow, meta, legenda de gráfico */
+    --fs-sm: 13px;   /* rótulo, item de lista, texto secundário */
+    --fs-md: 15px;   /* corpo */
+    --fs-lg: 20px;   /* título de bloco */
+    --fs-xl: 26px;   /* título de página */
+
+    /* Dimensões do shell — a sidebar, a topbar e o painel do SusBot leem daqui.
+       Mudar a largura da sidebar em um lugar só. */
+    --sb-w:      220px;
+    --topbar-h:  60px;
+    --gap:       16px;
+    --chat-w:    420px;
+    /* Recuo do `main` com o chat aberto. O card de conteúdo já tem margem --gap
+       por dentro, então basta descolar o painel: --chat-w + --gap deixa
+       exatamente --gap de calha entre o card e o painel. */
+    --chat-inset: calc(var(--chat-w) + var(--gap));
   }
 
   * { box-sizing: border-box; }
@@ -121,7 +140,7 @@
 
   .eyebrow {
     font-family: var(--ff-body);
-    font-size: 10px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -130,6 +149,48 @@
 
   .rise { animation: rise 0.4s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
 }
+
+/* ─── Chrome do shell: sidebar, topbar ──────────────────────────────────────
+   Hover e foco vivem aqui, não em onMouseEnter/onMouseLeave inline: handler de
+   mouse não dispara para teclado nem para toque, então quem navega por Tab não
+   recebia nenhum feedback de posição. */
+
+.nav-item,
+.nav-item-2,
+.nav-footer,
+.topbar-btn {
+  transition: background 0.12s, box-shadow 0.12s, border-color 0.12s;
+}
+
+.nav-item:not([aria-current]):hover        { background: rgba(255, 255, 255, 0.35); }
+.nav-item-2:not([aria-current]):hover      { background: rgba(255, 255, 255, 0.25); }
+.nav-footer:not([aria-current]):hover      { background: rgba(255, 255, 255, 0.34); }
+.topbar-btn:hover                          { border-color: var(--ink-200); background: var(--subtle); }
+
+/* Anel de foco único para todo o chrome. :focus-visible = só teclado, o clique
+   de mouse não acende. */
+.nav-item:focus-visible,
+.nav-item-2:focus-visible,
+.nav-footer:focus-visible,
+.topbar-btn:focus-visible,
+.topbar-select:focus-visible {
+  outline: 2px solid var(--sb-strong);
+  outline-offset: 2px;
+}
+
+.topbar-select {
+  appearance: none;
+  border: 1px solid var(--sb-border);
+  background: var(--elev);
+  color: var(--ink-900);
+  border-radius: 8px;
+  padding: 6px 26px 6px 10px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.topbar-select:hover { border-color: var(--ink-200); }
 
 @keyframes rise {
   from { transform: translateY(8px); opacity: 0; }

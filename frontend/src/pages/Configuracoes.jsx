@@ -36,7 +36,7 @@ function Segmented({ options, value, onChange }) {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
-              fontSize: 12, fontWeight: active ? 600 : 500,
+              fontSize: 13, fontWeight: active ? 600 : 500,
               color: active ? '#1A1814' : '#6B665D',
               background: active ? '#FFFFFF' : 'transparent',
               boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
@@ -57,7 +57,7 @@ function SettingRow({ title, desc, children, last }) {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderBottom: last ? 'none' : '1px solid #EFEBE0' }}>
       <div style={{ minWidth: 0 }}>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#1A1814', marginBottom: 2 }}>{title}</p>
-        {desc && <p style={{ fontSize: 11.5, color: '#8A8579', lineHeight: 1.4 }}>{desc}</p>}
+        {desc && <p style={{ fontSize: 11, color: '#8A8579', lineHeight: 1.4 }}>{desc}</p>}
       </div>
       <div style={{ flexShrink: 0 }}>{children}</div>
     </div>
@@ -67,8 +67,8 @@ function SettingRow({ title, desc, children, last }) {
 function CardHead({ title, hint }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4, paddingBottom: 12, borderBottom: '1px solid #EFEBE0' }}>
-      <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1814' }}>{title}</h2>
-      {hint && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A8A39A' }}>{hint}</span>}
+      <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>{title}</h2>
+      {hint && <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A8A39A' }}>{hint}</span>}
     </div>
   );
 }
@@ -171,11 +171,11 @@ export default function PageConfiguracoes() {
                     <p style={{ fontSize: 11, color: '#8A8579' }}>{it.sub}</p>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 600, color: c, background: c + '18' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600, color: c, background: c + '18' }}>
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: c }} />
                       {it.status}
                     </span>
-                    <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#A8A39A', marginTop: 3 }}>{it.tempo}</p>
+                    <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#A8A39A', marginTop: 3 }}>{it.tempo}</p>
                   </div>
                 </div>
               );
@@ -188,7 +188,7 @@ export default function PageConfiguracoes() {
           {/* Plano */}
           <Card className="p-5">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, paddingBottom: 12, borderBottom: '1px solid #EFEBE0' }}>
-              <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1814' }}>Plano contratado</h2>
+              <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>Plano contratado</h2>
               <Badge label="SusPredict Pro" color="var(--primary)" />
             </div>
             {[
@@ -198,7 +198,7 @@ export default function PageConfiguracoes() {
             ].map(r => (
               <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 13 }}>
                 <span style={{ color: '#6B665D' }}>{r.k}</span>
-                <span style={{ fontWeight: 600, color: '#1A1814', fontFamily: 'JetBrains Mono, monospace', fontSize: 12.5 }}>{r.v}</span>
+                <span style={{ fontWeight: 600, color: '#1A1814', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>{r.v}</span>
               </div>
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0 14px', fontSize: 13 }}>
@@ -213,17 +213,17 @@ export default function PageConfiguracoes() {
           {/* Sobre */}
           <Card className="p-5">
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #EFEBE0' }}>
-              <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1814' }}>Sobre o SusPredict</h2>
+              <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>Sobre o SusPredict</h2>
               <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#A8A39A' }}>v1.0.4</span>
             </div>
-            <p style={{ fontSize: 12.5, color: '#6B665D', lineHeight: 1.6, marginBottom: 14 }}>Inteligência preditiva para a Saúde Pública. Desenvolvido pela Startup One — FIAP 2026.</p>
-            <p style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A8A39A', marginBottom: 8 }}>Equipe</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px', fontSize: 12, color: '#3D3A33', marginBottom: 14 }}>
+            <p style={{ fontSize: 13, color: '#6B665D', lineHeight: 1.6, marginBottom: 14 }}>Inteligência preditiva para a Saúde Pública. Desenvolvido pela Startup One — FIAP 2026.</p>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A8A39A', marginBottom: 8 }}>Equipe</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px', fontSize: 13, color: '#3D3A33', marginBottom: 14 }}>
               {['Ariadine Amaral', 'Gabriel Araujo', 'Nilton Mikael', 'Vinicius Mascarenhas', 'Yasmin Cristino Miguez'].map(n => <span key={n}>{n}</span>)}
             </div>
-            <p style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A8A39A', marginBottom: 6 }}>Em parceria</p>
-            <p style={{ fontSize: 12, color: '#3D3A33', marginBottom: 14 }}>FIAP · Claro · DATASUS</p>
-            <p style={{ fontSize: 10.5, color: '#A8A39A', paddingTop: 12, borderTop: '1px solid #EFEBE0' }}>LGPD em conformidade · Termos · Privacidade</p>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A8A39A', marginBottom: 6 }}>Em parceria</p>
+            <p style={{ fontSize: 13, color: '#3D3A33', marginBottom: 14 }}>FIAP · Claro · DATASUS</p>
+            <p style={{ fontSize: 11, color: '#A8A39A', paddingTop: 12, borderTop: '1px solid #EFEBE0' }}>LGPD em conformidade · Termos · Privacidade</p>
           </Card>
 
           {/* Ações administrativas */}
@@ -236,9 +236,9 @@ export default function PageConfiguracoes() {
                   borderBottom: i < CFG_ACOES.length - 1 ? '1px solid #EFEBE0' : 'none',
                   background: 'none', cursor: 'pointer', textAlign: 'left', color: '#3D3A33',
                 }}>
-                  <span className="material-symbols-rounded" style={{ fontSize: 19, color: '#6B665D' }}>{a.icon}</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#6B665D' }}>{a.icon}</span>
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{a.label}</span>
-                  <span className="material-symbols-rounded" style={{ fontSize: 18, color: '#C9C4BA' }}>chevron_right</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#C9C4BA' }}>chevron_right</span>
                 </button>
               ))}
             </div>

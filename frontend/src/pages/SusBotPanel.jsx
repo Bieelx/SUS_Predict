@@ -242,7 +242,7 @@ function EstadoPainel({ icone, titulo, texto, acao, tom = 'neutral' }) {
         <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: tom === 'danger' ? cor : 'var(--ink-700)' }}>
           {titulo}
         </p>
-        <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.5, color: tom === 'danger' ? cor : 'var(--ink-400)' }}>
+        <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.5, color: tom === 'danger' ? cor : 'var(--ink-400)' }}>
           {texto}
         </p>
       </div>
@@ -252,7 +252,7 @@ function EstadoPainel({ icone, titulo, texto, acao, tom = 'neutral' }) {
 }
 
 const ROTULO_META = {
-  margin: 0, fontFamily: 'var(--ff-mono, monospace)', fontSize: 9.5,
+  margin: 0, fontFamily: 'var(--ff-mono, monospace)', fontSize: 11,
   letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-400)',
 };
 
@@ -270,7 +270,7 @@ function Bolha({ msg, onNavigate }) {
         <div style={{
           maxWidth: '88%', padding: '9px 13px', borderRadius: 12,
           background: 'var(--subtle)', border: '1px solid var(--ink-100)',
-          fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink-900)', overflowWrap: 'anywhere',
+          fontSize: 13, lineHeight: 1.55, color: 'var(--ink-900)', overflowWrap: 'anywhere',
         }}>
           {msg.texto}
         </div>
@@ -288,7 +288,7 @@ function Bolha({ msg, onNavigate }) {
         {isErro ? 'não foi possível responder' : 'SusBot'}
       </p>
       <div style={{
-        marginTop: 5, fontSize: 13.5, lineHeight: 1.6,
+        marginTop: 5, fontSize: 13, lineHeight: 1.6,
         color: 'var(--ink-700)', overflowWrap: 'anywhere',
       }}>
         {isErro ? <p style={{ margin: 0 }}>{msg.texto}</p> : renderMd(msg.texto)}
@@ -303,7 +303,7 @@ function Bolha({ msg, onNavigate }) {
         <button
           onClick={() => msg.onRetry?.(msg.perguntaOriginal)}
           style={{
-            marginTop: 8, fontSize: 11.5, fontWeight: 700, color: cor, background: 'none',
+            marginTop: 8, fontSize: 11, fontWeight: 700, color: cor, background: 'none',
             border: `1px solid color-mix(in srgb, ${cor} 40%, transparent)`, borderRadius: 8,
             padding: '4px 10px', cursor: 'pointer',
           }}
@@ -318,7 +318,7 @@ function Bolha({ msg, onNavigate }) {
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 10, padding: '5px 11px',
             background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)',
-            borderRadius: 999, cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: 'var(--primary)',
+            borderRadius: 999, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: 'var(--primary)',
           }}
         >
           {msg.link.label}
@@ -342,7 +342,7 @@ function ItemHistorico({ thread, onAbrir }) {
       }}
     >
       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink-900)' }}>{titulo}</p>
-      <p style={{ margin: 0, fontFamily: 'var(--ff-mono, monospace)', fontSize: 10.5, color: 'var(--ink-400)' }}>
+      <p style={{ margin: 0, fontFamily: 'var(--ff-mono, monospace)', fontSize: 11, color: 'var(--ink-400)' }}>
         {formatRelativo(thread.criadaEm)}
       </p>
     </div>
@@ -366,6 +366,15 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
 
   const fimRef = useRef(null);
   const inputRef = useRef(null);
+  const painelRef = useRef(null);
+
+  // O painel fica montado o tempo todo (translada para fora quando fechado), então
+  // precisa sair da árvore de foco ao fechar. `inert` faz as duas coisas: esconde
+  // do leitor de tela e impede foco — com aria-hidden sozinho, o [x] que acabou de
+  // ser clicado continuava focado dentro de uma subárvore escondida.
+  useEffect(() => {
+    if (painelRef.current) painelRef.current.inert = !open;
+  }, [open]);
   const conversaLoadSeq = useRef(0);
   const ibge6Atual = normalizarIbge6(ibge6);
 
@@ -653,7 +662,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
         .susbot-icon-btn:hover { background: var(--subtle); color: var(--ink-900); }
 
         .susbot-panel-shell {
-          width: min(420px, calc(100vw - 16px));
+          width: min(var(--chat-w), calc(100vw - var(--gap)));
           border-radius: 18px;
           overflow: hidden;
         }
@@ -687,14 +696,14 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
 
       {/* Dock lateral — sempre montado, translada para fora quando fechado */}
       <div
-        aria-hidden={!open}
+        ref={painelRef}
         role="dialog"
         aria-label="Painel do SusBot"
         className="susbot-panel-shell"
         style={{
-          // Card destacado: afastado de todas as bordas, na mesma altura visual
-          // do card de conteúdo (topbar = 60px, respiro de 16px nas outras).
-          position: 'fixed', top: 76, right: 16, bottom: 16,
+          // Card destacado: afastado de todas as bordas, na mesma caixa visual
+          // do card de conteúdo (topbar + respiro no topo, respiro nas demais).
+          position: 'fixed', top: 'calc(var(--topbar-h) + var(--gap))', right: 'var(--gap)', bottom: 'var(--gap)',
           background: 'var(--content)', border: '1px solid var(--sb-border)',
           boxShadow: open ? '0 8px 28px rgba(26,24,20,0.12)' : 'none',
           zIndex: 55, display: 'flex', flexDirection: 'column',
@@ -769,7 +778,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                     style={{
                       border: '1px solid color-mix(in srgb, var(--bad, #8A2A38) 22%, var(--ink-100))',
                       background: 'var(--canvas)', borderRadius: 999, padding: '7px 12px', cursor: 'pointer',
-                      fontSize: 12, fontWeight: 700, color: 'var(--bad, #8A2A38)',
+                      fontSize: 13, fontWeight: 700, color: 'var(--bad, #8A2A38)',
                     }}
                   >
                     tentar novamente
@@ -806,11 +815,11 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                 <div style={{ paddingTop: 10 }}>
                   <p style={{
                     margin: 0, fontFamily: 'var(--ff-tight)', fontWeight: 800,
-                    fontSize: 21, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--ink-900)',
+                    fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--ink-900)',
                   }}>
                     O que você precisa decidir agora?
                   </p>
-                  <p style={{ margin: '8px 0 18px', fontSize: 12.5, lineHeight: 1.5, color: 'var(--ink-400)' }}>
+                  <p style={{ margin: '8px 0 18px', fontSize: 13, lineHeight: 1.5, color: 'var(--ink-400)' }}>
                     Pergunte sobre {getSusbotPageLabel(page)} ou sobre qualquer dado do município.
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -847,7 +856,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                   }}
                   placeholder="Pergunte sobre este município…"
                   style={{
-                    width: '100%', fontSize: 13.5, border: 'none', outline: 'none', padding: 0,
+                    width: '100%', fontSize: 13, border: 'none', outline: 'none', padding: 0,
                     color: 'var(--ink-900)', background: 'transparent', resize: 'none',
                     overflow: 'hidden', lineHeight: 1.5, minHeight: 22, maxHeight: 120,
                   }}
