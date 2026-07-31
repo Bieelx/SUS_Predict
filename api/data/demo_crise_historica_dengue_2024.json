@@ -1,0 +1,83 @@
+{
+  "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+  "status_dataset": "validado",
+  "municipio": "Campinas",
+  "uf": "SP",
+  "ibge6": "350950",
+  "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+  "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+  "periodo": {
+    "inicio": "2024-01",
+    "fim": "2024-12"
+  },
+  "extraido_em": "2026-07-30T00:00:00Z",
+  "observacoes": [
+    "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+    "O arquivo estabiliza o replay sem depender de rede.",
+    "Estoque e precos sao ficticios e marcados como estoque_demo.",
+    "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+    "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+  ],
+  "premissas": {
+    "limiar_surto_crescimento_pct": 30,
+    "limiar_surto_previsao_multiplo": 1.5,
+    "limiar_ruptura_atencao_dias": 60,
+    "limiar_ruptura_critica_dias": 30,
+    "multiplicador_compra_emergencial": 1.35,
+    "janela_planejamento_dias": 90,
+    "janela_previsao_meses": 3,
+    "dias_por_mes": 30
+  },
+  "serie_mensal": [
+    {"mes": "2024-01", "casos": 3973},
+    {"mes": "2024-02", "casos": 12319},
+    {"mes": "2024-03", "casos": 28156},
+    {"mes": "2024-04", "casos": 33354},
+    {"mes": "2024-05", "casos": 29073},
+    {"mes": "2024-06", "casos": 9500},
+    {"mes": "2024-07", "casos": 1988},
+    {"mes": "2024-08", "casos": 960},
+    {"mes": "2024-09", "casos": 755},
+    {"mes": "2024-10", "casos": 586},
+    {"mes": "2024-11", "casos": 466},
+    {"mes": "2024-12", "casos": 343}
+  ],
+  "estoque_demo": [
+    {
+      "item": "Dipirona 500mg",
+      "unidade": "cx",
+      "quantidade_inicial": 170000,
+      "consumo_base_por_caso": 1.5,
+      "consumo_basal_diario": 8,
+      "preco_unitario": 4.8,
+      "estoque_demo": true
+    },
+    {
+      "item": "Soro fisiológico 1L",
+      "unidade": "fr",
+      "quantidade_inicial": 155000,
+      "consumo_base_por_caso": 1.0,
+      "consumo_basal_diario": 6,
+      "preco_unitario": 23.5,
+      "estoque_demo": true
+    },
+    {
+      "item": "Sais de reidratação oral",
+      "unidade": "cx",
+      "quantidade_inicial": 130000,
+      "consumo_base_por_caso": 0.6,
+      "consumo_basal_diario": 4,
+      "preco_unitario": 3.2,
+      "estoque_demo": true
+    },
+    {
+      "item": "Repelente infantil",
+      "unidade": "un",
+      "quantidade_inicial": 115000,
+      "consumo_base_por_caso": 0.25,
+      "consumo_basal_diario": 2,
+      "preco_unitario": 19.9,
+      "estoque_demo": true
+    }
+  ]
+}

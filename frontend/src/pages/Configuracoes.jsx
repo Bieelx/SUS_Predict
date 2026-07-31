@@ -74,11 +74,11 @@ function CardHead({ title, hint }) {
 }
 
 const CFG_INTEGRACOES = [
-  { sigla: 'S', nome: 'SINAN — Sistema de Agravos',      sub: 'Sincronização diária às 04:00',         status: 'conectado', tempo: 'há 4 horas' },
-  { sigla: 'S', nome: 'SIH/SUS — Hospitalares',          sub: 'Atualização mensal · competência 03/2026', status: 'conectado', tempo: 'há 12 dias' },
-  { sigla: 'C', nome: 'CNES — Cadastro de Estabelecimentos', sub: 'Sincronização semanal',              status: 'conectado', tempo: 'há 2 dias' },
-  { sigla: 'P', nome: 'PNI — Imunizações',               sub: 'Sincronização diária às 06:00',          status: 'atraso',    tempo: 'há 2 dias' },
-  { sigla: 'E', nome: 'Estoque local (UBS)',             sub: 'API municipal · tempo real',             status: 'conectado', tempo: 'há 8 min' },
+  { sigla: 'S', nome: 'SINAN — Sistema de Agravos',      sub: 'Carga diária programada',                status: 'conectado', tempo: 'última carga há 4 h' },
+  { sigla: 'S', nome: 'SIH/SUS — Hospitalares',          sub: 'Atualização mensal · competência 03/2026', status: 'conectado', tempo: 'última carga há 12 dias' },
+  { sigla: 'C', nome: 'CNES — Cadastro de Estabelecimentos', sub: 'Carga semanal consolidada',          status: 'conectado', tempo: 'última carga há 2 dias' },
+  { sigla: 'P', nome: 'PNI — Imunizações',               sub: 'Carga diária programada',                status: 'atraso',    tempo: 'última carga há 2 dias' },
+  { sigla: 'E', nome: 'Estoque local (UBS)',             sub: 'Integração municipal simulada',          status: 'conectado', tempo: 'última carga há 8 min' },
 ];
 
 const CFG_ACOES = [
@@ -89,7 +89,7 @@ const CFG_ACOES = [
   { icon: 'support_agent', label: 'Falar com Suporte' },
 ];
 
-export default function PageConfiguracoes() {
+export default function PageConfiguracoes({ demoState }) {
   const { themeId, setThemeId } = useTheme();
   const [densidade, setDensidade] = useState('confortavel');
   const [notif, setNotif] = useState({ email: true, sms: true, whatsapp: true, push: true });
@@ -102,8 +102,17 @@ export default function PageConfiguracoes() {
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', letterSpacing: '-0.02em', marginBottom: 4 }}>Configurações</h1>
-        <p style={{ fontSize: 13, color: '#8A8579' }}>Preferências de notificação, regras de alerta, integrações e gestão de usuários da Secretaria.</p>
+        <p style={{ fontSize: 13, color: '#8A8579' }}>Preferências de notificação, regras de alerta, integrações de apoio e gestão de usuários da Secretaria.</p>
       </div>
+
+      {demoState?.enabled && (
+        <Card className="p-5" style={{ marginBottom: 20, border: '1px solid color-mix(in srgb, var(--info) 20%, transparent)', background: 'color-mix(in srgb, var(--info) 6%, white)' }}>
+          <CardHead title="Modo demo" hint="transparência" />
+          <p style={{ fontSize: 13, lineHeight: 1.6, color: '#3D3A33', margin: 0 }}>
+            Esta área fica fora da história principal do replay histórico. As integrações abaixo são referências de apoio e não representam monitoramento em tempo real durante a demo.
+          </p>
+        </Card>
+      )}
 
       {/* Aparência — full width */}
       <Card className="p-5" style={{ marginBottom: 20 }}>

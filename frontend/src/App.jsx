@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { THEMES, ThemeContext, MIcon, LogoIcon } from './shared/ui.jsx';
+import { API_BASE, THEMES, ThemeContext, MIcon, LogoIcon } from './shared/ui.jsx';
 
 import LoginScreen from './pages/Login.jsx';
 import VisaoGeral from './pages/VisaoGeral.jsx';
@@ -145,7 +145,7 @@ function SidebarFooterAction({ item, active, onClick }) {
   );
 }
 
-function Sidebar({ current, onNav, aberta }) {
+function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled }) {
   // Abre já expandido quando a página ativa é de Análises — chegar em
   // Epidemiologia por um link de card e não ver o item destacado no menu é
   // desorientador. Reabre também quando a navegação vem de fora da sidebar.
@@ -187,7 +187,12 @@ function Sidebar({ current, onNav, aberta }) {
             OPERACIONAL
           </p>
           {NAV_OPERACIONAL.map(item => (
-            <NavItemTier1 key={item.id} item={item} active={current === item.id} onClick={() => onNav(item.id)} />
+            <NavItemTier1
+              key={item.id}
+              item={{ ...item, badge: item.id === 'alertas' ? alertasBadge : item.badge }}
+              active={current === item.id}
+              onClick={() => onNav(item.id)}
+            />
           ))}
         </div>
 
@@ -222,7 +227,9 @@ function Sidebar({ current, onNav, aberta }) {
       <div style={{ padding: '12px 20px 18px', borderTop: '1px solid rgba(44,74,71,0.12)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3DB887', flexShrink: 0, animation: 'dot-pulse 2.4s ease-in-out infinite' }} />
-          <span style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION }}>Dados em sincronia · há 8 min</span>
+          <span style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION }}>
+            {demoEnabled ? 'Replay histórico ativo' : 'Dados em sincronia · há 8 min'}
+          </span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <SidebarFooterAction
@@ -368,6 +375,26 @@ const MUNICIPIOS = [
   { ibge6: '355700', nome: 'Vargem Grande Pta.', uf: 'SP' },
 ];
 
+function demoAtivaNaUrl() {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('demo') === 'crise-historica';
+}
+
+function atualizarUrlDemo(ativa) {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (ativa) url.searchParams.set('demo', 'crise-historica');
+  else url.searchParams.delete('demo');
+  window.history.replaceState({}, '', url);
+}
+
+async function lerJson(response, fallback) {
+  if (!response.ok) {
+    throw new Error(fallback);
+  }
+  return response.json();
+}
+
 export default function App() {
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('sus_predict_token'));
   const [page, setPage] = useState('visao-geral');
@@ -384,6 +411,14 @@ export default function App() {
   }, [sidebarAberta]);
   const [municipio, setMunicipio] = useState(MUNICIPIOS[0]);
   const [documentos, setDocumentos] = useState(DOCUMENTOS_INICIAIS);
+  const [demoEnabled, setDemoEnabled] = useState(demoAtivaNaUrl);
+  const [demo, setDemo] = useState({
+    meta: null,
+    cutoff: null,
+    payload: null,
+    loading: false,
+    error: null,
+  });
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
 
   function salvarDocumento(doc) {
@@ -400,20 +435,171 @@ export default function App() {
     });
   }
 
+  function handleEtpGerado(_documento, origem) {
+    if (!demoEnabled || !origem?.alertaId) return;
+    void marcarAlertaEmAndamento?.(origem.alertaId);
+  }
+
+  async function carregarMetaEEstado(cutoffDesejado = null) {
+    setDemo(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const metaResp = await fetch(`${API_BASE}/api/demo/crise-historica/meta`);
+      const meta = await lerJson(metaResp, 'Falha ao carregar a meta da demo');
+      const cutoff = cutoffDesejado || meta.cortes?.mes_inicial || meta.cortes?.cortes?.[0]?.mes || '2024-01';
+      const estadoResp = await fetch(`${API_BASE}/api/demo/crise-historica/estado?cutoff=${encodeURIComponent(cutoff)}`);
+      const payload = await lerJson(estadoResp, 'Falha ao carregar o corte da demo');
+
+      setDemo({
+        meta,
+        cutoff: payload.cutoff || cutoff,
+        payload,
+        loading: false,
+        error: null,
+      });
+    } catch (error) {
+      setDemo(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Falha ao carregar a demo',
+      }));
+    }
+  }
+
+  async function carregarEstado(cutoff) {
+    setDemo(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const resp = await fetch(`${API_BASE}/api/demo/crise-historica/estado?cutoff=${encodeURIComponent(cutoff)}`);
+      const payload = await lerJson(resp, 'Falha ao carregar o corte da demo');
+      setDemo(prev => ({
+        ...prev,
+        cutoff: payload.cutoff || cutoff,
+        payload,
+        loading: false,
+        error: null,
+      }));
+    } catch (error) {
+      setDemo(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Falha ao carregar o corte da demo',
+      }));
+    }
+  }
+
+  function iniciarDemo() {
+    atualizarUrlDemo(true);
+    setDemoEnabled(true);
+  }
+
+  async function reiniciarDemo() {
+    if (!demoEnabled) return iniciarDemo();
+    setDemo(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const resp = await fetch(`${API_BASE}/api/demo/crise-historica/reset`, { method: 'POST' });
+      const payload = await lerJson(resp, 'Falha ao reiniciar a demo');
+      setDemo(prev => ({
+        ...prev,
+        cutoff: payload.cutoff || prev.meta?.cortes?.mes_inicial || '2024-01',
+        payload,
+        loading: false,
+        error: null,
+      }));
+    } catch (error) {
+      setDemo(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Falha ao reiniciar a demo',
+      }));
+    }
+  }
+
+  function obterCutoffVizinho(passos) {
+    const cortes = demo.meta?.cortes?.cortes || [];
+    const atual = demo.cutoff || demo.meta?.cortes?.mes_inicial || cortes[0]?.mes;
+    const indiceAtual = cortes.findIndex(item => item.mes === atual);
+    if (indiceAtual < 0) return null;
+    const alvo = cortes[indiceAtual + passos];
+    return alvo?.mes || null;
+  }
+
+  async function voltarMes() {
+    const anterior = obterCutoffVizinho(-1);
+    if (anterior) await carregarEstado(anterior);
+  }
+
+  async function avancarMes() {
+    const proximo = obterCutoffVizinho(1);
+    if (proximo) await carregarEstado(proximo);
+  }
+
+  async function marcarAlertaEmAndamento(alertaId) {
+    if (!demoEnabled) return null;
+    const cutoff = demo.cutoff || demo.meta?.cortes?.mes_inicial || '2024-01';
+    try {
+      const resp = await fetch(
+        `${API_BASE}/api/demo/crise-historica/alertas/${encodeURIComponent(alertaId)}/andamento?cutoff=${encodeURIComponent(cutoff)}`,
+        { method: 'POST' },
+      );
+      const payload = await lerJson(resp, 'Falha ao atualizar o alerta da demo');
+      setDemo(prev => ({
+        ...prev,
+        cutoff: payload.cutoff || cutoff,
+        payload,
+        loading: false,
+        error: null,
+      }));
+      return payload;
+    } catch (error) {
+      setDemo(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Falha ao atualizar o alerta da demo',
+      }));
+      return null;
+    }
+  }
+
+  useEffect(() => {
+    if (!demoEnabled) return;
+    carregarMetaEEstado();
+  }, [demoEnabled]);
+
+  const demoState = {
+    enabled: demoEnabled,
+    meta: demo.meta,
+    cutoff: demo.cutoff,
+    payload: demo.payload,
+    loading: demo.loading,
+    error: demo.error,
+    iniciarDemo,
+    avancarMes,
+    voltarMes,
+    reiniciarDemo,
+    marcarAlertaEmAndamento,
+  };
+
+  const alertasBadge = demoEnabled && demo.payload
+    ? (demo.payload.alertas || []).filter(a => a.status === 'novo' || a.status === 'andamento').length
+    : 3;
+
   if (!authed) return <LoginScreen onEnter={() => setAuthed(true)} />;
 
   function render() {
+    const foraDoEscopoDemo = demoEnabled && ['epidemiologia', 'internacoes', 'superlotacao', 'configuracoes', 'perfil'].includes(page);
+    if (foraDoEscopoDemo) {
+      return <DemoForaDoEscopo page={page} onNavigate={setPage} />;
+    }
+
     switch (page) {
-      case 'visao-geral':   return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} municipio={municipio} />;
-      case 'alertas':       return <Alertas onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} />;
-      case 'insumos':       return <Insumos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} />;
-      case 'documentos':    return <Documentos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} documentos={documentos} />;
-      case 'epidemiologia': return <Epidemiologia onNavigate={setPage} />;
-      case 'internacoes':   return <Internacoes onNavigate={setPage} />;
-      case 'superlotacao':  return <Superlotacao onNavigate={setPage} />;
-      case 'configuracoes': return <PageConfiguracoes onNavigate={setPage} />;
-      case 'perfil':        return <PagePerfil onNavigate={setPage} onLogout={() => { localStorage.removeItem('sus_predict_token'); setAuthed(false); }} />;
-      default:              return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} municipio={municipio} />;
+      case 'visao-geral':   return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
+      case 'alertas':       return <Alertas onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
+      case 'insumos':       return <Insumos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
+      case 'documentos':    return <Documentos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} documentos={documentos} demoState={demoState} />;
+      case 'epidemiologia': return <Epidemiologia onNavigate={setPage} demoState={demoState} />;
+      case 'internacoes':   return <Internacoes onNavigate={setPage} demoState={demoState} />;
+      case 'superlotacao':  return <Superlotacao onNavigate={setPage} demoState={demoState} />;
+      case 'configuracoes': return <PageConfiguracoes onNavigate={setPage} demoState={demoState} />;
+      case 'perfil':        return <PagePerfil onNavigate={setPage} onLogout={() => { localStorage.removeItem('sus_predict_token'); setAuthed(false); }} demoState={demoState} />;
+      default:              return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
     }
   }
 
@@ -422,7 +608,7 @@ export default function App() {
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
           (esquerda da sidebar, gap central, respiro do painel do SusBot). */}
       <div style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
-        <Sidebar current={page} onNav={setPage} aberta={sidebarAberta} />
+        <Sidebar current={page} onNav={setPage} aberta={sidebarAberta} alertasBadge={alertasBadge} demoEnabled={demoEnabled} />
         <Topbar
           municipio={municipio}
           municipios={MUNICIPIOS}
@@ -467,7 +653,7 @@ export default function App() {
             </div>
           </div>
         </main>
-        <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} />
+        <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} onEtpGerado={handleEtpGerado} />
         <SusBotPanel page={page} onNavigate={setPage} ibge6={municipio.ibge6} onOpenChange={setChatAberto} />
       </div>
     </ThemeContext.Provider>

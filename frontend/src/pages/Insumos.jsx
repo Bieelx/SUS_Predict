@@ -5,7 +5,7 @@
 // isso a tela carrega também uma dimensão de entrada de dado (CRUD de estoque). Todos os
 // dados abaixo são mock estático — nenhum fetch/axios nesta tela.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Line,
   ReferenceLine, ReferenceDot,
@@ -118,21 +118,23 @@ const estiloBotaoOutline = {
 
 // ─── Sub-componentes ────────────────────────────────────────────────────────
 
-function Cabecalho({ view, onAtualizarEstoque, onVoltar }) {
+function Cabecalho({ view, onAtualizarEstoque, onVoltar, demoAtivo, municipio }) {
   if (view === 'crud') {
     return (
       <div style={{ marginBottom: 22 }}>
-        <button
-          onClick={onVoltar}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, fontWeight: 600, color: 'var(--primary)', marginBottom: 10 }}
-        >
-          ← Voltar
-        </button>
+        {!demoAtivo && (
+          <button
+            onClick={onVoltar}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, fontWeight: 600, color: 'var(--primary)', marginBottom: 10 }}
+          >
+            ← Voltar
+          </button>
+        )}
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', margin: 0 }}>
           Gestão de Estoque
         </h1>
         <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: '4px 0 0' }}>
-          Origem dos dados de estoque usados para calcular dias restantes — {MUNICIPIO.nome}, {MUNICIPIO.uf}.
+          Origem dos dados de estoque usados para calcular dias restantes — {municipio.nome}, {municipio.uf}.
         </p>
       </div>
     );
@@ -142,8 +144,8 @@ function Cabecalho({ view, onAtualizarEstoque, onVoltar }) {
       <div>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4 }}>
           Insumos{' '}
-          <span style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
-            — {MUNICIPIO.nome}, {MUNICIPIO.uf}
+          <span className="ff-serif" style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
+            — {municipio.nome}, {municipio.uf}
           </span>
         </h1>
         <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: 0 }}>
@@ -172,7 +174,7 @@ function Divisor() {
   return <span style={{ width: 1, height: 32, background: 'var(--ink-100)', margin: '0 30px' }} />;
 }
 
-function ResumoExecutivo({ criticos, alertas }) {
+function ResumoExecutivo({ criticos, alertas, economia = ECONOMIA_ESTIMADA, percentualEmergencial = 35, mesAcaoRecomendado = null }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 14, marginBottom: 24 }}>
       <StatInline valor={criticos} label="críticos" cor="var(--risk-alto)" />
@@ -185,12 +187,12 @@ function ResumoExecutivo({ criticos, alertas }) {
             <MIcon m="savings" size={19} />
           </span>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 800, color: 'var(--good)' }}>
-            R$ {ECONOMIA_ESTIMADA.toLocaleString('pt-BR')}
+            R$ {economia.toLocaleString('pt-BR')}
           </span>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-700)' }}>economia estimada agindo agora</span>
         </div>
         <p style={{ fontSize: 11, color: 'var(--ink-400)', margin: '2px 0 0 27px' }}>
-          compra planejada vs. emergencial (30–40% mais cara) — estimativa
+          compra planejada vs. emergencial ({`+${percentualEmergencial}%`} mais cara) — ação em {mesAcaoRecomendado || '—'}
         </p>
       </div>
     </div>
@@ -252,7 +254,8 @@ function LinhaItem({ item, isLast, onAbrirDrawer, onGerarEtp }) {
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: cor, flexShrink: 0 }} />
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-900)' }}>{item.nome}</span>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink-900)' }}>{item.nome}</span>
+            {item.estoque_demo && <Badge label="Estoque demo" color="var(--info)" />}
             {item.etpGeradoEm && <Badge label={`ETP gerado em ${item.etpGeradoEm}`} color="var(--info)" />}
           </div>
           <p style={{
@@ -372,9 +375,14 @@ function DrawerDetalhe({ item, onClose, onGerarEtp }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, paddingRight: 30 }}>
           <span style={{ width: 11, height: 11, borderRadius: '50%', background: cor, flexShrink: 0 }} />
-          <h3 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 20, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
-            {item.nome}
-          </h3>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <h3 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 18, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
+                {item.nome}
+              </h3>
+              {item.estoque_demo && <Badge label="Estoque demo" color="var(--info)" />}
+            </div>
+          </div>
         </div>
         <div style={{ marginBottom: 22 }}>
           <Badge label={rotuloStatus(status)} color={cor} />
@@ -665,8 +673,13 @@ function GestaoEstoque({
 
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-export default function Insumos({ onNavigate, onGerarEtp }) {
-  const [estoque, setEstoque] = useState(ESTOQUE_INICIAL);
+export default function Insumos({ onNavigate, onGerarEtp, demoState }) {
+  const demoAtiva = demoState?.enabled && demoState.payload;
+  const municipio = obterMunicipioTela(demoState);
+  const estoqueBase = demoAtiva && Array.isArray(demoState.payload?.insumos)
+    ? demoState.payload.insumos
+    : ESTOQUE_INICIAL;
+  const [estoque, setEstoque] = useState(estoqueBase);
   const [view, setView] = useState('lista'); // 'lista' | 'crud'
   const [modo, setModo] = useState('medicamento'); // 'medicamento' | 'setor'
   const [itemDrawer, setItemDrawer] = useState(null);
@@ -674,9 +687,16 @@ export default function Insumos({ onNavigate, onGerarEtp }) {
   const [itemEditando, setItemEditando] = useState(null);
   const [uploadPreview, setUploadPreview] = useState(false);
 
+  useEffect(() => {
+    if (demoAtiva) setEstoque(estoqueBase);
+  }, [demoAtiva, estoqueBase]);
+
   const itensOrdenados = [...estoque].sort((a, b) => diasRestantesDe(a) - diasRestantesDe(b));
   const criticos = itensOrdenados.filter(it => statusDe(diasRestantesDe(it)) === 'critico').length;
   const alertas = itensOrdenados.filter(it => statusDe(diasRestantesDe(it)) === 'alerta').length;
+  const economiaEstimada = demoAtiva ? (demoState.payload?.prova_valor?.economia_estimada ?? ECONOMIA_ESTIMADA) : ECONOMIA_ESTIMADA;
+  const percentualEmergencial = demoAtiva ? (demoState.payload?.prova_valor?.percentual_emergencial ?? 35) : 35;
+  const mesAcaoRecomendado = demoAtiva ? (demoState.payload?.prova_valor?.mes_acao_recomendado || demoState.payload?.prova_valor?.etp_recomendado_em || null) : null;
 
   const acionarGerarEtp = item => {
     if (typeof onGerarEtp !== 'function') return;
@@ -687,6 +707,8 @@ export default function Insumos({ onNavigate, onGerarEtp }) {
         diasRestantes: diasRestantesDe(item),
         consumoSemanal: item.consumoSemanal,
         atualizadoHaDias: item.atualizadoHaDias,
+        alertaId: item.alertaId || item.id,
+        estoque_demo: !!demoAtiva,
       },
     });
   };
@@ -724,7 +746,7 @@ export default function Insumos({ onNavigate, onGerarEtp }) {
   if (view === 'crud') {
     return (
       <div className="rise">
-        <Cabecalho view="crud" onVoltar={voltarDaCrud} />
+        <Cabecalho view="crud" onVoltar={voltarDaCrud} demoAtivo={demoAtiva} municipio={municipio} />
         <GestaoEstoque
           estoque={estoque}
           formAberto={formAberto}
@@ -746,13 +768,30 @@ export default function Insumos({ onNavigate, onGerarEtp }) {
 
   return (
     <div className="rise">
-      <Cabecalho view="lista" onAtualizarEstoque={irParaCrud} />
+      <Cabecalho view="lista" onAtualizarEstoque={irParaCrud} demoAtivo={demoAtiva} municipio={municipio} />
+
+      {demoAtiva && (
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
+          padding: '10px 14px', borderRadius: 12, marginBottom: 18,
+          border: '1px solid color-mix(in srgb, var(--info) 22%, transparent)',
+          background: 'color-mix(in srgb, var(--info) 7%, white)',
+        }}>
+          <Badge label="Demo histórica" color="var(--info)" />
+          <span style={{ fontSize: 12.5, color: 'var(--ink-700)' }}>
+            Casos históricos reais; estoque e preços são cenário demo fictício.
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--ink-500)' }}>
+            corte temporal {formatarCutoffDemo(demoState.cutoff)}
+          </span>
+        </div>
+      )}
 
       {itensOrdenados.length === 0 ? (
         <EstadoVazio onEnviarPlanilha={abrirEnvioPlanilha} onCadastrarManual={abrirCadastroManual} />
       ) : (
         <>
-          <ResumoExecutivo criticos={criticos} alertas={alertas} />
+          <ResumoExecutivo criticos={criticos} alertas={alertas} economia={economiaEstimada} percentualEmergencial={percentualEmergencial} mesAcaoRecomendado={mesAcaoRecomendado ? formatarCutoffDemo(mesAcaoRecomendado) : null} />
           <SegmentedControl
             value={modo}
             onChange={setModo}

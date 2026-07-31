@@ -98,16 +98,41 @@ function corFaixaRisco(valor) {
   return 'var(--risk-baixo)';
 }
 
+const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+function formatarCutoffDemo(cutoff) {
+  if (!cutoff || !/^\d{4}-\d{2}$/.test(cutoff)) return cutoff || '';
+  const [ano, mes] = String(cutoff).split('-');
+  return `${MESES_ABREV[Number(mes) - 1] || mes}/${ano}`;
+}
+
+function obterMunicipioTela(demoState) {
+  const municipio = demoState?.payload?.meta?.municipio || demoState?.meta?.municipio;
+  return municipio?.nome && municipio?.uf ? municipio : MUNICIPIO;
+}
+
+function construirStatusDemo(payload) {
+  return payload?.status || STATUS;
+}
+
+function construirSerieDemo(payload) {
+  return payload?.serie_com_previsao || payload?.serie_temporal || DENGUE_SERIE;
+}
+
+function construirAlertasDemo(payload) {
+  return payload?.alertas || ALERTAS;
+}
+
 // ─── Sub-componentes da tela ────────────────────────────────────────────────
 
-function BannerStatus({ onNavigate }) {
+function BannerStatus({ onNavigate, status = STATUS, acao = 'alertas', rotuloAcao = 'Ver plano' }) {
   return (
     <div
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20,
         padding: '20px 26px', borderRadius: 14, marginBottom: 26,
-        background: `color-mix(in srgb, ${STATUS.cor} 9%, var(--elev))`,
-        border: `1px solid color-mix(in srgb, ${STATUS.cor} 28%, transparent)`,
+        background: `color-mix(in srgb, ${status.cor} 9%, var(--elev))`,
+        border: `1px solid color-mix(in srgb, ${status.cor} 28%, transparent)`,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
@@ -123,33 +148,140 @@ function BannerStatus({ onNavigate }) {
               fontFamily: 'Inter Tight, sans-serif', fontWeight: 800, fontSize: 15,
               letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--ink-900)', margin: 0,
             }}>
-              {STATUS.titulo}
+              {status.titulo}
             </p>
             <span style={{
               fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
               color: 'var(--ink-500)', background: 'var(--elev)', border: '1px solid var(--ink-100)',
               borderRadius: 99, padding: '2px 8px',
             }}>
-              índice {STATUS.indice}/100
+              índice {status.indice}/100
             </span>
           </div>
-          <p style={{ fontSize: 15, color: 'var(--ink-700)', margin: 0 }}>{STATUS.frase}</p>
+          <p style={{ fontSize: 15, color: 'var(--ink-700)', margin: 0 }}>{status.frase}</p>
         </div>
       </div>
       <button
-        onClick={() => onNavigate('alertas')}
+        onClick={() => onNavigate(acao)}
         style={{
           flexShrink: 0, padding: '9px 18px', borderRadius: 9, border: 'none', cursor: 'pointer',
           background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700,
         }}
       >
-        Ver plano
+        {rotuloAcao}
       </button>
     </div>
   );
 }
 
-function BlocoSusBot() {
+function FaixaTransparenciaDemo({ demoState }) {
+  if (!demoState?.enabled) return null;
+  const municipio = obterMunicipioTela(demoState);
+  const cutoff = formatarCutoffDemo(demoState.cutoff || demoState.payload?.cutoff || demoState.meta?.cortes?.mes_inicial);
+
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
+      padding: '10px 14px', borderRadius: 12, marginBottom: 18,
+      border: '1px solid color-mix(in srgb, var(--info) 22%, transparent)',
+      background: 'color-mix(in srgb, var(--info) 7%, white)',
+    }}>
+      <Badge label="Demo histórica" color="var(--info)" />
+      <span style={{ fontSize: 12.5, color: 'var(--ink-700)' }}>
+        Casos históricos reais; estoque e preços são cenário demo fictício.
+      </span>
+      <span style={{ fontSize: 12, color: 'var(--ink-500)' }}>
+        {municipio.nome}/{municipio.uf} · corte temporal {cutoff}
+      </span>
+    </div>
+  );
+}
+
+function BarDemo({ demoState }) {
+  if (!demoState?.enabled) return null;
+  const cortes = demoState.meta?.cortes?.cortes || [];
+  const indiceAtual = cortes.findIndex(item => item.mes === demoState.cutoff);
+  const podeVoltar = indiceAtual > 0;
+  const podeAvancar = indiceAtual >= 0 && indiceAtual < cortes.length - 1;
+
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 14, alignItems: 'center',
+      padding: '12px 16px', borderRadius: 12, marginBottom: 18,
+      border: '1px solid color-mix(in srgb, var(--primary) 18%, transparent)',
+      background: 'color-mix(in srgb, var(--primary) 6%, white)',
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Demo histórica
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--ink-500)' }}>
+            dengue 2024 · corte temporal: {formatarCutoffDemo(demoState.cutoff)}
+          </span>
+          {demoState.loading && <span style={{ fontSize: 12, color: 'var(--ink-500)' }}>carregando...</span>}
+        </div>
+        {demoState.error && (
+          <span style={{ fontSize: 12, color: 'var(--risk-alto)' }}>{demoState.error}</span>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={demoState.voltarMes} disabled={!podeVoltar || demoState.loading} style={estiloBotaoOutline}>Voltar mês</button>
+        <button onClick={demoState.avancarMes} disabled={!podeAvancar || demoState.loading} style={estiloBotaoPrimario}>Avançar mês</button>
+        <button onClick={demoState.reiniciarDemo} disabled={demoState.loading} style={estiloBotaoOutline}>Reiniciar</button>
+      </div>
+    </div>
+  );
+}
+
+function ProvaValorDemo({ demoState }) {
+  if (!demoState?.enabled || !demoState?.payload?.prova_valor) return null;
+  const prova = demoState.payload.prova_valor;
+  const mesAcao = prova.mes_acao_recomendado || prova.etp_recomendado_em;
+  const mesRuptura = prova.mes_ruptura_prevista || prova.ruptura_estimada_em;
+  const antecedencia = prova.antecedencia_operacional_dias != null
+    ? `${prova.antecedencia_operacional_dias.toLocaleString('pt-BR')} dias`
+    : '—';
+  const economia = prova.economia_estimada != null ? `R$ ${prova.economia_estimada.toLocaleString('pt-BR')}` : '—';
+  const custoPlanejado = prova.custo_planejado != null ? `R$ ${prova.custo_planejado.toLocaleString('pt-BR')}` : '—';
+  const custoEmergencial = prova.custo_emergencial != null ? `R$ ${prova.custo_emergencial.toLocaleString('pt-BR')}` : '—';
+
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12,
+      padding: 16, borderRadius: 14, marginBottom: 24,
+      border: '1px solid color-mix(in srgb, var(--good) 20%, transparent)',
+      background: 'color-mix(in srgb, var(--good) 6%, white)',
+    }}>
+      <div>
+        <p style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-400)', margin: '0 0 6px' }}>
+          Antecedência operacional
+        </p>
+        <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 800, color: 'var(--good)', margin: 0 }}>
+          {antecedencia}
+        </p>
+      </div>
+      <div>
+        <p style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-400)', margin: '0 0 6px' }}>
+          Economia estimada
+        </p>
+        <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 800, color: 'var(--good)', margin: 0 }}>
+          {economia}
+        </p>
+      </div>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <p style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--ink-700)', margin: 0 }}>
+          ETP recomendado em <strong>{mesAcao || '—'}</strong> · ruptura estimada em <strong>{mesRuptura || '—'}</strong>
+        </p>
+        <p style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--ink-500)', margin: 0 }}>
+          Compra planejada {custoPlanejado} vs. emergencial {custoEmergencial}.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function BlocoSusBot({ texto = SUSBOT_TEXTO }) {
   return (
     <div style={{
       background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)',
@@ -159,7 +291,7 @@ function BlocoSusBot() {
         <MIcon m="smart_toy" size={14} /> SusBot
       </p>
       <p style={{ fontSize: 15, lineHeight: 1.65, color: 'var(--ink-700)', margin: 0 }}>
-        {SUSBOT_TEXTO}
+        {texto}
       </p>
     </div>
   );
@@ -213,16 +345,16 @@ function LinhaAlerta({ alerta, isLast, onNavigate, onGerarEtp }) {
   );
 }
 
-function AlertasPrioritarios({ onNavigate, onGerarEtp }) {
+function AlertasPrioritarios({ onNavigate, onGerarEtp, alertas = ALERTAS }) {
   return (
     <div style={{ marginBottom: 28 }}>
       <SectionTitle>Alertas prioritários</SectionTitle>
       <Card>
-        {ALERTAS.map((a, i) => (
+        {alertas.map((a, i) => (
           <LinhaAlerta
             key={a.id}
             alerta={a}
-            isLast={i === ALERTAS.length - 1}
+            isLast={i === alertas.length - 1}
             onNavigate={onNavigate}
             onGerarEtp={onGerarEtp}
           />
@@ -263,12 +395,12 @@ function TooltipDengue({ active, payload, label }) {
   );
 }
 
-function CardPrevisaoDengue() {
+function CardPrevisaoDengue({ serie = DENGUE_SERIE }) {
   return (
     <Card className="p-5">
       <SectionTitle>Previsão de casos — dengue</SectionTitle>
       <ResponsiveContainer width="100%" height={270}>
-        <ComposedChart data={DENGUE_SERIE} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+        <ComposedChart data={serie} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--ink-100)" vertical={false} />
           <XAxis
             dataKey="mes" tick={{ fontSize: 11, fill: 'var(--ink-400)' }}
@@ -341,29 +473,65 @@ function CardRankingRegional({ municipio }) {
 
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-// O município deixou de aparecer no <h1>: ele é contexto global do app e agora
-// vive no seletor da topbar, visível em todas as telas.
-export default function VisaoGeral({ onNavigate, onGerarEtp, municipio = MUNICIPIO }) {
+export default function VisaoGeral({ onNavigate, onGerarEtp, demoState }) {
+  const demoAtiva = demoState?.enabled && demoState.payload;
+  const municipio = obterMunicipioTela(demoState);
+  const statusDemo = demoAtiva ? construirStatusDemo(demoState.payload) : STATUS;
+  const serieDemo = demoAtiva ? construirSerieDemo(demoState.payload) : DENGUE_SERIE;
+  const alertasDemo = demoAtiva ? construirAlertasDemo(demoState.payload) : ALERTAS;
+  const textoSusbot = demoAtiva ? (demoState.payload.susbot_briefing || []).join('\n') : SUSBOT_TEXTO;
+
   return (
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{
-          fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800,
-          color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4,
-        }}>
-          Visão Geral
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: 0 }}>
-          Em 30 segundos: o que precisa da sua decisão agora.
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{
+              fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800,
+              color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4,
+            }}>
+              Visão Geral{' '}
+              <span className="ff-serif" style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
+                — {municipio.nome}, {municipio.uf}
+              </span>
+            </h1>
+            <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: 0 }}>
+              Em 30 segundos: o que precisa da sua decisão agora.
+            </p>
+          </div>
+        </div>
+        {demoState?.enabled ? (
+          <>
+            <FaixaTransparenciaDemo demoState={demoState} />
+            <BarDemo demoState={demoState} />
+          </>
+        ) : (
+          <button
+            onClick={() => demoState?.iniciarDemo?.()}
+            style={{
+              marginTop: 12, border: '1px solid color-mix(in srgb, var(--primary) 20%, var(--ink-100))',
+              background: 'white', color: 'var(--primary)', borderRadius: 10, padding: '8px 12px',
+              fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            Abrir demo histórica
+          </button>
+        )}
       </div>
 
-      <BannerStatus onNavigate={onNavigate} />
-      <BlocoSusBot />
-      <AlertasPrioritarios onNavigate={onNavigate} onGerarEtp={onGerarEtp} />
+      {demoState?.enabled && demoState.error && !demoState.payload && (
+        <div style={{ marginBottom: 18, padding: '12px 14px', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--risk-alto) 24%, transparent)', background: 'color-mix(in srgb, var(--risk-alto) 8%, white)', color: 'var(--ink-700)', fontSize: 13 }}>
+          A demo não carregou agora. O layout abaixo segue com o conteúdo padrão até a API responder.
+        </div>
+      )}
+
+      <BannerStatus onNavigate={onNavigate} status={statusDemo} acao="alertas" rotuloAcao="Ver plano" />
+      <BlocoSusBot texto={textoSusbot} />
+      <ProvaValorDemo demoState={demoState} />
+      <AlertasPrioritarios onNavigate={onNavigate} onGerarEtp={onGerarEtp} alertas={alertasDemo} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
-        <CardPrevisaoDengue />
+        <CardPrevisaoDengue serie={serieDemo} />
         <CardRankingRegional municipio={municipio} />
       </div>
     </div>

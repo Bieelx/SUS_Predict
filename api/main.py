@@ -63,6 +63,7 @@ from api.core.aggregation import (
 from api.core.constants import ANO_MAXIMO_CONFIAVEL, ESTADOS_FALLBACK
 from api.core.db import delete_run, find_cached, find_latest_by_ibge, init_db, list_runs, save_resultado
 from api.core import auth as auth_core
+from api.core.demo_router import router as demo_router
 from api.core.dengue import router as dengue_router
 from api.core.export import csv_gz_bytes, slug_filename, xlsx_bytes
 from api.core.ibge import buscar_municipios, get_estados
@@ -83,6 +84,7 @@ app.add_middleware(
 )
 
 app.include_router(dengue_router)
+app.include_router(demo_router)
 app.include_router(susbot_router)
 
 jobs: dict = {}

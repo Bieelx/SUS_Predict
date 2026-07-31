@@ -3,7 +3,7 @@ import {
   ComposedChart, LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { Card, MIcon } from '../shared/ui.jsx';
+import { Card, Badge, MIcon } from '../shared/ui.jsx';
 
 // ─── Dados mock (topo do arquivo — sem fetch/axios) ────────────────────────────
 //
@@ -25,6 +25,128 @@ const FILTROS_TIPO = [
   { id: 'ruptura',  label: 'Ruptura' },
   { id: 'ocupacao', label: 'Ocupação' },
 ];
+
+function formatarCutoffDemo(cutoff) {
+  if (!cutoff) return '—';
+  const [ano, mes] = String(cutoff).split('-');
+  const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  return `${meses[Number(mes) - 1] || mes}/${ano}`;
+}
+
+function obterMunicipioTela(demoState) {
+  const municipio = demoState?.payload?.meta?.municipio || demoState?.meta?.municipio;
+  return municipio?.nome && municipio?.uf ? municipio : { nome: 'Cotia', uf: 'SP' };
+}
+
+function mapearSeveridadeDemo(severidade) {
+  return severidade === 'alta' ? 'critico' : 'alerta';
+}
+
+function construirSerieSurtoDemo(payload) {
+  return (payload?.previsao || []).slice(0, 8).map((p, idx) => ({
+    semana: `M${idx + 1}`,
+    casos: p.casos_previstos,
+    min: p.lower,
+    max: p.upper,
+  }));
+}
+
+function construirSerieEstoqueDemo(item) {
+  const diasRestantes = Math.max(0, Number(item?.dias_restantes || 0));
+  const consumoDia = Math.max(1, Number(item?.consumo_previsto_dia || 0));
+  const estoqueInicial = Math.max(0, Number(item?.quantidade_restante || 0));
+  const passo = Math.max(1, Math.round(Math.min(7, diasRestantes / 4) || 1));
+  const pontos = [{ label: 'hoje', estoque: estoqueInicial }];
+  for (let dias = passo; dias <= Math.min(30, diasRestantes + 7); dias += passo) {
+    pontos.push({ label: `+${dias}d`, estoque: Math.max(0, Math.round(estoqueInicial - consumoDia * dias)) });
+  }
+  if (pontos[pontos.length - 1].estoque !== 0) {
+    pontos.push({ label: `+${Math.max(diasRestantes, 30)}d`, estoque: 0 });
+  }
+  return pontos;
+}
+
+function construirAlertaDemo(alerta, payload) {
+  const itemDemo = payload?.insumos?.find(item => item.item === alerta.item_ou_condicao) || null;
+  const severidade = mapearSeveridadeDemo(alerta.severidade);
+  const origem = alerta.tipo === 'surto' ? 'SINAN · Demo histórica' : 'Estoque demo · Insumos';
+  const cutoff = formatarCutoffDemo(payload?.cutoff);
+  const economia = itemDemo?.economia_estimada ?? payload?.prova_valor?.economia_estimada ?? null;
+  const prova = payload?.prova_valor || {};
+
+  const base = {
+    id: alerta.id,
+    tipo: alerta.tipo,
+    severidade,
+    status: alerta.status,
+    titulo: alerta.tipo === 'surto' ? 'Surto de dengue em aceleração' : `Risco de ruptura: ${alerta.item_ou_condicao}`,
+    evidencia: alerta.tipo === 'surto'
+      ? `Crescimento mensal de ${alerta.evidencia?.crescimento_pct?.toFixed(1) || 0}%`
+      : `Cobertura estimada de ${Number(alerta.evidencia?.dias_restantes || 0).toFixed(1)} dias`,
+    origem,
+    tempo: `corte ${cutoff}`,
+    acao: alerta.tipo === 'surto'
+      ? { tipo: 'drawer', label: 'Ver detalhes' }
+      : { tipo: alerta.status === 'andamento' ? 'ver' : 'etp', label: alerta.status === 'andamento' ? 'Ver ETP' : 'Gerar ETP' },
+    alertaId: alerta.id,
+    scenarioId: payload?.scenario_id,
+    cutoff: payload?.cutoff,
+    precoUnitario: itemDemo?.preco_unitario ?? null,
+    economiaEstimada: economia,
+    mesAcaoRecomendado: itemDemo?.evidencia?.mes_acao_recomendado ?? prova.mes_acao_recomendado ?? prova.etp_recomendado_em ?? null,
+    mesRupturaPrevista: itemDemo?.evidencia?.mes_ruptura_prevista ?? prova.mes_ruptura_prevista ?? null,
+    antecedenciaOperacionalDias: itemDemo?.evidencia?.antecedencia_operacional_dias ?? prova.antecedencia_operacional_dias ?? null,
+    custoPlanejado: itemDemo?.custo_planejado ?? prova.custo_planejado ?? null,
+    custoEmergencial: itemDemo?.custo_emergencial ?? prova.custo_emergencial ?? null,
+    percentualEmergencial: prova.percentual_emergencial ?? null,
+    quantidadePlanejada: prova.quantidade_planejada ?? null,
+  };
+
+  if (alerta.tipo === 'surto') {
+    return {
+      ...base,
+      detalhe: {
+        texto: `A dengue entrou em tendência de alta. O replay está no corte ${cutoff} e a previsão do próximo mês mostra continuidade da aceleração.`,
+        grafico: 'surto',
+        probabilidade: Math.min(98, Math.max(50, Math.round((alerta.evidencia?.crescimento_pct || 30) + 48))),
+        serie: construirSerieSurtoDemo(payload),
+      },
+      timeline: [{ rotulo: 'Detectado', data: `corte ${cutoff}` }],
+    };
+  }
+
+  return {
+    ...base,
+    item: {
+      nome: alerta.item_ou_condicao,
+      diasRestantes: Number(alerta.evidencia?.dias_restantes || 0),
+      consumoSemanal: Math.round((itemDemo?.consumo_previsto_dia || 0) * 7),
+      atualizadoHaDias: 0,
+      unidade: itemDemo?.unidade || 'un',
+      precoUnitario: itemDemo?.preco_unitario ?? null,
+      estoque_demo: true,
+      economiaEstimada: itemDemo?.economia_estimada ?? economia,
+      mesAcaoRecomendado: itemDemo?.evidencia?.mes_acao_recomendado ?? prova.mes_acao_recomendado ?? null,
+      mesRupturaPrevista: itemDemo?.evidencia?.mes_ruptura_prevista ?? prova.mes_ruptura_prevista ?? null,
+      antecedenciaOperacionalDias: itemDemo?.evidencia?.antecedencia_operacional_dias ?? prova.antecedencia_operacional_dias ?? null,
+      custoPlanejado: itemDemo?.custo_planejado ?? prova.custo_planejado ?? null,
+      custoEmergencial: itemDemo?.custo_emergencial ?? prova.custo_emergencial ?? null,
+      percentualEmergencial: prova.percentual_emergencial ?? null,
+      quantidadePlanejada: prova.quantidade_planejada ?? null,
+      quantidade_restante: itemDemo?.quantidade_restante,
+    },
+    detalhe: {
+      texto: `Cobertura estimada de ${Number(alerta.evidencia?.dias_restantes || 0).toFixed(1)} dias no corte ${cutoff}. ${base.mesAcaoRecomendado ? `Ação recomendada em ${formatarCutoffDemo(base.mesAcaoRecomendado)}.` : ''}`,
+      grafico: 'estoque',
+      serie: construirSerieEstoqueDemo(itemDemo),
+      limiar: 30,
+    },
+    timeline: [
+      { rotulo: 'Detectado', data: `corte ${cutoff}` },
+      ...(alerta.status === 'andamento' ? [{ rotulo: 'Em andamento', data: 'ação registrada' }] : []),
+    ],
+  };
+}
 
 // Alertas ativos (Novo + Em andamento) — estado inicial, mutável em runtime
 // conforme a gestora aciona as ações (Camada 3 do doc da tela).
@@ -418,17 +540,22 @@ function Timeline({ passos }) {
 
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-export default function Alertas({ onNavigate, onGerarEtp }) {
+export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
   const [alertas, setAlertas] = useState(ALERTAS_INICIAIS);
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const [drawer, setDrawer] = useState(null); // { kind: 'ativo'|'historico', data }
 
-  const nNovos = alertas.filter(a => a.status === 'novo').length;
-  const nAndamento = alertas.filter(a => a.status === 'andamento').length;
+  const demoAtiva = demoState?.enabled && demoState.payload;
+  const municipio = obterMunicipioTela(demoState);
+  const alertasDemo = demoAtiva ? (demoState.payload.alertas || []).map(alerta => construirAlertaDemo(alerta, demoState.payload)) : null;
+  const alertasVisiveis = demoAtiva ? alertasDemo : alertas;
+
+  const nNovos = alertasVisiveis.filter(a => a.status === 'novo').length;
+  const nAndamento = alertasVisiveis.filter(a => a.status === 'andamento').length;
   const nResolvidos = HISTORICO.length;
 
-  const ativosFiltrados = alertas.filter(a => filtroTipo === 'todos' || a.tipo === filtroTipo);
+  const ativosFiltrados = alertasVisiveis.filter(a => filtroTipo === 'todos' || a.tipo === filtroTipo);
   const listaAtiva = [
     ...ativosFiltrados.filter(a => a.status === 'novo'),
     ...ativosFiltrados.filter(a => a.status === 'andamento'),
@@ -436,6 +563,7 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
   const historicoFiltrado = HISTORICO.filter(h => filtroTipo === 'todos' || h.tipo === filtroTipo);
 
   function moverParaAndamento(alerta) {
+    if (demoAtiva) return;
     // rótulo do botão pós-transição: Gerar ETP → Ver ETP · Acionar Plano → Ver plano
     const rotuloVer = alerta.acao.tipo === 'etp' ? 'Ver ETP' : 'Ver plano';
     setAlertas(prev => prev.map(a => (
@@ -453,9 +581,29 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
   function handleAcao(e, alerta) {
     e.stopPropagation();
     if (alerta.acao.tipo === 'etp') {
-      onGerarEtp?.({ tipo: 'alerta', item: alerta.item });
+      if (demoAtiva && alerta.alertaId) {
+        demoState?.marcarAlertaEmAndamento?.(alerta.alertaId);
+      }
+      onGerarEtp?.({
+        tipo: 'alerta',
+        item: alerta.item,
+        alertaId: alerta.alertaId,
+        scenarioId: alerta.scenarioId,
+        cutoff: alerta.cutoff,
+        precoUnitario: alerta.precoUnitario ?? alerta.item?.precoUnitario ?? null,
+        economiaEstimada: alerta.economiaEstimada ?? alerta.item?.economiaEstimada ?? null,
+        mesAcaoRecomendado: alerta.mesAcaoRecomendado ?? alerta.item?.mesAcaoRecomendado ?? null,
+        mesRupturaPrevista: alerta.mesRupturaPrevista ?? alerta.item?.mesRupturaPrevista ?? null,
+        antecedenciaOperacionalDias: alerta.antecedenciaOperacionalDias ?? alerta.item?.antecedenciaOperacionalDias ?? null,
+        custoPlanejado: alerta.custoPlanejado ?? alerta.item?.custoPlanejado ?? null,
+        custoEmergencial: alerta.custoEmergencial ?? alerta.item?.custoEmergencial ?? null,
+        percentualEmergencial: alerta.percentualEmergencial ?? alerta.item?.percentualEmergencial ?? null,
+      });
       moverParaAndamento(alerta);
     } else if (alerta.acao.tipo === 'plano') {
+      if (demoAtiva && alerta.alertaId) {
+        demoState?.marcarAlertaEmAndamento?.(alerta.alertaId);
+      }
       moverParaAndamento(alerta);
     } else {
       // 'drawer' (Ver detalhes) e 'ver' (Ver ETP / Ver plano) não mudam estado — só abrem o drawer
@@ -473,7 +621,7 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
     setDrawer(null);
   }
 
-  const alertaAtivoDrawer = drawer?.kind === 'ativo' ? alertas.find(a => a.id === drawer.data.id) : null;
+  const alertaAtivoDrawer = drawer?.kind === 'ativo' ? alertasVisiveis.find(a => a.id === drawer.data.id) : null;
   const itemHistoricoDrawer = drawer?.kind === 'historico' ? drawer.data : null;
 
   return (
@@ -486,7 +634,10 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-            Central de Alertas
+            Central de Alertas{' '}
+            <span className="ff-serif" style={{ color: 'var(--ink-400)', fontWeight: 400, fontSize: '0.72em' }}>
+              — {municipio.nome}, {municipio.uf}
+            </span>
           </h1>
           <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>Triagem de surtos, rupturas de insumo e ocupação acima do threshold.</p>
         </div>
@@ -507,6 +658,23 @@ export default function Alertas({ onNavigate, onGerarEtp }) {
           </span>
         </div>
       </div>
+
+      {demoAtiva && (
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
+          padding: '10px 14px', borderRadius: 12, marginBottom: 18,
+          border: '1px solid color-mix(in srgb, var(--info) 22%, transparent)',
+          background: 'color-mix(in srgb, var(--info) 7%, white)',
+        }}>
+          <Badge label="Demo histórica" color="var(--info)" />
+          <span style={{ fontSize: 12.5, color: 'var(--ink-700)' }}>
+            Casos históricos reais; estoque e preços são cenário demo fictício.
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--ink-500)' }}>
+            corte temporal {formatarCutoffDemo(demoState.cutoff)}
+          </span>
+        </div>
+      )}
 
       {/* Camada 1 — filtro por tipo */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>

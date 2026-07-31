@@ -3,7 +3,7 @@
 // Aba leve, de baixa prioridade no menu — consulta ocasional dos ETPs já gerados ou
 // em rascunho. O histórico é sincronizado com o modal de ETP via App.jsx.
 
-import { Card, MIcon } from '../shared/ui.jsx';
+import { Card, Badge, MIcon } from '../shared/ui.jsx';
 import { baixarEtpPdf } from '../shared/etp.js';
 
 const STATUS_LABEL = { finalizado: 'Finalizado', rascunho: 'Rascunho' };
@@ -104,7 +104,7 @@ function TabelaDocumentos({ documentos, onGerarEtp }) {
   );
 }
 
-export default function Documentos({ onNavigate, onGerarEtp, documentos = [] }) {
+export default function Documentos({ onNavigate, onGerarEtp, documentos = [], demoState }) {
   const continuarRascunho = item => {
     if (typeof onGerarEtp !== 'function') return;
     onGerarEtp({ tipo: 'insumo', item });
@@ -120,6 +120,20 @@ export default function Documentos({ onNavigate, onGerarEtp, documentos = [] }) 
           ETPs gerados
         </p>
       </div>
+
+      {demoState?.enabled && (
+        <Card className="p-5" style={{ marginBottom: 20, border: '1px solid color-mix(in srgb, var(--info) 20%, transparent)', background: 'color-mix(in srgb, var(--info) 6%, white)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+            <Badge label="Demo histórica" color="var(--info)" />
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-700)' }}>
+              Os ETPs abaixo pertencem ao replay da dengue 2024 e preservam o contexto do corte temporal.
+            </span>
+          </div>
+          <p style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink-500)', margin: 0 }}>
+            O histórico existe para auditoria da decisão, não como fluxo genérico de documentos do produto.
+          </p>
+        </Card>
+      )}
 
       {documentos.length === 0 ? (
         <EstadoVazio />

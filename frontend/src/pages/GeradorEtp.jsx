@@ -16,14 +16,28 @@ const ETAPAS = [
   { id: 4, label: 'Geração' },
 ];
 
+function formatarMes(mes) {
+  if (!mes || !/^\d{4}-\d{2}$/.test(mes)) return mes || '—';
+  const [ano, mesNum] = mes.split('-');
+  const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  return `${meses[Number(mesNum) - 1] || mesNum}/${ano}`;
+}
+
 function justificativaPadrao(item) {
-  const qtd = Math.round((item.consumoSemanal || 0) * 26);
+  const qtd = item.quantidadePlanejada ?? Math.round((item.consumoSemanal || 0) * 26);
   const dias = item.diasRestantes ?? '—';
-    return `O consumo de ${item.nome} apresenta tendencia de alta acelerada (+12%), conforme previsao do modelo Holt/SINAN. Mantido o ritmo atual, projeta-se o esgotamento do estoque disponivel em ${dias} dias, o que compromete a continuidade do atendimento caso nao haja reposicao planejada.
+  const mesAcao = item.mesAcaoRecomendado ? formatarMes(item.mesAcaoRecomendado) : 'o corte atual';
+  const mesRuptura = item.mesRupturaPrevista ? formatarMes(item.mesRupturaPrevista) : 'a ruptura estimada';
+  const antecedencia = item.antecedenciaOperacionalDias != null ? `${item.antecedenciaOperacionalDias} dias` : '—';
+  const custoPlanejado = item.custoPlanejado != null ? `R$ ${Number(item.custoPlanejado).toLocaleString('pt-BR')}` : null;
+  const custoEmergencial = item.custoEmergencial != null ? `R$ ${Number(item.custoEmergencial).toLocaleString('pt-BR')}` : null;
+  const percentualEmergencial = item.percentualEmergencial != null ? `+${item.percentualEmergencial}%` : '30 a 40%';
+
+  return `O consumo de ${item.nome} apresenta tendencia de alta acelerada (+12%), conforme previsao do modelo Holt/SINAN. Mantido o ritmo atual, projeta-se o esgotamento do estoque disponivel em ${dias} dias, com recomendação de ação em ${mesAcao} e ruptura estimada em ${mesRuptura}.
 
 Recomenda-se a aquisicao de aproximadamente ${qtd.toLocaleString('pt-BR')} unidades de ${item.nome}, quantidade estimada para cobrir a demanda projetada dos proximos 6 meses.
 
-A formalizacao desta compra por meio de processo planejado, amparado neste Estudo Tecnico Preliminar, evita o recurso a compra emergencial - historicamente 30 a 40% mais cara que a aquisicao planejada - resultando em economia relevante para a Secretaria e garantindo a continuidade da assistencia a populacao.`;
+A formalizacao desta compra por meio de processo planejado, amparado neste Estudo Tecnico Preliminar, evita o recurso a compra emergencial - historicamente ${percentualEmergencial} mais cara que a aquisicao planejada - resultando em economia relevante para a Secretaria e garantindo a continuidade da assistencia a populacao.${custoPlanejado && custoEmergencial ? ` Compra planejada ${custoPlanejado} vs. emergencial ${custoEmergencial}.` : ''}${antecedencia !== '—' ? ` Antecedência operacional: ${antecedencia}.` : ''}`;
 }
 
 // Rascunho pré-existente coerente com o chip "Rascunho — 28/06/2026" de Documentos.jsx
@@ -115,6 +129,30 @@ function Etapa1DadosSistema({ item }) {
         label="Quantidade estimada para 6 meses"
         valor={`${qtd6meses.toLocaleString('pt-BR')} unidades`}
       />
+      {item.quantidadePlanejada != null && (
+        <CampoLeitura
+          label="Quantidade planejada estimada"
+          valor={`${Number(item.quantidadePlanejada).toLocaleString('pt-BR')} unidades`}
+        />
+      )}
+      {item.mesAcaoRecomendado && (
+        <CampoLeitura
+          label="Mês recomendado para ação"
+          valor={formatarMes(item.mesAcaoRecomendado)}
+        />
+      )}
+      {item.mesRupturaPrevista && (
+        <CampoLeitura
+          label="Mês estimado da ruptura"
+          valor={formatarMes(item.mesRupturaPrevista)}
+        />
+      )}
+      {item.antecedenciaOperacionalDias != null && (
+        <CampoLeitura
+          label="Antecedência operacional"
+          valor={`${item.antecedenciaOperacionalDias.toLocaleString('pt-BR')} dias`}
+        />
+      )}
       <div style={{ marginBottom: 4 }}>
         <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)', margin: '0 0 4px' }}>
           Referência legal aplicável
@@ -124,6 +162,24 @@ function Etapa1DadosSistema({ item }) {
           referência genérica — não substitui parecer jurídico
         </p>
       </div>
+
+      {(item.custoPlanejado != null || item.custoEmergencial != null) && (
+        <div style={{ marginBottom: 4 }}>
+          <p style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)', margin: '0 0 4px' }}>
+            Compra planejada vs. emergencial
+          </p>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-900)', margin: 0 }}>
+            {item.custoPlanejado != null ? `Planejada: R$ ${Number(item.custoPlanejado).toLocaleString('pt-BR')}` : 'Planejada: —'}
+            {' '}·{ ' '}
+            {item.custoEmergencial != null ? `Emergencial: R$ ${Number(item.custoEmergencial).toLocaleString('pt-BR')}` : 'Emergencial: —'}
+          </p>
+          {item.percentualEmergencial != null && (
+            <p style={{ fontSize: 10.5, color: 'var(--ink-400)', margin: '3px 0 0', fontStyle: 'italic' }}>
+              ágio emergencial estimado: +{item.percentualEmergencial}%
+            </p>
+          )}
+        </div>
+      )}
 
       {desatualizado && (
         <div style={{
@@ -264,7 +320,7 @@ function ToastEtpGerado({ toast, onClose }) {
 
 // ─── Modal principal ────────────────────────────────────────────────────────
 
-export default function GeradorEtp({ origem, onClose, onSalvarDocumento }) {
+export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGerado }) {
   // rascunhos: { [nomeItem]: { etapa, dados, texto, aprovado } } — sobrevive ao
   // fechamento do modal porque o componente fica sempre montado (contrato do shell).
   const [rascunhos, setRascunhos] = useState(RASCUNHOS_INICIAIS);
@@ -318,6 +374,7 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento }) {
         return cp;
       });
       onSalvarDocumento?.(documento);
+      onEtpGerado?.(documento, origem);
       setToast(documento);
       onClose();
     }, 1500);
