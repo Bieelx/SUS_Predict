@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { Card, Badge, MIcon } from '../shared/ui.jsx';
+import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
 
 // ─── Dados mock (topo do arquivo — sem fetch/axios) ────────────────────────────
 //
@@ -26,25 +27,13 @@ const FILTROS_TIPO = [
   { id: 'ocupacao', label: 'Ocupação' },
 ];
 
-function formatarCutoffDemo(cutoff) {
-  if (!cutoff) return '—';
-  const [ano, mes] = String(cutoff).split('-');
-  const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  return `${meses[Number(mes) - 1] || mes}/${ano}`;
-}
-
-function obterMunicipioTela(demoState) {
-  const municipio = demoState?.payload?.meta?.municipio || demoState?.meta?.municipio;
-  return municipio?.nome && municipio?.uf ? municipio : { nome: 'Cotia', uf: 'SP' };
-}
-
 function mapearSeveridadeDemo(severidade) {
   return severidade === 'alta' ? 'critico' : 'alerta';
 }
 
 function construirSerieSurtoDemo(payload) {
   return (payload?.previsao || []).slice(0, 8).map((p, idx) => ({
-    semana: `M${idx + 1}`,
+    mes: formatarCutoffDemo(p.mes),
     casos: p.casos_previstos,
     min: p.lower,
     max: p.upper,
@@ -139,7 +128,7 @@ function construirAlertaDemo(alerta, payload) {
       texto: `Cobertura estimada de ${Number(alerta.evidencia?.dias_restantes || 0).toFixed(1)} dias no corte ${cutoff}. ${base.mesAcaoRecomendado ? `Ação recomendada em ${formatarCutoffDemo(base.mesAcaoRecomendado)}.` : ''}`,
       grafico: 'estoque',
       serie: construirSerieEstoqueDemo(itemDemo),
-      limiar: 30,
+      limiar: Math.round(Number(itemDemo?.consumo_previsto_dia || 0) * 30),
     },
     timeline: [
       { rotulo: 'Detectado', data: `corte ${cutoff}` },
@@ -470,7 +459,7 @@ function GraficoDrawer({ detalhe }) {
         <ResponsiveContainer width="100%" height={170}>
           <ComposedChart data={detalhe.serie} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
             <CartesianGrid stroke="var(--ink-50)" vertical={false} />
-            <XAxis dataKey="semana" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
+            <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
             <YAxis tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--ink-100)' }} />
             {/* banda de confiança: pinta 0→max, depois "apaga" 0→min por cima com a cor de fundo */}
@@ -480,7 +469,7 @@ function GraficoDrawer({ detalhe }) {
           </ComposedChart>
         </ResponsiveContainer>
         <p style={{ fontSize: 11, color: 'var(--ink-400)', textAlign: 'center', marginTop: 2 }}>
-          modelo Holt · confiança {detalhe.probabilidade}%
+          previsão mensal da demo · confiança {detalhe.probabilidade}%
         </p>
       </>
     );
@@ -494,7 +483,7 @@ function GraficoDrawer({ detalhe }) {
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} />
           <YAxis tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} />
           <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--ink-100)' }} />
-          <ReferenceLine y={detalhe.limiar} stroke="var(--warn)" strokeDasharray="4 3" label={{ value: 'limiar de reposição', position: 'insideTopRight', fontSize: 11, fill: 'var(--warn)' }} />
+          <ReferenceLine y={detalhe.limiar} stroke="var(--warn)" strokeDasharray="4 3" label={{ value: 'limiar de 30 dias', position: 'insideTopRight', fontSize: 11, fill: 'var(--warn)' }} />
           <Line type="monotone" dataKey="estoque" stroke="var(--risk-alto)" strokeWidth={2.2} dot={{ r: 2.5 }} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
@@ -547,20 +536,21 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
   const [drawer, setDrawer] = useState(null); // { kind: 'ativo'|'historico', data }
 
   const demoAtiva = demoState?.enabled && demoState.payload;
-  const municipio = obterMunicipioTela(demoState);
+  const municipio = obterMunicipioDemo(demoState);
   const alertasDemo = demoAtiva ? (demoState.payload.alertas || []).map(alerta => construirAlertaDemo(alerta, demoState.payload)) : null;
   const alertasVisiveis = demoAtiva ? alertasDemo : alertas;
+  const historicoResolvido = demoAtiva ? [] : HISTORICO;
 
   const nNovos = alertasVisiveis.filter(a => a.status === 'novo').length;
   const nAndamento = alertasVisiveis.filter(a => a.status === 'andamento').length;
-  const nResolvidos = HISTORICO.length;
+  const nResolvidos = historicoResolvido.length;
 
   const ativosFiltrados = alertasVisiveis.filter(a => filtroTipo === 'todos' || a.tipo === filtroTipo);
   const listaAtiva = [
     ...ativosFiltrados.filter(a => a.status === 'novo'),
     ...ativosFiltrados.filter(a => a.status === 'andamento'),
   ];
-  const historicoFiltrado = HISTORICO.filter(h => filtroTipo === 'todos' || h.tipo === filtroTipo);
+  const historicoFiltrado = historicoResolvido.filter(h => filtroTipo === 'todos' || h.tipo === filtroTipo);
 
   function moverParaAndamento(alerta) {
     if (demoAtiva) return;
@@ -714,7 +704,9 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
         {historicoAberto && (
           <div style={{ marginTop: 12 }}>
             {historicoFiltrado.length === 0 ? (
-              <p style={{ fontSize: 13, color: 'var(--ink-400)', padding: '10px 0' }}>Nenhum item resolvido para este filtro.</p>
+              <p style={{ fontSize: 13, color: 'var(--ink-400)', padding: '10px 0' }}>
+                {demoAtiva ? 'O replay histórico não mantém uma fila separada de alertas resolvidos.' : 'Nenhum item resolvido para este filtro.'}
+              </p>
             ) : (
               historicoFiltrado.map(h => (
                 <LinhaHistorico key={h.id} item={h} onAbrir={abrirDrawerHistorico} />
@@ -756,7 +748,7 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
                       {alertaAtivoDrawer.origem} · {alertaAtivoDrawer.tempo}
                     </p>
                   </div>
-                  <button onClick={fecharDrawer} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', flexShrink: 0 }}>
+                  <button aria-label="Fechar detalhes do alerta" onClick={fecharDrawer} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', flexShrink: 0 }}>
                     <MIcon m="close" size={20} />
                   </button>
                 </div>
@@ -799,7 +791,7 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
                       {TIPO_LABEL[itemHistoricoDrawer.tipo]}
                     </p>
                   </div>
-                  <button onClick={fecharDrawer} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', flexShrink: 0 }}>
+                  <button aria-label="Fechar histórico do alerta" onClick={fecharDrawer} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', flexShrink: 0 }}>
                     <MIcon m="close" size={20} />
                   </button>
                 </div>

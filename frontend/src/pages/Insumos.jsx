@@ -11,6 +11,7 @@ import {
   ReferenceLine, ReferenceDot,
 } from 'recharts';
 import { Card, Badge, MIcon } from '../shared/ui.jsx';
+import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
 
 // ─── Mock: fatos canônicos do município (Cotia — SP) ──────────────────────────
 
@@ -102,6 +103,32 @@ function gerarSerieProjecao(item) {
   return semanas;
 }
 
+function adaptarItemDemo(item, provaValor = {}, cutoff = null, scenarioId = null, idx = 0) {
+  return {
+    id: item.id || item.item || `demo-insumo-${idx}`,
+    nome: item.item || item.nome || `Insumo ${idx + 1}`,
+    qtdAtual: Math.max(0, Math.round(Number(item.quantidade_restante ?? item.qtdAtual ?? 0))),
+    consumoSemanal: Math.max(0, Math.round(Number(item.consumo_previsto_dia ?? item.consumoSemanal ?? 0) * 7)),
+    unidade: item.unidade || 'un',
+    precoUnitario: item.preco_unitario ?? item.precoUnitario ?? null,
+    origem: 'api',
+    atualizadoHaDias: 0,
+    estoque_demo: true,
+    etpGeradoEm: item.evidencia?.etp_recomendado_em || item.etpGeradoEm || null,
+    alertaId: item.alertaId || `demo-ruptura-${String(item.item || idx).toLowerCase().replace(/\s+/g, '-')}`,
+    cutoff,
+    scenarioId,
+    quantidadePlanejada: provaValor.quantidade_planejada ?? null,
+    mesAcaoRecomendado: item.evidencia?.mes_acao_recomendado ?? provaValor.mes_acao_recomendado ?? provaValor.etp_recomendado_em ?? null,
+    mesRupturaPrevista: item.evidencia?.mes_ruptura_prevista ?? provaValor.mes_ruptura_prevista ?? null,
+    antecedenciaOperacionalDias: item.evidencia?.antecedencia_operacional_dias ?? provaValor.antecedencia_operacional_dias ?? null,
+    custoPlanejado: item.custo_planejado ?? provaValor.custo_planejado ?? null,
+    custoEmergencial: item.custo_emergencial ?? provaValor.custo_emergencial ?? null,
+    percentualEmergencial: provaValor.percentual_emergencial ?? null,
+    economiaEstimada: item.economia_estimada ?? provaValor.economia_estimada ?? null,
+  };
+}
+
 // ─── Estilos reutilizados ───────────────────────────────────────────────────
 
 const estiloBotaoPrimario = {
@@ -152,9 +179,11 @@ function Cabecalho({ view, onAtualizarEstoque, onVoltar, demoAtivo, municipio })
           O que vai faltar, em quanto tempo, e o que fazer agora.
         </p>
       </div>
-      <button onClick={onAtualizarEstoque} style={estiloBotaoOutline}>
-        <MIcon m="inventory_2" size={15} /> Atualizar estoque
-      </button>
+      {!demoAtivo && (
+        <button onClick={onAtualizarEstoque} style={estiloBotaoOutline}>
+          <MIcon m="inventory_2" size={15} /> Atualizar estoque
+        </button>
+      )}
     </div>
   );
 }
@@ -675,9 +704,9 @@ function GestaoEstoque({
 
 export default function Insumos({ onNavigate, onGerarEtp, demoState }) {
   const demoAtiva = demoState?.enabled && demoState.payload;
-  const municipio = obterMunicipioTela(demoState);
+  const municipio = obterMunicipioDemo(demoState, MUNICIPIO);
   const estoqueBase = demoAtiva && Array.isArray(demoState.payload?.insumos)
-    ? demoState.payload.insumos
+    ? demoState.payload.insumos.map((item, idx) => adaptarItemDemo(item, demoState.payload?.prova_valor || {}, demoState.payload?.cutoff || null, demoState.payload?.scenario_id || null, idx))
     : ESTOQUE_INICIAL;
   const [estoque, setEstoque] = useState(estoqueBase);
   const [view, setView] = useState('lista'); // 'lista' | 'crud'
@@ -690,6 +719,10 @@ export default function Insumos({ onNavigate, onGerarEtp, demoState }) {
   useEffect(() => {
     if (demoAtiva) setEstoque(estoqueBase);
   }, [demoAtiva, estoqueBase]);
+
+  useEffect(() => {
+    if (demoAtiva && view === 'crud') setView('lista');
+  }, [demoAtiva, view]);
 
   const itensOrdenados = [...estoque].sort((a, b) => diasRestantesDe(a) - diasRestantesDe(b));
   const criticos = itensOrdenados.filter(it => statusDe(diasRestantesDe(it)) === 'critico').length;
@@ -709,11 +742,26 @@ export default function Insumos({ onNavigate, onGerarEtp, demoState }) {
         atualizadoHaDias: item.atualizadoHaDias,
         alertaId: item.alertaId || item.id,
         estoque_demo: !!demoAtiva,
+        scenarioId: item.scenarioId || null,
+        cutoff: item.cutoff || null,
+        quantidadePlanejada: item.quantidadePlanejada ?? null,
+        mesAcaoRecomendado: item.mesAcaoRecomendado ?? null,
+        mesRupturaPrevista: item.mesRupturaPrevista ?? null,
+        antecedenciaOperacionalDias: item.antecedenciaOperacionalDias ?? null,
+        custoPlanejado: item.custoPlanejado ?? null,
+        custoEmergencial: item.custoEmergencial ?? null,
+        percentualEmergencial: item.percentualEmergencial ?? null,
+        economiaEstimada: item.economiaEstimada ?? null,
       },
+      scenarioId: item.scenarioId || null,
+      cutoff: item.cutoff || null,
     });
   };
 
-  const irParaCrud = () => setView('crud');
+  const irParaCrud = () => {
+    if (demoAtiva) return;
+    setView('crud');
+  };
   const voltarDaCrud = () => {
     setView('lista');
     setFormAberto(false);

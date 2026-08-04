@@ -430,8 +430,12 @@ def _briefing_susbot(status: str, crescimento_pct: float | None, item_critico: d
     linhas = []
     if crescimento_pct is None:
         linhas.append("O replay ainda esta em fase inicial e a tendencia epidemiologica segue sem sinal forte.")
-    else:
+    elif crescimento_pct > 0:
         linhas.append(f"A dengue entrou em tendencia de alta de {crescimento_pct:.1f}% no ultimo corte visivel.")
+    elif crescimento_pct < 0:
+        linhas.append(f"A curva de dengue recuou {abs(crescimento_pct):.1f}% no ultimo corte visivel, mas o impacto operacional segue pressionando o estoque.")
+    else:
+        linhas.append("A curva de dengue estabilizou no ultimo corte visivel, mas o estoque segue sob monitoramento.")
 
     if item_critico is not None:
         linhas.append(

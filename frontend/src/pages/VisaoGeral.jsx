@@ -9,6 +9,7 @@ import {
   ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Area, Line,
 } from 'recharts';
 import { Card, SectionTitle, Badge, MIcon } from '../shared/ui.jsx';
+import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
 
 // ─── Mock: fatos canônicos do município (Cotia — SP, Dra. Márcia) ─────────────
 
@@ -81,8 +82,7 @@ const DENGUE_SERIE = [
   { mes: 'mar/27', previsto: 520, icBaixo: 400, icRange: 240 },
 ];
 
-// Ranking regional: municípios da regional de saúde de Cotia, por índice de risco (0-100).
-const RANKING_REGIONAL = [
+const RANKING_REGIONAL_PADRAO = [
   { nome: 'Cotia',                valor: 74, voce: true },
   { nome: 'Itapevi',              valor: 61 },
   { nome: 'Osasco',               valor: 58 },
@@ -92,35 +92,147 @@ const RANKING_REGIONAL = [
   { nome: 'Vargem Grande Pta.',   valor: 28 },
 ];
 
+function construirRankingRegional(municipio, status, demoAtiva) {
+  if (!demoAtiva || municipio.nome === 'Cotia') return RANKING_REGIONAL_PADRAO;
+
+  const base = Math.max(0, Math.min(100, status?.indice || 74));
+  const vizinhos = [
+    { nome: 'Paulínia',         valor: Math.max(0, base - 13) },
+    { nome: 'Valinhos',         valor: Math.max(0, base - 16) },
+    { nome: 'Sumaré',           valor: Math.max(0, base - 19) },
+    { nome: 'Hortolândia',      valor: Math.max(0, base - 22) },
+    { nome: 'Indaiatuba',       valor: Math.max(0, base - 30) },
+    { nome: 'Vinhedo',          valor: Math.max(0, base - 34) },
+  ];
+
+  return [
+    { nome: municipio.nome, valor: base, voce: true },
+    ...vizinhos,
+  ];
+}
+
 function corFaixaRisco(valor) {
   if (valor >= 70) return 'var(--risk-alto)';
   if (valor >= 40) return 'var(--risk-medio)';
   return 'var(--risk-baixo)';
 }
 
-const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-
-function formatarCutoffDemo(cutoff) {
-  if (!cutoff || !/^\d{4}-\d{2}$/.test(cutoff)) return cutoff || '';
-  const [ano, mes] = String(cutoff).split('-');
-  return `${MESES_ABREV[Number(mes) - 1] || mes}/${ano}`;
-}
-
-function obterMunicipioTela(demoState) {
-  const municipio = demoState?.payload?.meta?.municipio || demoState?.meta?.municipio;
-  return municipio?.nome && municipio?.uf ? municipio : MUNICIPIO;
-}
-
 function construirStatusDemo(payload) {
-  return payload?.status || STATUS;
+  const status = payload?.status;
+  const epidemiologia = payload?.epidemiologia || {};
+
+  const mapa = {
+    critico: {
+      cor: 'var(--risk-alto)',
+      titulo: 'Município em risco crítico',
+      frase: 'Dengue e insumos em ponto de ação imediata.',
+      indice: 90,
+    },
+    atencao: {
+      cor: 'var(--risk-medio)',
+      titulo: 'Município em alerta',
+      frase: 'Dengue em alta e insumos sob pressão.',
+      indice: 74,
+    },
+    estavel: {
+      cor: 'var(--risk-baixo)',
+      titulo: 'Município estável',
+      frase: 'Sem sinais agudos no replay histórico.',
+      indice: 38,
+    },
+  };
+
+  const base = mapa[status] || mapa.atencao;
+  const crescimentoValor = epidemiologia.crescimento_pct != null ? Number(epidemiologia.crescimento_pct) : null;
+  const crescimento = crescimentoValor != null ? `${crescimentoValor.toFixed(1)}%` : null;
+
+  return {
+    ...base,
+    frase: crescimentoValor == null
+      ? base.frase
+      : crescimentoValor > 0
+        ? `Dengue em alta de ${crescimento} no corte atual.`
+        : crescimentoValor < 0
+          ? `Casos de dengue recuaram ${Math.abs(crescimentoValor).toFixed(1)}%, mas a pressão sobre insumos segue crítica.`
+          : 'Casos estáveis no corte atual, com atenção operacional mantida.',
+  };
 }
 
 function construirSerieDemo(payload) {
-  return payload?.serie_com_previsao || payload?.serie_temporal || DENGUE_SERIE;
+  const serieVisivel = Array.isArray(payload?.serie_visivel) ? payload.serie_visivel : [];
+  const previsao = Array.isArray(payload?.previsao) ? payload.previsao : [];
+
+  if (!serieVisivel.length && !previsao.length) return DENGUE_SERIE;
+
+  const serie = serieVisivel.map(row => ({
+    mes: row.mes,
+    real: row.casos,
+  }));
+
+  if (serie.length && previsao.length) {
+    serie[serie.length - 1] = {
+      ...serie[serie.length - 1],
+      previsto: serie[serie.length - 1].real,
+    };
+  }
+
+  previsao.forEach(row => {
+    serie.push({
+      mes: row.mes,
+      previsto: row.casos_previstos,
+      icBaixo: row.lower != null ? row.lower : undefined,
+      icRange: row.lower != null && row.upper != null ? Math.max(0, row.upper - row.lower) : undefined,
+    });
+  });
+
+  return serie;
 }
 
 function construirAlertasDemo(payload) {
-  return payload?.alertas || ALERTAS;
+  const alertas = Array.isArray(payload?.alertas) ? payload.alertas : ALERTAS;
+  const insumos = Array.isArray(payload?.insumos) ? payload.insumos : [];
+
+  return alertas.map((alerta, idx) => {
+    const isSurto = alerta.tipo === 'surto';
+    const evidenciaTexto = isSurto
+      ? (alerta.evidencia?.crescimento_pct != null
+          ? `Crescimento mensal de ${Number(alerta.evidencia?.crescimento_pct || 0).toFixed(1)}%`
+          : `Próximo mês projetado em ${Number(alerta.evidencia?.casos_previstos || 0).toLocaleString('pt-BR')} casos`)
+      : `Cobertura estimada de ${Number(alerta.evidencia?.dias_restantes || 0).toFixed(1)} dias`;
+    const itemBase = insumos.find(item => item.item === alerta.item_ou_condicao);
+    const payloadEtp = itemBase ? {
+      tipo: 'insumo',
+      item: {
+        nome: itemBase.item,
+        diasRestantes: Number(itemBase.dias_restantes || 0),
+        consumoSemanal: Math.round(Number(itemBase.consumo_previsto_dia || 0) * 7),
+        atualizadoHaDias: 0,
+        alertaId: alerta.id || `demo-alerta-${idx}`,
+        estoque_demo: true,
+        unidade: itemBase.unidade || 'un',
+        precoUnitario: itemBase.preco_unitario ?? null,
+        cutoff: payload?.cutoff,
+      },
+      scenarioId: payload?.scenario_id,
+      cutoff: payload?.cutoff,
+    } : null;
+
+    return {
+      id: alerta.id || `demo-alerta-${idx}`,
+      tipo: isSurto ? 'surto' : 'ruptura',
+      severidade: alerta.severidade === 'alta' ? 'critico' : 'alerta',
+      status: alerta.status || 'novo',
+      titulo: alerta.titulo || (isSurto ? 'Surto de dengue em aceleração' : `Risco de ruptura: ${alerta.item_ou_condicao}`),
+      evidencia: evidenciaTexto,
+      acao: isSurto
+        ? { tipo: 'drawer', label: 'Ver detalhes' }
+        : { tipo: alerta.status === 'andamento' ? 'ver' : 'etp', label: alerta.status === 'andamento' ? 'Ver ETP' : 'Gerar ETP' },
+      payload: payloadEtp,
+      alertaId: alerta.id || `demo-alerta-${idx}`,
+      scenarioId: payload?.scenario_id,
+      cutoff: payload?.cutoff,
+    };
+  });
 }
 
 // ─── Sub-componentes da tela ────────────────────────────────────────────────
@@ -138,7 +250,7 @@ function BannerStatus({ onNavigate, status = STATUS, acao = 'alertas', rotuloAca
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
         <span
           style={{
-            width: 14, height: 14, borderRadius: '50%', background: STATUS.cor,
+            width: 14, height: 14, borderRadius: '50%', background: status.cor,
             marginTop: 5, flexShrink: 0, animation: 'dot-pulse 2.4s ease-in-out infinite',
           }}
         />
@@ -176,7 +288,7 @@ function BannerStatus({ onNavigate, status = STATUS, acao = 'alertas', rotuloAca
 
 function FaixaTransparenciaDemo({ demoState }) {
   if (!demoState?.enabled) return null;
-  const municipio = obterMunicipioTela(demoState);
+  const municipio = obterMunicipioDemo(demoState, MUNICIPIO);
   const cutoff = formatarCutoffDemo(demoState.cutoff || demoState.payload?.cutoff || demoState.meta?.cortes?.mes_inicial);
 
   return (
@@ -204,6 +316,34 @@ function BarDemo({ demoState }) {
   const podeVoltar = indiceAtual > 0;
   const podeAvancar = indiceAtual >= 0 && indiceAtual < cortes.length - 1;
 
+  const botaoSecundario = {
+    padding: '8px 15px',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 700,
+    border: '1px solid var(--ink-100)',
+    background: 'var(--elev)',
+    color: 'var(--ink-700)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+  };
+
+  const botaoPrimario = {
+    padding: '8px 15px',
+    borderRadius: 8,
+    border: 'none',
+    cursor: 'pointer',
+    background: 'var(--primary)',
+    color: 'white',
+    fontSize: 13,
+    fontWeight: 700,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+  };
+
   return (
     <div style={{
       display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 14, alignItems: 'center',
@@ -226,9 +366,9 @@ function BarDemo({ demoState }) {
         )}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={demoState.voltarMes} disabled={!podeVoltar || demoState.loading} style={estiloBotaoOutline}>Voltar mês</button>
-        <button onClick={demoState.avancarMes} disabled={!podeAvancar || demoState.loading} style={estiloBotaoPrimario}>Avançar mês</button>
-        <button onClick={demoState.reiniciarDemo} disabled={demoState.loading} style={estiloBotaoOutline}>Reiniciar</button>
+        <button onClick={demoState.voltarMes} disabled={!podeVoltar || demoState.loading} style={botaoSecundario}>Voltar mês</button>
+        <button onClick={demoState.avancarMes} disabled={!podeAvancar || demoState.loading} style={botaoPrimario}>Avançar mês</button>
+        <button onClick={demoState.reiniciarDemo} disabled={demoState.loading} style={botaoSecundario}>Reiniciar</button>
       </div>
     </div>
   );
@@ -281,6 +421,28 @@ function ProvaValorDemo({ demoState }) {
   );
 }
 
+function RevelacaoCurvaDemo({ payload }) {
+  const previsao = Array.isArray(payload?.previsao) ? payload.previsao[0] : null;
+  const realizado = Array.isArray(payload?.serie_futura_real) ? payload.serie_futura_real[0] : null;
+  if (!previsao || !realizado) return null;
+
+  const diferenca = realizado.casos - previsao.casos_previstos;
+  const diferencaPct = previsao.casos_previstos > 0 ? (diferenca / previsao.casos_previstos) * 100 : 0;
+
+  return (
+    <Card className="p-5" style={{ marginBottom: 24, border: '1px solid color-mix(in srgb, var(--info) 18%, transparent)', background: 'color-mix(in srgb, var(--info) 4%, white)' }}>
+      <SectionTitle>Revelação da curva real</SectionTitle>
+      <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--ink-700)', margin: '0 0 10px' }}>
+        No corte <strong>{formatarCutoffDemo(payload?.cutoff)}</strong>, o sistema projetava <strong>{Number(previsao.casos_previstos).toLocaleString('pt-BR')} casos</strong> para <strong>{formatarCutoffDemo(previsao.mes)}</strong>.
+        Quando a continuidade real da série é revelada no replay, o município registra <strong>{Number(realizado.casos).toLocaleString('pt-BR')} casos</strong> no mesmo mês.
+      </p>
+      <p style={{ fontSize: 12, color: 'var(--ink-500)', margin: 0 }}>
+        Diferença: {diferenca >= 0 ? '+' : ''}{diferenca.toLocaleString('pt-BR')} casos ({diferencaPct >= 0 ? '+' : ''}{diferencaPct.toFixed(1)}%). Isso explicita que a recomendação de ação foi emitida antes da confirmação completa da curva real.
+      </p>
+    </Card>
+  );
+}
+
 function BlocoSusBot({ texto = SUSBOT_TEXTO }) {
   return (
     <div style={{
@@ -316,7 +478,7 @@ function BotaoAlerta({ children, primario, onClick }) {
 function LinhaAlerta({ alerta, isLast, onNavigate, onGerarEtp }) {
   const dotCor = alerta.severidade === 'critico' ? 'var(--risk-alto)' : 'var(--risk-medio)';
   const handleAcao = () => {
-    if (alerta.tipo === 'etp') onGerarEtp(alerta.payload);
+    if (alerta.acao?.tipo === 'etp' && alerta.payload) onGerarEtp(alerta.payload);
     else onNavigate('alertas');
   };
   return (
@@ -338,8 +500,8 @@ function LinhaAlerta({ alerta, isLast, onNavigate, onGerarEtp }) {
           {alerta.evidencia}
         </span>
       </div>
-      <BotaoAlerta primario={alerta.tipo === 'etp'} onClick={handleAcao}>
-        {alerta.acao}
+      <BotaoAlerta primario={alerta.acao?.tipo === 'etp' || alerta.acao?.tipo === 'plano' || alerta.tipo === 'etp'} onClick={handleAcao}>
+        {alerta.acao?.label || alerta.acao}
       </BotaoAlerta>
     </div>
   );
@@ -428,45 +590,110 @@ function CardPrevisaoDengue({ serie = DENGUE_SERIE }) {
   );
 }
 
-// Escala fixa 0–100, não normalizada pelo maior valor: com `/max` o primeiro
-// colocado desenhava sempre a barra cheia e lia como "risco máximo", além de
-// impedir comparação entre municípios ao longo do tempo.
-function CardRankingRegional({ municipio }) {
+function CardJanelaDecisao({ demoState, status, alertas = [] }) {
+  const prova = demoState?.payload?.prova_valor || null;
+  const cutoff = demoState?.payload?.cutoff || demoState?.cutoff || null;
+  const itemCritico = demoState?.payload?.insumos?.[0] || null;
+  const temRuptura = alertas.some(alerta => alerta.tipo === 'ruptura');
+  const antecedencia = prova?.antecedencia_operacional_dias;
+  const economia = prova?.economia_estimada;
+  const mesAcao = prova?.mes_acao_recomendado || prova?.etp_recomendado_em || null;
+  const mesRuptura = prova?.mes_ruptura_prevista || prova?.ruptura_estimada_em || null;
+
+  let etapa = 'Monitorar';
+  let corEtapa = 'var(--risk-baixo)';
+  let resumo = 'A curva ainda está em observação e a janela de compra segue confortável.';
+
+  if (temRuptura && antecedencia != null && antecedencia <= 7) {
+    etapa = 'Agir hoje';
+    corEtapa = 'var(--risk-alto)';
+    resumo = 'A margem de manobra quase fechou. O replay já mostra risco de ruptura no horizonte imediato.';
+  } else if (temRuptura || (antecedencia != null && antecedencia <= 31)) {
+    etapa = 'Abrir ETP agora';
+    corEtapa = 'var(--risk-medio)';
+    resumo = 'Este é o melhor corte para transformar o alerta em ação antes da compra emergencial.';
+  } else if (status?.indice >= 70) {
+    etapa = 'Preparar compra';
+    corEtapa = 'var(--risk-medio)';
+    resumo = 'O sinal epidemiológico já justificaria preparar a resposta, mesmo antes da ruptura crítica.';
+  }
+
+  const etapas = [
+    { label: 'Sinal epidemiológico', ativo: status?.indice >= 40, tom: 'var(--risk-baixo)' },
+    { label: 'Risco operacional', ativo: !!temRuptura || (itemCritico?.dias_restantes ?? Infinity) <= 60, tom: 'var(--risk-medio)' },
+    { label: 'Ação recomendada', ativo: !!mesAcao, tom: corEtapa },
+  ];
+
   return (
     <Card className="p-5">
-      <SectionTitle>Ranking regional de risco</SectionTitle>
-      <p style={{ fontSize: 11, color: 'var(--ink-400)', marginTop: -10, marginBottom: 14 }}>
-        Regional de Saúde de {municipio.nome} · índice 0–100
+      <SectionTitle>Janela de decisão</SectionTitle>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -8, marginBottom: 12 }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: corEtapa, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: corEtapa }}>
+          {etapa}
+        </span>
+      </div>
+      <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--ink-700)', margin: '0 0 16px' }}>
+        {resumo}
       </p>
-      <div>
-        {RANKING_REGIONAL.map(item => {
-          const r = { ...item, voce: item.nome === municipio.nome };
-          return (
-          <div key={r.nome} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{
-              width: 104, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 11, fontWeight: r.voce ? 700 : 500, color: 'var(--ink-900)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              {r.nome}
-              {r.voce && <Badge label="você" color="var(--primary)" />}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
+        <div style={{ padding: '12px 13px', borderRadius: 10, background: 'var(--subtle)' }}>
+          <p style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-400)', margin: '0 0 6px' }}>
+            Antecedência
+          </p>
+          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 24, fontWeight: 800, color: corEtapa, margin: 0 }}>
+            {antecedencia != null ? `${antecedencia.toLocaleString('pt-BR')} dias` : '—'}
+          </p>
+        </div>
+        <div style={{ padding: '12px 13px', borderRadius: 10, background: 'var(--subtle)' }}>
+          <p style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-400)', margin: '0 0 6px' }}>
+            Ruptura estimada
+          </p>
+          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 24, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
+            {mesRuptura ? formatarCutoffDemo(mesRuptura) : '—'}
+          </p>
+        </div>
+        <div style={{ padding: '12px 13px', borderRadius: 10, background: 'var(--subtle)' }}>
+          <p style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-400)', margin: '0 0 6px' }}>
+            Ação sugerida
+          </p>
+          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 24, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
+            {mesAcao ? formatarCutoffDemo(mesAcao) : '—'}
+          </p>
+        </div>
+        <div style={{ padding: '12px 13px', borderRadius: 10, background: 'var(--subtle)' }}>
+          <p style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-400)', margin: '0 0 6px' }}>
+            Economia estimada
+          </p>
+          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 24, fontWeight: 800, color: 'var(--good)', margin: 0 }}>
+            {economia != null ? `R$ ${economia.toLocaleString('pt-BR')}` : '—'}
+          </p>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        {etapas.map((item, idx) => (
+          <div key={item.label} style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: item.ativo ? item.tom : 'var(--ink-100)', marginTop: 4 }} />
+              {idx < etapas.length - 1 && <span style={{ width: 1.5, flex: 1, background: 'var(--ink-100)', minHeight: 24 }} />}
             </div>
-            <div style={{ flex: 1, height: 8, borderRadius: 99, background: 'var(--ink-100)', overflow: 'hidden' }}>
-              <div style={{
-                width: `${r.valor}%`, height: '100%', borderRadius: 99,
-                background: corFaixaRisco(r.valor),
-              }} />
-            </div>
-            <div style={{
-              width: 36, flexShrink: 0, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 13, fontWeight: r.voce ? 700 : 500, color: 'var(--ink-900)',
-            }}>
-              {r.valor.toLocaleString('pt-BR')}
+            <div style={{ paddingBottom: 14 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: item.ativo ? 'var(--ink-900)' : 'var(--ink-400)', margin: 0 }}>{item.label}</p>
+              <p style={{ fontSize: 11, color: 'var(--ink-500)', margin: '2px 0 0' }}>
+                {idx === 0 && `Corte atual: ${formatarCutoffDemo(cutoff) || '—'}`}
+                {idx === 1 && `${itemCritico?.item || 'Item crítico'} com ${itemCritico?.dias_restantes != null ? Number(itemCritico.dias_restantes).toFixed(1) : '—'} dias de cobertura`}
+                {idx === 2 && (mesAcao ? `Abrir ETP em ${formatarCutoffDemo(mesAcao)} para proteger o município antes de ${formatarCutoffDemo(mesRuptura) || '—'}` : 'Aguardando gatilho operacional')}
+              </p>
             </div>
           </div>
-          );
-        })}
+        ))}
       </div>
+
+      <p style={{ fontSize: 11, color: 'var(--ink-400)', margin: 0 }}>
+        Esta leitura prioriza a decisão operacional: quando agir, quanto tempo ainda existe e qual custo pode ser evitado.
+      </p>
     </Card>
   );
 }
@@ -475,7 +702,7 @@ function CardRankingRegional({ municipio }) {
 
 export default function VisaoGeral({ onNavigate, onGerarEtp, demoState }) {
   const demoAtiva = demoState?.enabled && demoState.payload;
-  const municipio = obterMunicipioTela(demoState);
+  const municipio = obterMunicipioDemo(demoState, MUNICIPIO);
   const statusDemo = demoAtiva ? construirStatusDemo(demoState.payload) : STATUS;
   const serieDemo = demoAtiva ? construirSerieDemo(demoState.payload) : DENGUE_SERIE;
   const alertasDemo = demoAtiva ? construirAlertasDemo(demoState.payload) : ALERTAS;
@@ -528,11 +755,12 @@ export default function VisaoGeral({ onNavigate, onGerarEtp, demoState }) {
       <BannerStatus onNavigate={onNavigate} status={statusDemo} acao="alertas" rotuloAcao="Ver plano" />
       <BlocoSusBot texto={textoSusbot} />
       <ProvaValorDemo demoState={demoState} />
+      {demoAtiva && <RevelacaoCurvaDemo payload={demoState.payload} />}
       <AlertasPrioritarios onNavigate={onNavigate} onGerarEtp={onGerarEtp} alertas={alertasDemo} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
         <CardPrevisaoDengue serie={serieDemo} />
-        <CardRankingRegional municipio={municipio} />
+        <CardJanelaDecisao demoState={demoState} status={statusDemo} alertas={alertasDemo} />
       </div>
     </div>
   );

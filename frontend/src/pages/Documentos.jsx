@@ -44,7 +44,7 @@ function StatusChip({ status }) {
   );
 }
 
-function EstadoVazio() {
+function EstadoVazio({ demoAtivo = false }) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
@@ -54,10 +54,12 @@ function EstadoVazio() {
         <MIcon m="description" size={38} />
       </span>
       <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', margin: '0 0 6px' }}>
-        Nenhum documento gerado ainda
+        {demoAtivo ? 'Nenhum ETP gerado neste replay ainda' : 'Nenhum documento gerado ainda'}
       </p>
       <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: 0, maxWidth: 380, lineHeight: 1.6 }}>
-        Os ETPs nascem de um alerta ou item de Insumos — não existe um ETP genérico sem contexto.
+        {demoAtivo
+          ? 'O histórico da demo só aparece depois que um alerta ou item crítico gera ETP dentro do replay histórico atual.'
+          : 'Os ETPs nascem de um alerta ou item de Insumos — não existe um ETP genérico sem contexto.'}
       </p>
     </div>
   );
@@ -136,7 +138,7 @@ export default function Documentos({ onNavigate, onGerarEtp, documentos = [], de
       )}
 
       {documentos.length === 0 ? (
-        <EstadoVazio />
+        <EstadoVazio demoAtivo={!!demoState?.enabled} />
       ) : (
         <TabelaDocumentos documentos={documentos} onGerarEtp={continuarRascunho} />
       )}

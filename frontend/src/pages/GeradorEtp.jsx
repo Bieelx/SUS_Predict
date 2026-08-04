@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { MIcon } from '../shared/ui.jsx';
 import { REFERENCIA_LEGAL, baixarEtpPdf, dataHojeBr } from '../shared/etp.js';
+import { dataBrDoCutoff, formatarCutoffDemo, obterCutoffDemo } from '../shared/demo.js';
 
 const ETAPAS = [
   { id: 1, label: 'Dados do sistema' },
@@ -24,7 +25,7 @@ function formatarMes(mes) {
 }
 
 function justificativaPadrao(item) {
-  const qtd = item.quantidadePlanejada ?? Math.round((item.consumoSemanal || 0) * 26);
+  const qtd = item.quantidadePlanejada ?? Math.round((item.consumoSemanal || 0) * 13);
   const dias = item.diasRestantes ?? '—';
   const mesAcao = item.mesAcaoRecomendado ? formatarMes(item.mesAcaoRecomendado) : 'o corte atual';
   const mesRuptura = item.mesRupturaPrevista ? formatarMes(item.mesRupturaPrevista) : 'a ruptura estimada';
@@ -32,10 +33,11 @@ function justificativaPadrao(item) {
   const custoPlanejado = item.custoPlanejado != null ? `R$ ${Number(item.custoPlanejado).toLocaleString('pt-BR')}` : null;
   const custoEmergencial = item.custoEmergencial != null ? `R$ ${Number(item.custoEmergencial).toLocaleString('pt-BR')}` : null;
   const percentualEmergencial = item.percentualEmergencial != null ? `+${item.percentualEmergencial}%` : '30 a 40%';
+  const corte = item.cutoff ? formatarCutoffDemo(item.cutoff) : null;
 
-  return `O consumo de ${item.nome} apresenta tendencia de alta acelerada (+12%), conforme previsao do modelo Holt/SINAN. Mantido o ritmo atual, projeta-se o esgotamento do estoque disponivel em ${dias} dias, com recomendação de ação em ${mesAcao} e ruptura estimada em ${mesRuptura}.
+  return `No corte ${corte || 'atual'}, ${item.nome} aparece como insumo sensivel no replay historico, com cobertura estimada de ${dias} dias e recomendação de ação em ${mesAcao}, antes da ruptura projetada em ${mesRuptura}.
 
-Recomenda-se a aquisicao de aproximadamente ${qtd.toLocaleString('pt-BR')} unidades de ${item.nome}, quantidade estimada para cobrir a demanda projetada dos proximos 6 meses.
+Recomenda-se a aquisicao planejada de aproximadamente ${qtd.toLocaleString('pt-BR')} unidades de ${item.nome}, conforme a janela operacional estimada para o cenário.
 
 A formalizacao desta compra por meio de processo planejado, amparado neste Estudo Tecnico Preliminar, evita o recurso a compra emergencial - historicamente ${percentualEmergencial} mais cara que a aquisicao planejada - resultando em economia relevante para a Secretaria e garantindo a continuidade da assistencia a populacao.${custoPlanejado && custoEmergencial ? ` Compra planejada ${custoPlanejado} vs. emergencial ${custoEmergencial}.` : ''}${antecedencia !== '—' ? ` Antecedência operacional: ${antecedencia}.` : ''}`;
 }
@@ -115,7 +117,7 @@ function CampoLeitura({ label, valor }) {
 }
 
 function Etapa1DadosSistema({ item }) {
-  const qtd6meses = Math.round((item.consumoSemanal || 0) * 26);
+  const qtdJanela = Math.round((item.consumoSemanal || 0) * 13);
   const desatualizado = item.atualizadoHaDias != null && item.atualizadoHaDias > 15;
 
   return (
@@ -123,11 +125,11 @@ function Etapa1DadosSistema({ item }) {
       <CampoLeitura label="Medicamento / condição de origem" valor={item.nome} />
       <CampoLeitura
         label="Previsão de demanda"
-        valor={`Consumo projetado ${(item.consumoSemanal ?? 0).toLocaleString('pt-BR')}/sem, com tendência de alta — modelo Holt/SINAN`}
+        valor={`Consumo projetado ${(item.consumoSemanal ?? 0).toLocaleString('pt-BR')}/sem, conforme série histórica e cenário operacional da demo`}
       />
       <CampoLeitura
-        label="Quantidade estimada para 6 meses"
-        valor={`${qtd6meses.toLocaleString('pt-BR')} unidades`}
+        label="Quantidade estimada para a janela padrão"
+        valor={`${qtdJanela.toLocaleString('pt-BR')} unidades`}
       />
       {item.quantidadePlanejada != null && (
         <CampoLeitura
@@ -320,7 +322,7 @@ function ToastEtpGerado({ toast, onClose }) {
 
 // ─── Modal principal ────────────────────────────────────────────────────────
 
-export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGerado }) {
+export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGerado, demoState }) {
   // rascunhos: { [nomeItem]: { etapa, dados, texto, aprovado } } — sobrevive ao
   // fechamento do modal porque o componente fica sempre montado (contrato do shell).
   const [rascunhos, setRascunhos] = useState(RASCUNHOS_INICIAIS);
@@ -334,12 +336,15 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGe
   const modalRef = useRef(null);
 
   const chave = origem?.item?.nome ?? null;
+  const cutoffDemo = origem?.cutoff || origem?.item?.cutoff || obterCutoffDemo(demoState);
+  const scenarioIdDemo = origem?.scenarioId || demoState?.payload?.scenario_id || null;
+  const dataDocumento = demoState?.enabled ? dataBrDoCutoff(cutoffDemo) : dataHojeBr();
 
   // Ao abrir (origem passa de null para um item, ou troca de item), retoma o rascunho
   // salvo para aquele item, se existir, ou parte do zero pré-preenchido pelo sistema.
   useEffect(() => {
     if (!origem) return;
-    const salvo = chave ? rascunhos[chave] : null;
+    const salvo = !demoState?.enabled && chave ? rascunhos[chave] : null;
     if (salvo) {
       setEtapa(salvo.etapa);
       setDados(salvo.dados);
@@ -348,7 +353,7 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGe
     } else {
       setEtapa(1);
       setDados({ dotacao: '', unidade: '', responsavel: '' });
-      setTexto(justificativaPadrao(origem.item));
+      setTexto(justificativaPadrao({ ...origem.item, cutoff: cutoffDemo }));
       setAprovado(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -364,9 +369,12 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGe
         nome,
         item: origem.item,
         origem: origem.tipo === 'alerta' ? 'Alertas' : 'Insumos',
-        data: dataHojeBr(),
+        data: dataDocumento,
         status: 'finalizado',
         texto,
+        demoHistorica: !!demoState?.enabled,
+        scenarioId: scenarioIdDemo,
+        cutoff: cutoffDemo,
       };
       setRascunhos(prev => {
         const cp = { ...prev };
@@ -460,8 +468,11 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGe
         nome: chave,
         item: origem?.item,
         origem: origem?.tipo === 'alerta' ? 'Alertas' : 'Insumos',
-        data: dataHojeBr(),
+        data: dataDocumento,
         status: 'rascunho',
+        demoHistorica: !!demoState?.enabled,
+        scenarioId: scenarioIdDemo,
+        cutoff: cutoffDemo,
       });
     }
     onClose();
@@ -502,7 +513,7 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGe
               <h3 id="etp-modal-titulo" style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
                 Gerar ETP — {origem.item.nome}
               </h3>
-              <button onClick={fechar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', display: 'flex' }}>
+              <button aria-label="Fechar gerador de ETP" onClick={fechar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', display: 'flex' }}>
                 <MIcon m="close" size={20} />
               </button>
             </div>

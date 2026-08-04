@@ -14,6 +14,7 @@ import PagePerfil from './pages/Perfil.jsx';
 import GeradorEtp from './pages/GeradorEtp.jsx';
 import { SusBotPanel } from './pages/SusBotPanel.jsx';
 import { DOCUMENTOS_INICIAIS } from './shared/etp.js';
+import { obterIbgeDemo, obterMunicipioDemo } from './shared/demo.js';
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 //
@@ -269,7 +270,7 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled }) {
 // (item ativo) e o <h1> da página já diziam, e nenhum nível dele era clicável.
 // A busca e o botão de "aplicativos" saíram: eram controles sem handler.
 
-function Topbar({ municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar }) {
+function Topbar({ municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar, demoEnabled }) {
   return (
     <header style={{
       position: 'fixed', top: 0, right: 0, height: 'var(--topbar-h)',
@@ -316,6 +317,7 @@ function Topbar({ municipio, municipios, onTrocarMunicipio, onNavigate, sidebarA
             className="topbar-select"
             aria-label="Município em análise"
             value={municipio.ibge6}
+            disabled={demoEnabled}
             onChange={e => onTrocarMunicipio(municipios.find(m => m.ibge6 === e.target.value))}
           >
             {municipios.map(m => (
@@ -343,6 +345,63 @@ function Topbar({ municipio, municipios, onTrocarMunicipio, onNavigate, sidebarA
         <MIcon m="notifications" size={18} />
       </button>
     </header>
+  );
+}
+
+function DemoForaDoEscopo({ page, onNavigate }) {
+  const titulo = {
+    epidemiologia: 'Epidemiologia fora do replay',
+    internacoes: 'Internações fora do replay',
+    superlotacao: 'Superlotação fora do replay',
+    configuracoes: 'Configurações fora do replay',
+    perfil: 'Perfil fora do replay',
+  }[page] || 'Página fora do replay';
+
+  const subtitulo = {
+    epidemiologia: 'A demo histórica cobre Visão Geral, Alertas e Insumos. As análises ficam bloqueadas neste modo.',
+    internacoes: 'A demo histórica cobre Visão Geral, Alertas e Insumos. As análises ficam bloqueadas neste modo.',
+    superlotacao: 'A demo histórica cobre Visão Geral, Alertas e Insumos. As análises ficam bloqueadas neste modo.',
+    configuracoes: 'A demo histórica não altera as configurações durante o replay.',
+    perfil: 'O perfil real fica fora do replay histórico.',
+  }[page] || 'Esta página não faz parte do replay histórico.';
+
+  return (
+    <div className="rise" style={{ maxWidth: 860 }}>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4 }}>
+          {titulo}
+        </h1>
+        <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: 0 }}>{subtitulo}</p>
+      </div>
+
+      <Card className="p-5">
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+          <span style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--primary-soft)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <MIcon m="lock" size={20} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink-900)', margin: '2px 0 6px' }}>
+              Conteúdo bloqueado na demo histórica
+            </p>
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--ink-700)', margin: 0 }}>
+              {subtitulo}
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
+          <button onClick={() => onNavigate('visao-geral')} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700 }}>
+            Ir para Visão Geral
+          </button>
+          <button onClick={() => onNavigate('alertas')} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--ink-100)', cursor: 'pointer', background: 'var(--elev)', color: 'var(--ink-700)', fontSize: 13, fontWeight: 700 }}>
+            Abrir Alertas
+          </button>
+          <button onClick={() => onNavigate('insumos')} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--ink-100)', cursor: 'pointer', background: 'var(--elev)', color: 'var(--ink-700)', fontSize: 13, fontWeight: 700 }}>
+            Abrir Insumos
+          </button>
+        </div>
+      </Card>
+    </div>
   );
 }
 
@@ -420,6 +479,18 @@ export default function App() {
     error: null,
   });
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
+  const municipioDemo = demoEnabled ? obterMunicipioDemo(demo, MUNICIPIOS[0]) : null;
+  const ibgeDemo = demoEnabled ? obterIbgeDemo(demo, MUNICIPIOS[0].ibge6) : null;
+  const municipioAtual = demoEnabled && municipioDemo
+    ? { ...municipioDemo, ibge6: ibgeDemo }
+    : municipio;
+  const municipiosTopbar = demoEnabled && municipioDemo
+    ? [{ ...municipioDemo, ibge6: ibgeDemo }]
+    : MUNICIPIOS;
+  const scenarioIdDemo = demo.payload?.scenario_id || demo.meta?.scenario_id || 'demo-crise-historica-dengue-2024-campinas';
+  const documentosVisiveis = demoEnabled
+    ? documentos.filter(doc => doc.demoHistorica && doc.scenarioId === scenarioIdDemo)
+    : documentos.filter(doc => !doc.demoHistorica);
 
   function salvarDocumento(doc) {
     setDocumentos(prev => {
@@ -593,7 +664,7 @@ export default function App() {
       case 'visao-geral':   return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
       case 'alertas':       return <Alertas onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
       case 'insumos':       return <Insumos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
-      case 'documentos':    return <Documentos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} documentos={documentos} demoState={demoState} />;
+      case 'documentos':    return <Documentos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} documentos={documentosVisiveis} demoState={demoState} />;
       case 'epidemiologia': return <Epidemiologia onNavigate={setPage} demoState={demoState} />;
       case 'internacoes':   return <Internacoes onNavigate={setPage} demoState={demoState} />;
       case 'superlotacao':  return <Superlotacao onNavigate={setPage} demoState={demoState} />;
@@ -610,12 +681,13 @@ export default function App() {
       <div style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
         <Sidebar current={page} onNav={setPage} aberta={sidebarAberta} alertasBadge={alertasBadge} demoEnabled={demoEnabled} />
         <Topbar
-          municipio={municipio}
-          municipios={MUNICIPIOS}
+          municipio={municipioAtual}
+          municipios={municipiosTopbar}
           onTrocarMunicipio={setMunicipio}
           onNavigate={setPage}
           sidebarAberta={sidebarAberta}
           onToggleSidebar={() => setSidebarAberta(v => !v)}
+          demoEnabled={demoEnabled}
         />
         {/* Uma linguagem visual só: o conteúdo é sempre um card destacado do
             canvas, com o mesmo respiro do painel do SusBot. Abrir o chat mexe
@@ -653,8 +725,8 @@ export default function App() {
             </div>
           </div>
         </main>
-        <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} onEtpGerado={handleEtpGerado} />
-        <SusBotPanel page={page} onNavigate={setPage} ibge6={municipio.ibge6} onOpenChange={setChatAberto} />
+        <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} onEtpGerado={handleEtpGerado} demoState={demoState} />
+        <SusBotPanel page={page} onNavigate={setPage} ibge6={municipioAtual.ibge6} onOpenChange={setChatAberto} />
       </div>
     </ThemeContext.Provider>
   );

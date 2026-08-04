@@ -15,7 +15,7 @@ from api.core.demo_crise_historica import calcular_replay, carregar_dataset, lis
 
 router = APIRouter(prefix="/api/demo/crise-historica", tags=["demo"])
 
-_ESTADO_ALERTAS: dict[tuple[str, str], str] = {}
+_ESTADO_ALERTAS: dict[tuple[str, str, str], str] = {}
 
 
 def _scenario_id() -> str:
@@ -26,10 +26,10 @@ def _cutoff_inicial() -> str:
     return str(listar_cortes()["mes_inicial"])
 
 
-def _overlay_status(payload: dict[str, Any], scenario_id: str) -> dict[str, Any]:
+def _overlay_status(payload: dict[str, Any], scenario_id: str, cutoff: str) -> dict[str, Any]:
     resultado = copy.deepcopy(payload)
     for alerta in resultado.get("alertas", []):
-        status = _ESTADO_ALERTAS.get((scenario_id, str(alerta.get("id"))))
+        status = _ESTADO_ALERTAS.get((scenario_id, cutoff, str(alerta.get("id"))))
         if status:
             alerta["status"] = status
     return resultado
@@ -42,7 +42,7 @@ def _payload(cutoff: str | None = None) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     scenario_id = str(payload.get("scenario_id") or _scenario_id())
-    return _overlay_status(payload, scenario_id)
+    return _overlay_status(payload, scenario_id, cutoff_final)
 
 
 def limpar_estado_demo(scenario_id: str | None = None) -> None:
@@ -100,5 +100,6 @@ def marcar_alerta_em_andamento(alerta_id: str, cutoff: str | None = None) -> dic
     if not any(str(alerta.get("id")) == alerta_id for alerta in alertas):
         raise HTTPException(status_code=404, detail="alerta não encontrado no corte atual")
 
-    _ESTADO_ALERTAS[(scenario_id, alerta_id)] = "andamento"
+    cutoff_final = str(payload.get("cutoff") or cutoff or _cutoff_inicial())
+    _ESTADO_ALERTAS[(scenario_id, cutoff_final, alerta_id)] = "andamento"
     return _payload(cutoff)
