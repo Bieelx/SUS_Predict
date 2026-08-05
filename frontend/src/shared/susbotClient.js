@@ -56,6 +56,7 @@ export async function listarConversasSusbot({
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   const response = await fetchFn(resolverUrl(baseUrl, `${SUSBOT_ENDPOINTS.conversas}?${params.toString()}`), {
     method: 'GET',
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...headers,
@@ -87,6 +88,7 @@ export async function listarMensagensSusbot({
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   const response = await fetchFn(resolverUrl(baseUrl, `${SUSBOT_ENDPOINTS.mensagens(conversaId)}?${params.toString()}`), {
     method: 'GET',
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...headers,
@@ -284,6 +286,7 @@ export async function conversarComSusbot({
   try {
     const response = await fetchFn(resolverUrl(baseUrl, SUSBOT_ENDPOINTS.perguntar), {
       method: 'POST',
+      credentials: 'include',
       headers: {
         Accept: 'text/event-stream',
         'Content-Type': 'application/json',

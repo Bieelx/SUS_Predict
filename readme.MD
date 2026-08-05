@@ -34,8 +34,8 @@ Necessário para rodar o frontend (Vite).
 ### 3) Chaves opcionais/necessárias por recurso
 
 - `GEMINI_API_KEY`: necessária para o SusBot responder com LLM real.
-- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`: opcionais, só se quiser sincronizar cache/persistência com Supabase.
-- `SUSBOT_DEV_AUTH_SECRET`: opcional, usado para assinar o login de desenvolvimento quando Supabase não estiver configurado.
+- `SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY` (ou a chave legada `SUPABASE_ANON_KEY`): obrigatórias para login.
+- `SUPABASE_SECRET_KEY` (ou a chave legada `SUPABASE_SERVICE_ROLE_KEY`): obrigatória no backend para roles, convites e persistência.
 
 ## Instalação (local)
 
@@ -111,13 +111,19 @@ npm install
 npm run dev
 ```
 
-## Auth de desenvolvimento
+## Autenticação e autorização
 
-Para testar o SusBot sem Supabase, use o botão **Entrar como dev** na tela de login.
+O dashboard exige uma sessão Supabase válida com a role de negócio `admin`. A
+existência de uma string no navegador não libera nenhuma tela, e todas as rotas
+`/api/*` (exceto o fluxo público de autenticação) são validadas no backend.
 
-- Ele chama `POST /api/auth/dev-login`.
-- O backend gera um token local assinado.
-- Esse token é aceito em `GET /api/auth/me` e nas rotas do SusBot.
+- Não existe cadastro público.
+- Novos usuários são convidados por um Admin na aba **Perfil do Usuário**.
+- Access e refresh tokens permanecem em cookies `HttpOnly`; não são gravados no `localStorage`.
+- O modo dev é desligado por padrão, não aparece no frontend e é recusado em produção.
+
+O tutorial completo do painel, SQL, primeiro Admin, SMTP e recuperação de senha
+está em [`supabase/SETUP.md`](supabase/SETUP.md).
 
 ## Supabase (cache + organização)
 
@@ -125,15 +131,16 @@ O Supabase é usado para evitar re-download e manter os dados tratados organizad
 
 ### Segurança
 
-- Nunca use `SUPABASE_SERVICE_ROLE_KEY` no frontend.
+- Nunca use `SUPABASE_SECRET_KEY`/`SUPABASE_SERVICE_ROLE_KEY` no frontend.
 - Nunca comite `.env`.
 - Se uma chave vazar, rotacione imediatamente no Supabase.
 
 ### 1) Criar schema no Supabase (SQL)
 
-No Supabase, abra `SQL Editor` e rode:
+No Supabase, abra `SQL Editor` e rode, nesta ordem:
 
 - `supabase/schema.sql`
+- `supabase/auth.sql`
 
 O schema cria:
 
@@ -158,7 +165,11 @@ Crie um arquivo `.env` na raiz (existe um modelo em `.env.example`).
 Variáveis usadas pelo backend:
 
 - `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_PUBLISHABLE_KEY` (ou `SUPABASE_ANON_KEY`)
+- `SUPABASE_SECRET_KEY` (ou `SUPABASE_SERVICE_ROLE_KEY`)
+- `FRONTEND_URL`
+- `AUTH_REDIRECT_URL`
+- `CORS_ALLOWED_ORIGINS`
 - `SUPABASE_BUCKET_RAW` (default: `datasus-raw`)
 - `SUPABASE_ENABLE_RAW_UPLOAD` (default: `true`)
 - `SUPABASE_RAW_MAX_BYTES` (default: `250000000`)
@@ -168,14 +179,19 @@ Exemplo:
 
 ```bash
 SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxx
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
+SUPABASE_SECRET_KEY=sb_secret_xxx
+FRONTEND_URL=http://localhost:3000
+AUTH_REDIRECT_URL=http://localhost:3000/auth/update-password
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 SUPABASE_BUCKET_RAW=datasus-raw
 SUPABASE_ENABLE_RAW_UPLOAD=true
 SUPABASE_RAW_MAX_BYTES=250000000
 SUPABASE_ENABLE_CACHE_READ=true
 ```
 
-Se `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` não estiverem definidos, o projeto continua funcionando em modo local, usando SQLite e o login de desenvolvimento.
+Se as chaves de autenticação não estiverem definidas, o backend falha fechado com
+`503`; ele não cria mais uma sessão local silenciosamente.
 
 ### Como funciona o upload no Supabase
 
@@ -201,7 +217,7 @@ em andamento — ver `CLAUDE.md` (seção "Redesenho de telas") e `docs/telas/` 
 real do frontend e a especificação de telas em vigor.**
 
 Hoje o frontend monta:
-- Login/cadastro.
+- Login e recuperação de senha (sem cadastro público).
 - Dashboard das telas do redesenho.
 - Painel flutuante do SusBot.
 - Gerador de ETP.
@@ -225,6 +241,8 @@ O frontend mostra o botão `Exportar XLSX` quando a análise está carregada.
 
 ## Endpoints principais (backend)
 
+Todos os endpoints abaixo exigem sessão Admin:
+
 - `POST /api/download`: inicia um job de download/processamento (com cache opcional).
 - `GET /api/status/{job_id}`: progresso e status.
 - `GET /api/resultado/{job_id}`: resultado final (JSON).
@@ -243,4 +261,4 @@ O frontend mostra o botão `Exportar XLSX` quando a análise está carregada.
 - Use `bash start_dev.sh` para evitar “esquecer” de ativar venv ou carregar `.env`.
 - Se o frontend abrir em outra porta, pare os processos antigos e rode `bash start_dev.sh` de novo.
 - Para forçar re-download (ignorando cache), envie `usar_cache=false` no `POST /api/download`.
-- Para manter o projeto seguro, nunca exponha `SUPABASE_SERVICE_ROLE_KEY`.
+- Para manter o projeto seguro, nunca exponha `SUPABASE_SECRET_KEY`/`SUPABASE_SERVICE_ROLE_KEY`.

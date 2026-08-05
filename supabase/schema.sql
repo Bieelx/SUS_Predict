@@ -67,3 +67,12 @@ create table if not exists public.datasus_top_causas (
 create index if not exists datasus_runs_city_idx on public.datasus_runs (uf, cidade);
 create index if not exists datasus_serie_ano_idx on public.datasus_serie (ano);
 create index if not exists datasus_raw_objects_run_idx on public.datasus_raw_objects (run_id);
+
+-- RLS falha fechado mesmo antes da criação das policies em auth.sql.
+-- A chave administrativa do backend continua acessando essas tabelas.
+alter table public.datasus_runs enable row level security;
+alter table public.datasus_raw_objects enable row level security;
+alter table public.datasus_serie enable row level security;
+alter table public.datasus_sexo enable row level security;
+alter table public.datasus_faixa_etaria enable row level security;
+alter table public.datasus_top_causas enable row level security;

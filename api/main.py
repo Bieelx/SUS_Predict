@@ -11,12 +11,13 @@ Runtime capabilities:
     PYSUS_OK   → PySUS available (Python 3.12 + venv/) — downloads real DATASUS data
     PROPHET_OK → Prophet available — advanced prediction with confidence intervals
     SQLite     → always active, stores results locally (no Supabase needed)
-    Supabase   → optional sync when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set
+    Supabase   → auth e sync quando URL + chaves publishable/secret estão definidas
 """
 
 import gc
 import json
 import logging
+import os
 import shutil
 import sys
 import uuid
@@ -27,10 +28,11 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field, SecretStr
+from starlette.concurrency import run_in_threadpool
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("sus_predict")
@@ -75,13 +77,88 @@ if PYSUS_OK:
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="SUS Predict API", version="2.1.0")
+def _cors_origins() -> list[str]:
+    configured = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+    if configured:
+        return [item.strip().rstrip("/") for item in configured.split(",") if item.strip()]
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+
+ALLOWED_ORIGINS = _cors_origins()
+API_DOCS_ENABLED = (
+    os.getenv("APP_ENV", "development").strip().lower() != "production"
+    or os.getenv("ENABLE_API_DOCS", "").strip().lower() in {"1", "true", "yes", "on"}
+)
+PUBLIC_API_PATHS = {
+    "/api/auth/login",
+    "/api/auth/refresh",
+    "/api/auth/logout",
+    "/api/auth/forgot-password",
+    "/api/auth/recovery/session",
+    "/api/auth/dev-login",
+    # Não há rota de signup; deixá-la passar resulta em 404 em vez de autenticar.
+    "/api/auth/signup",
+}
+
+
+app = FastAPI(
+    title="SUS Predict API",
+    version="2.2.0",
+    docs_url="/docs" if API_DOCS_ENABLED else None,
+    redoc_url="/redoc" if API_DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if API_DOCS_ENABLED else None,
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"], allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Accept", "Authorization", "Content-Type"],
+    expose_headers=["X-Conversa-Id"],
 )
+
+
+@app.middleware("http")
+async def proteger_api(request: Request, call_next):
+    """
+    Falha fechado: toda rota /api exige sessão Admin, salvo o fluxo público de
+    autenticação. A validação no backend protege inclusive chamadas diretas que
+    contornem o React.
+    """
+    path = request.url.path.rstrip("/") or "/"
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    origin = request.headers.get("origin", "").rstrip("/")
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and origin and origin not in ALLOWED_ORIGINS:
+        return JSONResponse({"detail": "Origem não autorizada"}, status_code=403)
+
+    if path.startswith("/api/") and path not in PUBLIC_API_PATHS:
+        try:
+            await run_in_threadpool(auth_core.authenticate_request, request)
+        except HTTPException as error:
+            response = JSONResponse({"detail": error.detail}, status_code=error.status_code)
+            if error.status_code == 401:
+                auth_core.clear_session_cookies(response)
+            # Esta resposta nasce antes do CORSMiddleware interno; preserve CORS
+            # para que o frontend consiga tratar 401/403 sem um falso erro de rede.
+            if origin in ALLOWED_ORIGINS:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Vary"] = "Origin"
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            return response
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if path.startswith("/api/auth/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 
 app.include_router(dengue_router)
 app.include_router(demo_router)
@@ -255,11 +332,31 @@ def processar_download(job_id: str, req: dict) -> None:
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
-class AuthRequest(BaseModel):
-    email:    str
-    password: str
-    nome:     str = ""
-    cargo:    str = ""
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: SecretStr = Field(min_length=1, max_length=128)
+
+
+class PasswordRecoveryRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+
+
+class RecoverySessionRequest(BaseModel):
+    # Tokens do Supabase são opacos para a aplicação. Em particular, refresh
+    # tokens válidos podem ser curtos (por exemplo, 12 caracteres); formato e
+    # validade devem ser verificados pelo Auth, não por uma suposição local.
+    access_token: SecretStr
+    refresh_token: SecretStr
+
+
+class PasswordUpdateRequest(BaseModel):
+    password: SecretStr = Field(min_length=12, max_length=128)
+
+
+class AdminInviteRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    full_name: str = Field(min_length=3, max_length=120)
+    job_title: str = Field(default="", max_length=120)
 
 
 class DownloadRequest(BaseModel):
@@ -280,33 +377,101 @@ def root():
     return {
         "status":     "ok",
         "app":        "SUS Predict API",
-        "version":    "2.1.0",
+        "version":    "2.2.0",
         "pysus_ok":   PYSUS_OK,
         "prophet_ok": PROPHET_OK,
-        "docs":       "/docs",
+        "docs":       "/docs" if API_DOCS_ENABLED else None,
     }
 
 
-@app.post("/api/auth/signup")
-def auth_signup(req: AuthRequest):
-    metadata = {k: v for k, v in {"nome": req.nome, "cargo": req.cargo}.items() if v}
-    return auth_core.signup(req.email, req.password, metadata or None)
-
-
 @app.post("/api/auth/login")
-def auth_login(req: AuthRequest):
-    return auth_core.login(req.email, req.password)
+def auth_login(req: LoginRequest, response: Response):
+    session = auth_core.login(req.email, req.password.get_secret_value())
+    user = auth_core.authorize_user(session.get("user") or {}, "admin")
+    auth_core.set_session_cookies(response, session)
+    return {"user": auth_core.serialize_user(user)}
 
 
 @app.post("/api/auth/dev-login")
-def auth_dev_login(req: AuthRequest | None = None):
-    email = (req.email if req else "") or "marcia.oliveira@dev.local"
-    return auth_core.dev_login(email)
+def auth_dev_login(req: LoginRequest, response: Response):
+    session = auth_core.dev_login(req.email, req.password.get_secret_value())
+    user = auth_core.authorize_user(session.get("user") or {}, "admin")
+    auth_core.set_session_cookies(response, session)
+    return {"user": auth_core.serialize_user(user)}
+
+
+@app.post("/api/auth/refresh")
+def auth_refresh(request: Request, response: Response):
+    session = auth_core.refresh_session(auth_core.refresh_token_from_request(request))
+    user = auth_core.authorize_user(session.get("user") or {}, "admin")
+    auth_core.set_session_cookies(response, session)
+    return {"user": auth_core.serialize_user(user)}
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request, response: Response):
+    auth_core.logout(auth_core.access_token_from_request(request))
+    auth_core.clear_session_cookies(response)
+    return {"ok": True}
+
+
+@app.post("/api/auth/forgot-password", status_code=202)
+def auth_forgot_password(req: PasswordRecoveryRequest):
+    auth_core.request_password_recovery(req.email)
+    return {
+        "message": "Se houver uma conta para este e-mail, enviaremos as instruções de acesso."
+    }
+
+
+@app.post("/api/auth/recovery/session")
+def auth_recovery_session(req: RecoverySessionRequest, response: Response):
+    session = auth_core.accept_external_session(
+        req.access_token.get_secret_value(),
+        req.refresh_token.get_secret_value(),
+    )
+    auth_core.set_session_cookies(response, session)
+    return {"user": auth_core.serialize_user(session["user"])}
+
+
+@app.post("/api/auth/password")
+def auth_update_password(
+    req: PasswordUpdateRequest,
+    request: Request,
+    user: dict = Depends(auth_core.require_admin),
+):
+    auth_core.update_password(
+        auth_core.access_token_from_request(request),
+        req.password.get_secret_value(),
+    )
+    return {"ok": True, "user": auth_core.serialize_user(user)}
 
 
 @app.get("/api/auth/me")
-def auth_me(user: dict = Depends(auth_core.require_user)):
-    return user
+def auth_me(user: dict = Depends(auth_core.require_admin)):
+    return {"user": auth_core.serialize_user(user)}
+
+
+@app.get("/api/admin/users")
+def admin_list_users(
+    page: int = 1,
+    per_page: int = 50,
+    _user: dict = Depends(auth_core.require_admin),
+):
+    return auth_core.list_admin_users(page, per_page)
+
+
+@app.post("/api/admin/users/invite", status_code=201)
+def admin_invite_user(
+    req: AdminInviteRequest,
+    user: dict = Depends(auth_core.require_admin),
+):
+    invited = auth_core.invite_admin(
+        actor=user,
+        email=req.email,
+        full_name=req.full_name,
+        job_title=req.job_title,
+    )
+    return {"user": invited}
 
 
 @app.get("/api/sistemas")

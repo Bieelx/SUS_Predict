@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { API_BASE, MIcon } from '../shared/ui.jsx';
 import { conversarComSusbot, listarConversasSusbot, listarMensagensSusbot } from '../shared/susbotClient.js';
 import { getSusbotPageLabel } from '../shared/susbotContract.js';
+import { apiFetch } from '../shared/authClient.js';
 
 // ─── Tela 08 — Painel de Conversa do SusBot ────────────────────────────────────
 //
@@ -48,11 +49,6 @@ const SUSBOT_ROUTE_ALIASES = {
   'visao-geral': 'visao-geral',
   '/visao-geral': 'visao-geral',
 };
-
-function getAuthHeaders() {
-  const token = localStorage.getItem('sus_predict_token') || '';
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 function normalizarRota(rota) {
   return String(rota || '').trim().replace(/^\/+/, '');
@@ -433,7 +429,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       try {
         const data = await listarConversasSusbot({
           baseUrl: API_BASE,
-          headers: getAuthHeaders(),
+          fetchImpl: apiFetch,
           page: 1,
           pageSize: 100,
         });
@@ -464,7 +460,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       setErroHistorico('');
       const data = await listarConversasSusbot({
         baseUrl: API_BASE,
-        headers: getAuthHeaders(),
+        fetchImpl: apiFetch,
         page: 1,
         pageSize: 100,
       });
@@ -485,7 +481,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       const data = await listarMensagensSusbot({
         conversaId: conversa.id,
         baseUrl: API_BASE,
-        headers: getAuthHeaders(),
+        fetchImpl: apiFetch,
         page: 1,
         pageSize: 100,
       });
@@ -542,7 +538,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
         conversaId: conversaIdAtual || undefined,
         ibge6: ibge6Atual,
         baseUrl: API_BASE,
-        headers: getAuthHeaders(),
+        fetchImpl: apiFetch,
         onStatus: status => {
           const mensagem = typeof status === 'string' ? status : status?.mensagem;
           if (mensagem) setEtapa(mensagem);

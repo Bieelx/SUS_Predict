@@ -32,6 +32,7 @@ echo ""
 
 if [ -f "$ROOT_DIR/.env" ]; then
     info "Carregando variáveis de ambiente de .env"
+    chmod 600 "$ROOT_DIR/.env" 2>/dev/null || true
     # Carregador simples e robusto (aceita espaços em volta do '=' e valores entre aspas)
     while IFS= read -r line || [ -n "$line" ]; do
         # trim (início e fim)
@@ -198,7 +199,14 @@ if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
 fi
 
 cd "$ROOT_DIR/frontend"
-npm run dev -- --host --port 3000 --strictPort 2>&1 &
+# O processo do Vite não herda segredos exclusivos do backend.
+env \
+    -u SUPABASE_SECRET_KEY \
+    -u SUPABASE_SERVICE_ROLE_KEY \
+    -u GEMINI_API_KEY \
+    -u SUSBOT_DEV_AUTH_SECRET \
+    -u SUS_PREDICT_DEV_PASSWORD \
+    npm run dev -- --host --port 3000 --strictPort 2>&1 &
 FRONTEND_PID=$!
 cd "$ROOT_DIR"
 
