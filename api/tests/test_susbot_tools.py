@@ -40,6 +40,46 @@ def test_consultar_estoque_retorna_dias_restantes(db):
     assert resultado["dados"][0]["status"] in {"critico", "alerta", "ok"}
 
 
+def test_consultar_estoque_aceita_nome_parcial(db):
+    from api.core.susbot_seed import seed_susbot_municipio
+    from api.core.susbot_tools import criar_susbot_tools
+
+    seed_susbot_municipio("3550308")
+    tools = criar_susbot_tools("3550308")
+
+    resultado = tools["consultar_estoque"](item="dipirona")
+
+    assert resultado["encontrado"] is True
+    assert resultado["dados"][0]["item"] == "Dipirona 500mg"
+
+
+def test_gerar_etp_aceita_nome_parcial_e_move_alerta(db):
+    from api.core.susbot_seed import seed_susbot_municipio
+    from api.core.susbot_tools import criar_susbot_tools
+
+    seed_susbot_municipio("3550308")
+    tools = criar_susbot_tools("3550308")
+
+    alerta_id = "alerta-teste-1"
+    db.insert_alertas([{
+        "id": alerta_id, "ibge6": "355030", "tipo": "ruptura",
+        "item_ou_condicao": "Dipirona 500mg", "severidade": "alta",
+        "status": "novo", "descricao": "Ruptura iminente",
+    }])
+
+    resultado = tools["gerar_etp"](item="dipirona", alerta_id=alerta_id)
+
+    assert resultado["encontrado"] is True
+    assert resultado["item"] == "dipirona"
+    assert resultado["etp_id"]
+    etp = db.get_etp(resultado["etp_id"])
+    assert etp["item"] == "dipirona"
+    assert "Dipirona 500mg" in etp["justificativa"]
+
+    alertas = db.get_alertas("355030", status="em_andamento")
+    assert any(a["id"] == alerta_id for a in alertas)
+
+
 def test_consultar_alertas_vazio_retorna_motivo(db):
     from api.core.susbot_tools import criar_susbot_tools
 

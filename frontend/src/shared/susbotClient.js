@@ -186,6 +186,16 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
       return;
     }
 
+    if (evento.event === SUSBOT_SSE_EVENTS.artefato) {
+      handlers.onArtefato?.(evento.data);
+      return;
+    }
+
+    if (evento.event === SUSBOT_SSE_EVENTS.confirmacao_pendente) {
+      handlers.onConfirmacaoPendente?.(evento.data);
+      return;
+    }
+
     if (evento.event === SUSBOT_SSE_EVENTS.fim) {
       if (evento.data && typeof evento.data === 'object') {
         respostaFinal = normalizarTexto(evento.data.resposta) || respostaFinal;
@@ -194,6 +204,11 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
         if (evento.data.conversa_id) conversaId = String(evento.data.conversa_id);
       }
       handlers.onFim?.(evento.data);
+      return;
+    }
+
+    if (evento.event === SUSBOT_SSE_EVENTS.erro) {
+      throw new Error(evento.data?.mensagem || 'Falha ao gerar resposta do SusBot.');
     }
   };
 
@@ -247,6 +262,7 @@ export async function conversarComSusbot({
   conversa_id,
   ibge6,
   ibge,
+  confirmar,
   baseUrl = '',
   fetchImpl = globalThis.fetch,
   timeoutMs = SUSBOT_TIMEOUT_MS,
@@ -255,6 +271,8 @@ export async function conversarComSusbot({
   onStatus,
   onToken,
   onReferencia,
+  onArtefato,
+  onConfirmacaoPendente,
   onFim,
   onEvento,
 } = {}) {
@@ -264,7 +282,7 @@ export async function conversarComSusbot({
   }
 
   const perguntaNormalizada = normalizarTexto(pergunta);
-  if (!perguntaNormalizada) {
+  if (!perguntaNormalizada && !confirmar) {
     throw new Error('pergunta ausente');
   }
 
@@ -296,6 +314,7 @@ export async function conversarComSusbot({
         ibge: ibge6Normalizado,
         tela_origem: telaNormalizada,
         tela_atual: telaNormalizada,
+        confirmar: confirmar || undefined,
       }),
       signal: controller.signal,
     });
@@ -304,6 +323,8 @@ export async function conversarComSusbot({
       onStatus,
       onToken,
       onReferencia,
+      onArtefato,
+      onConfirmacaoPendente,
       onFim,
       onEvento,
     });

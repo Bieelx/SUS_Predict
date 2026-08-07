@@ -8,7 +8,10 @@ export const SUSBOT_SSE_EVENTS = {
   status: 'status',
   token: 'token',
   referencia: 'referencia',
+  artefato: 'artefato',
+  confirmacao_pendente: 'confirmacao_pendente',
   fim: 'fim',
+  erro: 'erro',
 };
 
 export const SUSBOT_REQUEST_FIELDS = {

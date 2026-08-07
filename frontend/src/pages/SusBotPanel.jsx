@@ -259,7 +259,132 @@ const ROTULO_META = {
 // A resposta do bot não é balão: é um bloco de texto com régua lateral — o
 // mesmo idioma do card de insight na Visão Geral. A pergunta do usuário é um
 // bloco alinhado à direita, sem rabinho.
-function Bolha({ msg, onNavigate }) {
+function ArtefatoView({ artefato }) {
+  if (!artefato) return null;
+
+  if (artefato.tipo === 'tabela') {
+    if (!artefato.linhas?.length) return null;
+    return (
+      <div style={{ marginTop: 10, border: '1px solid var(--ink-100)', borderRadius: 10, overflow: 'hidden' }}>
+        <p style={{
+          margin: 0, padding: '6px 10px', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase',
+          letterSpacing: '0.05em', color: 'var(--ink-400)', background: 'var(--subtle)',
+        }}>
+          {artefato.titulo}
+        </p>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr>
+                {artefato.colunas.map(col => (
+                  <th key={col} style={{
+                    textAlign: 'left', padding: '6px 10px', color: 'var(--ink-500)',
+                    fontWeight: 700, borderBottom: '1px solid var(--ink-100)', whiteSpace: 'nowrap',
+                  }}>
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {artefato.linhas.map((linha, i) => (
+                <tr key={i}>
+                  {artefato.colunas.map(col => (
+                    <td key={col} style={{ padding: '6px 10px', borderTop: '1px solid var(--ink-50)', color: 'var(--ink-700)', whiteSpace: 'nowrap' }}>
+                      {String(linha[col] ?? '—')}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  if (artefato.tipo === 'resumo') {
+    const entradas = Object.entries(artefato.campos || {});
+    if (!entradas.length) return null;
+    return (
+      <div style={{ marginTop: 10 }}>
+        <p style={{ margin: '0 0 6px', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+          {artefato.titulo}
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(entradas.length, 3)}, 1fr)`, gap: 8 }}>
+          {entradas.map(([chave, valor]) => (
+            <div key={chave} style={{ padding: '8px 10px', borderRadius: 10, background: 'var(--subtle)', border: '1px solid var(--ink-100)' }}>
+              <p style={{ margin: 0, fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+                {chave.replace(/_/g, ' ')}
+              </p>
+              <p style={{ margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: 'var(--ink-900)' }}>
+                {String(valor)}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (artefato.tipo === 'etp') {
+    return (
+      <div style={{
+        marginTop: 10, padding: '10px 12px', borderRadius: 10,
+        border: '1px solid color-mix(in srgb, var(--good) 22%, transparent)',
+        background: 'color-mix(in srgb, var(--good) 6%, white)',
+      }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--good)' }}>{artefato.titulo}</p>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-700)', lineHeight: 1.5 }}>{artefato.justificativa}</p>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function ConfirmacaoAcao({ msg, onConfirmar, onCancelar }) {
+  const confirmacao = msg.confirmacao;
+  if (!confirmacao) return null;
+
+  return (
+    <div style={{
+      marginTop: 10, padding: '10px 12px', borderRadius: 10,
+      border: '1px solid color-mix(in srgb, var(--primary) 25%, transparent)',
+      background: 'var(--primary-soft)',
+    }}>
+      <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-700)', lineHeight: 1.5 }}>{confirmacao.resumo}</p>
+      {!confirmacao.resolvido ? (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button
+            onClick={() => onConfirmar?.(msg.id, confirmacao.ferramenta, confirmacao.argumentos)}
+            style={{
+              padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: 'var(--primary)', color: 'white', fontSize: 12, fontWeight: 700,
+            }}
+          >
+            Confirmar
+          </button>
+          <button
+            onClick={() => onCancelar?.(msg.id)}
+            style={{
+              padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+              border: '1px solid var(--ink-100)', background: 'transparent', color: 'var(--ink-500)',
+            }}
+          >
+            Cancelar
+          </button>
+        </div>
+      ) : (
+        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--ink-400)' }}>
+          {confirmacao.cancelado ? 'Cancelado.' : 'Confirmado.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Bolha({ msg, onNavigate, onConfirmar, onCancelar }) {
   const isUser = msg.autor === 'user';
   const isErro = msg.autor === 'error';
   const isStreaming = msg.autor === 'bot' && msg.streaming;
@@ -298,6 +423,9 @@ function Bolha({ msg, onNavigate }) {
       {isStreaming && msg.status && (
         <p style={{ ...ROTULO_META, marginTop: 6 }}>{msg.status}</p>
       )}
+
+      {!isErro && <ArtefatoView artefato={msg.artefato} />}
+      {!isErro && <ConfirmacaoAcao msg={msg} onConfirmar={onConfirmar} onCancelar={onCancelar} />}
 
       {isErro && (
         <button
@@ -569,6 +697,15 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
             link: criarLinkReferencia(rota, dadosReferencia?.label) || msg.link,
           }));
         },
+        onArtefato: artefato => {
+          atualizarMensagemAtual(idResposta, msg => ({ ...msg, artefato }));
+        },
+        onConfirmacaoPendente: dados => {
+          atualizarMensagemAtual(idResposta, msg => ({
+            ...msg,
+            confirmacao: { ferramenta: dados?.ferramenta, argumentos: dados?.argumentos, resumo: dados?.resumo, resolvido: false },
+          }));
+        },
       });
 
       if (resp.conversaId) {
@@ -598,6 +735,82 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       setEnviando(false);
       setEtapa('');
     }
+  }
+
+  async function confirmarAcao(idMensagemConfirmacao, ferramenta, argumentos) {
+    if (enviando) return;
+
+    atualizarMensagemAtual(idMensagemConfirmacao, msg => (
+      msg.confirmacao ? { ...msg, confirmacao: { ...msg.confirmacao, resolvido: true } } : msg
+    ));
+
+    const idResultado = uid();
+    setCurrent(c => ({
+      ...c,
+      mensagens: [...c.mensagens, { id: idResultado, autor: 'bot', texto: '', status: 'Executando', streaming: true, ts: new Date() }],
+    }));
+    setEnviando(true);
+    setEtapa('executando...');
+
+    try {
+      const resp = await conversarComSusbot({
+        confirmar: { ferramenta, argumentos },
+        telaAtual: page,
+        tela_atual: page,
+        tela_origem: page,
+        conversaId: current.conversaId || undefined,
+        ibge6: ibge6Atual,
+        baseUrl: API_BASE,
+        headers: getAuthHeaders(),
+        onStatus: status => {
+          const mensagem = typeof status === 'string' ? status : status?.mensagem;
+          if (mensagem) setEtapa(mensagem);
+          atualizarMensagemAtual(idResultado, msg => ({ ...msg, status: mensagem || msg.status }));
+        },
+        onToken: tokenParcial => {
+          atualizarMensagemAtual(idResultado, msg => ({
+            ...msg,
+            texto: `${msg.texto || ''}${tokenParcial}`,
+            status: msg.status || 'digitando...',
+            streaming: true,
+          }));
+        },
+        onReferencia: (rota, dadosReferencia) => {
+          atualizarMensagemAtual(idResultado, msg => ({
+            ...msg,
+            link: criarLinkReferencia(rota, dadosReferencia?.label) || msg.link,
+          }));
+        },
+        onArtefato: artefato => {
+          atualizarMensagemAtual(idResultado, msg => ({ ...msg, artefato }));
+        },
+      });
+
+      atualizarMensagemAtual(idResultado, msg => ({
+        ...msg,
+        texto: resp.resposta || msg.texto,
+        streaming: false,
+        status: undefined,
+        link: criarLinkReferencia(resp.referenciaRota, resp.referenciaLabel) || msg.link || null,
+      }));
+      void recarregarHistoricoSilencioso();
+    } catch (error) {
+      atualizarMensagemAtual(idResultado, () => ({
+        id: uid(),
+        autor: 'error',
+        texto: ERRO_SUSBOT_PADRAO,
+        ts: new Date(),
+      }));
+    } finally {
+      setEnviando(false);
+      setEtapa('');
+    }
+  }
+
+  function cancelarConfirmacao(idMensagemConfirmacao) {
+    atualizarMensagemAtual(idMensagemConfirmacao, msg => (
+      msg.confirmacao ? { ...msg, confirmacao: { ...msg.confirmacao, resolvido: true, cancelado: true } } : msg
+    ));
   }
 
   function novaConversa() {
@@ -834,7 +1047,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
 
               {current.mensagens.map(m => (
                 <div key={m.id} className="susbot-msg">
-                  <Bolha msg={m} onNavigate={onNavigate} />
+                  <Bolha msg={m} onNavigate={onNavigate} onConfirmar={confirmarAcao} onCancelar={cancelarConfirmacao} />
                 </div>
               ))}
               <div ref={fimRef} />

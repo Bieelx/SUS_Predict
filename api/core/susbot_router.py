@@ -25,12 +25,18 @@ log = logging.getLogger("sus_predict.susbot_router")
 router = APIRouter(prefix="/api/susbot", tags=["susbot"])
 
 
+class ConfirmarFerramentaRequest(BaseModel):
+    ferramenta: str
+    argumentos: dict[str, Any] = {}
+
+
 class PerguntaSusBotRequest(BaseModel):
     pergunta: str
     conversa_id: str | None = None
     ibge6: str | None = None
     ibge: str | None = None
     tela_origem: str | None = None
+    confirmar: ConfirmarFerramentaRequest | None = None
 
 
 def _usuario_referencia(user: dict[str, Any]) -> str:
@@ -95,18 +101,20 @@ def perguntar(req: PerguntaSusBotRequest, user: dict = Depends(require_user)):
         raise HTTPException(401, "Usuario autenticado invalido")
 
     pergunta = " ".join(str(req.pergunta or "").split()).strip()
-    if not pergunta:
+    if not pergunta and not req.confirmar:
         raise HTTPException(400, "pergunta ausente")
 
     ibge6 = _ibge6(req)
     seed_susbot_municipio(ibge6)
+
+    pergunta_registro = pergunta or f"[confirmado] {req.confirmar.ferramenta}" if req.confirmar else pergunta
 
     conversa = None
     conversa_criada = False
     if req.conversa_id:
         conversa = _verificar_ownership(db.get_conversa(req.conversa_id), usuario)
     else:
-        conversa = db.criar_conversa(usuario=usuario, titulo=_titulo_da_pergunta(pergunta))
+        conversa = db.criar_conversa(usuario=usuario, titulo=_titulo_da_pergunta(pergunta_registro))
         conversa_criada = True
 
     agente = criar_susbot_agente(
@@ -129,7 +137,12 @@ def perguntar(req: PerguntaSusBotRequest, user: dict = Depends(require_user)):
                 },
             )
 
-            for evento in agente.stream_eventos(pergunta):
+            eventos = (
+                agente.stream_eventos_confirmado(req.confirmar.ferramenta, req.confirmar.argumentos)
+                if req.confirmar
+                else agente.stream_eventos(pergunta)
+            )
+            for evento in eventos:
                 yield _sse(evento["event"], evento["data"])
                 if evento["event"] == "fim":
                     texto_final = str(evento["data"].get("resposta") or "")
@@ -139,7 +152,7 @@ def perguntar(req: PerguntaSusBotRequest, user: dict = Depends(require_user)):
                 db.adicionar_mensagem(
                     conversa_id=conversa["id"],
                     tela_origem=req.tela_origem,
-                    pergunta=pergunta,
+                    pergunta=pergunta_registro,
                     resposta=texto_final,
                     referencia_rota=referencia_rota,
                 )
@@ -148,6 +161,9 @@ def perguntar(req: PerguntaSusBotRequest, user: dict = Depends(require_user)):
 
         except HTTPException:
             raise
+        except Exception as exc:  # pragma: no cover - defesa contra falha do LLM/tool
+            log.warning("Falha no stream do SusBot: %s", exc)
+            yield _sse("erro", {"mensagem": "Falha ao gerar resposta do SusBot. Tente novamente."})
 
     headers = {
         "X-Conversa-Id": conversa["id"],

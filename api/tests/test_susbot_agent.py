@@ -44,6 +44,10 @@ class LLMMock:
 
 
 def test_stream_do_susbot_emite_tool_token_referencia_e_fim(db):
+    # Quando a tool encontra dado, a resposta é montada de forma determinística a
+    # partir do resultado real — o LLM não narra (evita hedge/alucinação de um
+    # modelo rápido ignorando o resultado da ferramenta). llm.stream_resposta não
+    # deve ser chamado nesse caminho.
     from api.core.susbot_agent import criar_susbot_agente
     from api.core.susbot_seed import seed_susbot_municipio
 
@@ -55,19 +59,39 @@ def test_stream_do_susbot_emite_tool_token_referencia_e_fim(db):
 
     assert eventos[0]["event"] == "status"
     assert any(evento["event"] == "referencia" and evento["data"]["rota"] == "/insumos" for evento in eventos)
-    assert [evento["data"]["texto"] for evento in eventos if evento["event"] == "token"] == [
-        "Seu estoque ",
-        "dura 12 dias.",
-    ]
+
+    tokens = "".join(evento["data"]["texto"] for evento in eventos if evento["event"] == "token")
+    assert "Soro fisiológico 1L" in tokens
+    assert "dias restantes" in tokens
 
     fim = next(evento for evento in eventos if evento["event"] == "fim")
-    assert fim["data"]["resposta"] == "Seu estoque dura 12 dias."
+    assert fim["data"]["resposta"] == tokens
     assert fim["data"]["referencia_rota"] == "/insumos"
     assert fim["data"]["resultado_ferramenta"]["encontrado"] is True
 
     assert llm.planejar_chamadas
+    assert not llm.stream_chamadas
+
+
+def test_stream_do_susbot_usa_llm_quando_nao_ha_ferramenta(db):
+    # Pergunta genérica (acao='resposta', sem tool) continua narrada pelo LLM.
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.susbot_seed import seed_susbot_municipio
+
+    class LLMSemFerramenta(LLMMock):
+        def planejar(self, pergunta, contexto, ferramentas):
+            self.planejar_chamadas.append((pergunta, contexto, ferramentas))
+            return {"acao": "resposta", "resposta": "", "referencia_rota": None}
+
+    seed_susbot_municipio("3550308")
+    llm = LLMSemFerramenta()
+    agente = criar_susbot_agente("3550308", llm=llm)
+
+    eventos = list(agente.stream_eventos("O que é dengue?"))
+
+    tokens = [evento["data"]["texto"] for evento in eventos if evento["event"] == "token"]
+    assert tokens == ["Seu estoque ", "dura 12 dias."]
     assert llm.stream_chamadas
-    assert llm.stream_chamadas[0][3]["encontrado"] is True
 
 
 def test_stream_sse_formata_eventos_em_blocos(db):

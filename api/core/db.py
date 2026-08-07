@@ -100,6 +100,16 @@ CREATE TABLE IF NOT EXISTS alertas (
     criado_em        TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS etps (
+    id            TEXT PRIMARY KEY,
+    ibge6         TEXT NOT NULL,
+    item          TEXT NOT NULL,
+    alerta_id     TEXT,
+    justificativa TEXT NOT NULL,
+    origem        TEXT NOT NULL,
+    criado_em     TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS susbot_conversas (
     id        TEXT PRIMARY KEY,
     usuario   TEXT NOT NULL,
@@ -120,6 +130,7 @@ CREATE TABLE IF NOT EXISTS susbot_mensagens (
 CREATE INDEX IF NOT EXISTS idx_runs_lookup  ON datasus_runs (sistema, uf, cidade, ano_ini, ano_fim);
 CREATE INDEX IF NOT EXISTS idx_runs_created ON datasus_runs (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alertas_ibge_status ON alertas (ibge6, status);
+CREATE INDEX IF NOT EXISTS idx_etps_ibge ON etps (ibge6, criado_em DESC);
 CREATE INDEX IF NOT EXISTS idx_conversas_usuario ON susbot_conversas (usuario, criada_em DESC);
 CREATE INDEX IF NOT EXISTS idx_mensagens_conversa ON susbot_mensagens (conversa_id, criado_em DESC);
 """
@@ -489,6 +500,49 @@ def has_alertas(ibge6: str) -> bool:
             LIMIT 1
         """, (str(ibge6)[:6],)).fetchone()
     return row is not None
+
+
+def atualizar_status_alerta(alerta_id: str, status: str) -> None:
+    with _conn() as con:
+        con.execute("UPDATE alertas SET status = ? WHERE id = ?", (status, alerta_id))
+
+
+def criar_etp(
+    ibge6: str,
+    item: str,
+    justificativa: str,
+    alerta_id: str | None = None,
+    origem: str = "susbot",
+) -> dict:
+    row = {
+        "id": str(uuid.uuid4()),
+        "ibge6": str(ibge6)[:6],
+        "item": item,
+        "alerta_id": alerta_id,
+        "justificativa": justificativa,
+        "origem": origem,
+        "criado_em": datetime.now(timezone.utc).isoformat(),
+    }
+    with _conn() as con:
+        con.execute("""
+            INSERT INTO etps (id, ibge6, item, alerta_id, justificativa, origem, criado_em)
+            VALUES (:id, :ibge6, :item, :alerta_id, :justificativa, :origem, :criado_em)
+        """, row)
+
+    # Gerar ETP sempre move o alerta relacionado para "em_andamento" (docs/telas/03).
+    if alerta_id:
+        atualizar_status_alerta(alerta_id, "em_andamento")
+
+    return row
+
+
+def get_etp(etp_id: str) -> dict | None:
+    with _conn() as con:
+        row = con.execute("""
+            SELECT id, ibge6, item, alerta_id, justificativa, origem, criado_em
+            FROM etps WHERE id = ?
+        """, (etp_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def criar_conversa(usuario: str, titulo: str) -> dict:

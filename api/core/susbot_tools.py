@@ -64,8 +64,18 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
 
     ibge = _normalizar_ibge6(ibge6)
 
+    def _buscar_estoque_por_item(item: str | None) -> list[dict]:
+        # Busca por substring (case-insensitive), não exata: o modelo tende a mandar
+        # "dipirona" quando o item cadastrado é "Dipirona 500mg" — match exato
+        # devolvia vazio sempre que faltava a dosagem/forma.
+        rows = db.get_estoque(ibge)
+        if not item:
+            return rows
+        alvo = str(item).strip().casefold()
+        return [row for row in rows if alvo in str(row.get("item") or "").casefold()]
+
     def consultar_estoque(item: str | None = None, **_kwargs) -> dict:
-        rows = db.get_estoque(ibge, item=item)
+        rows = _buscar_estoque_por_item(item)
         if not rows:
             return _resposta_vazia(
                 "Nenhum item de estoque encontrado para este município.",
@@ -104,7 +114,7 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
         }
 
     def consultar_epidemiologia(
-        sistema: str,
+        sistema: str | None = None,
         ano_ini: int | None = None,
         ano_fim: int | None = None,
         doenca_cod: str | None = None,
@@ -208,6 +218,35 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
             },
         }
 
+    def gerar_etp(item: str, alerta_id: str | None = None, **_kwargs) -> dict:
+        rows = _buscar_estoque_por_item(item)
+        if not rows:
+            return _resposta_vazia(
+                f"Nenhum estoque cadastrado para '{item}' neste município — não é possível "
+                "fundamentar o ETP sem dado de consumo/cobertura.",
+                ibge6=ibge,
+                item=item,
+            )
+
+        estoque = _enriquecer_estoque(rows)[0]
+        justificativa = (
+            f"Estoque de {estoque['item']} com cobertura estimada de {estoque['dias_restantes']} "
+            f"dias, com base no consumo médio diário de {estoque['consumo_medio_dia']} unidades "
+            f"(atualizado em {estoque['atualizado_em']}). Recomenda-se iniciar processo de "
+            "aquisição para evitar ruptura e compra emergencial."
+        )
+        registro = db.criar_etp(ibge, item, justificativa, alerta_id=alerta_id, origem="susbot")
+        return {
+            "encontrado": True,
+            "ibge6": ibge,
+            "etp_id": registro["id"],
+            "item": item,
+            "alerta_id": alerta_id,
+            "dias_restantes": estoque["dias_restantes"],
+            "justificativa": justificativa,
+            "criado_em": registro["criado_em"],
+        }
+
     def executar_sql_fallback(query: str, **_kwargs) -> dict:
         ok, motivo = validar_sql(query)
         if not ok:
@@ -235,5 +274,12 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
         "consultar_estoque": consultar_estoque,
         "consultar_alertas": consultar_alertas,
         "consultar_epidemiologia": consultar_epidemiologia,
+        "gerar_etp": gerar_etp,
         "executar_sql_fallback": executar_sql_fallback,
     }
+
+
+# Ferramentas que alteram estado — exigem confirmação humana explícita antes de
+# executar (docs/06-agente-susbot.md, requisito inegociável do briefing de
+# reposicionamento). Todo o resto é leitura e roda direto.
+FERRAMENTAS_ESCRITA = {"gerar_etp"}

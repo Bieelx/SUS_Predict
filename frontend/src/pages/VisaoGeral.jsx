@@ -2,12 +2,12 @@
 //
 // Briefing de risco do município, não um dashboard de BI descritivo: a tela responde
 // "eu preciso agir hoje, e em quê" em camadas verticais, da mais crítica para a mais
-// acessória (status → SusBot → alertas acionáveis → previsão + ranking regional).
+// acessória (status → SusBot → alertas acionáveis → janela de decisão). Zero gráfico e
+// zero ranking aqui por decisão de produto (07/08/2026) — a série de dengue e o
+// comparativo regional já existem em Epidemiologia (nível 2), esta tela é só a fila.
 // Todos os dados abaixo são mock estático — nenhum fetch/axios nesta tela.
 
-import {
-  ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Area, Line,
-} from 'recharts';
+import { useEffect, useState } from 'react';
 import { Card, SectionTitle, Badge, MIcon } from '../shared/ui.jsx';
 import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
 
@@ -56,67 +56,6 @@ const ALERTAS = [
   },
 ];
 
-// Série mensal de dengue: 12 meses reais (ago/25–jul/26) + 8 meses previstos (ago/26–mar/27).
-// jul/26 aparece em `real` e `previsto` (valor igual) só para a linha tracejada nascer sem
-// gap visual a partir do último ponto real — não é um dado duplicado, é continuidade visual.
-const DENGUE_SERIE = [
-  { mes: 'ago/25', real: 65 },
-  { mes: 'set/25', real: 48 },
-  { mes: 'out/25', real: 42 },
-  { mes: 'nov/25', real: 40 },
-  { mes: 'dez/25', real: 58 },
-  { mes: 'jan/26', real: 180 },
-  { mes: 'fev/26', real: 340 },
-  { mes: 'mar/26', real: 480 },
-  { mes: 'abr/26', real: 290 },
-  { mes: 'mai/26', real: 120 },
-  { mes: 'jun/26', real: 70 },
-  { mes: 'jul/26', real: 55, previsto: 55 },
-  { mes: 'ago/26', previsto: 60,  icBaixo: 48,  icRange: 24 },
-  { mes: 'set/26', previsto: 50,  icBaixo: 38,  icRange: 25 },
-  { mes: 'out/26', previsto: 48,  icBaixo: 35,  icRange: 27 },
-  { mes: 'nov/26', previsto: 55,  icBaixo: 40,  icRange: 32 },
-  { mes: 'dez/26', previsto: 98,  icBaixo: 75,  icRange: 50 },
-  { mes: 'jan/27', previsto: 225, icBaixo: 175, icRange: 105 },
-  { mes: 'fev/27', previsto: 410, icBaixo: 320, icRange: 180 },
-  { mes: 'mar/27', previsto: 520, icBaixo: 400, icRange: 240 },
-];
-
-const RANKING_REGIONAL_PADRAO = [
-  { nome: 'Cotia',                valor: 74, voce: true },
-  { nome: 'Itapevi',              valor: 61 },
-  { nome: 'Osasco',               valor: 58 },
-  { nome: 'Carapicuíba',          valor: 52 },
-  { nome: 'Embu das Artes',       valor: 47 },
-  { nome: 'Barueri',              valor: 34 },
-  { nome: 'Vargem Grande Pta.',   valor: 28 },
-];
-
-function construirRankingRegional(municipio, status, demoAtiva) {
-  if (!demoAtiva || municipio.nome === 'Cotia') return RANKING_REGIONAL_PADRAO;
-
-  const base = Math.max(0, Math.min(100, status?.indice || 74));
-  const vizinhos = [
-    { nome: 'Paulínia',         valor: Math.max(0, base - 13) },
-    { nome: 'Valinhos',         valor: Math.max(0, base - 16) },
-    { nome: 'Sumaré',           valor: Math.max(0, base - 19) },
-    { nome: 'Hortolândia',      valor: Math.max(0, base - 22) },
-    { nome: 'Indaiatuba',       valor: Math.max(0, base - 30) },
-    { nome: 'Vinhedo',          valor: Math.max(0, base - 34) },
-  ];
-
-  return [
-    { nome: municipio.nome, valor: base, voce: true },
-    ...vizinhos,
-  ];
-}
-
-function corFaixaRisco(valor) {
-  if (valor >= 70) return 'var(--risk-alto)';
-  if (valor >= 40) return 'var(--risk-medio)';
-  return 'var(--risk-baixo)';
-}
-
 function construirStatusDemo(payload) {
   const status = payload?.status;
   const epidemiologia = payload?.epidemiologia || {};
@@ -156,36 +95,6 @@ function construirStatusDemo(payload) {
           ? `Casos de dengue recuaram ${Math.abs(crescimentoValor).toFixed(1)}%, mas a pressão sobre insumos segue crítica.`
           : 'Casos estáveis no corte atual, com atenção operacional mantida.',
   };
-}
-
-function construirSerieDemo(payload) {
-  const serieVisivel = Array.isArray(payload?.serie_visivel) ? payload.serie_visivel : [];
-  const previsao = Array.isArray(payload?.previsao) ? payload.previsao : [];
-
-  if (!serieVisivel.length && !previsao.length) return DENGUE_SERIE;
-
-  const serie = serieVisivel.map(row => ({
-    mes: row.mes,
-    real: row.casos,
-  }));
-
-  if (serie.length && previsao.length) {
-    serie[serie.length - 1] = {
-      ...serie[serie.length - 1],
-      previsto: serie[serie.length - 1].real,
-    };
-  }
-
-  previsao.forEach(row => {
-    serie.push({
-      mes: row.mes,
-      previsto: row.casos_previstos,
-      icBaixo: row.lower != null ? row.lower : undefined,
-      icRange: row.lower != null && row.upper != null ? Math.max(0, row.upper - row.lower) : undefined,
-    });
-  });
-
-  return serie;
 }
 
 function construirAlertasDemo(payload) {
@@ -241,8 +150,8 @@ function BannerStatus({ onNavigate, status = STATUS, acao = 'alertas', rotuloAca
   return (
     <div
       style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20,
-        padding: '20px 26px', borderRadius: 14, marginBottom: 26,
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 16,
+        padding: '20px 24px', borderRadius: 14, height: '100%', boxSizing: 'border-box',
         background: `color-mix(in srgb, ${status.cor} 9%, var(--elev))`,
         border: `1px solid color-mix(in srgb, ${status.cor} 28%, transparent)`,
       }}
@@ -255,7 +164,7 @@ function BannerStatus({ onNavigate, status = STATUS, acao = 'alertas', rotuloAca
           }}
         />
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
             <p style={{
               fontFamily: 'Inter Tight, sans-serif', fontWeight: 800, fontSize: 15,
               letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--ink-900)', margin: 0,
@@ -276,7 +185,7 @@ function BannerStatus({ onNavigate, status = STATUS, acao = 'alertas', rotuloAca
       <button
         onClick={() => onNavigate(acao)}
         style={{
-          flexShrink: 0, padding: '9px 18px', borderRadius: 9, border: 'none', cursor: 'pointer',
+          alignSelf: 'flex-start', padding: '9px 18px', borderRadius: 9, border: 'none', cursor: 'pointer',
           background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700,
         }}
       >
@@ -447,7 +356,7 @@ function BlocoSusBot({ texto = SUSBOT_TEXTO }) {
   return (
     <div style={{
       background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)',
-      borderRadius: 12, padding: '16px 18px', marginBottom: 28, maxWidth: '78ch',
+      borderRadius: 12, padding: '16px 18px', height: '100%', boxSizing: 'border-box',
     }}>
       <p className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
         <MIcon m="smart_toy" size={14} /> SusBot
@@ -532,61 +441,6 @@ function AlertasPrioritarios({ onNavigate, onGerarEtp, alertas = ALERTAS }) {
         Ver todos na Central de Alertas →
       </button>
     </div>
-  );
-}
-
-function TooltipDengue({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null;
-  const real = payload.find(p => p.dataKey === 'real')?.value;
-  const previsto = payload.find(p => p.dataKey === 'previsto')?.value;
-  const valor = real ?? previsto;
-  if (valor == null) return null;
-  return (
-    <div style={{
-      background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8,
-      padding: '8px 12px', fontSize: 13, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-    }}>
-      <p style={{ fontWeight: 700, color: 'var(--ink-900)', marginBottom: 2 }}>{label}</p>
-      <p style={{ color: 'var(--ink-500)' }}>
-        {real != null ? 'Casos reais: ' : 'Casos previstos: '}
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: 'var(--ink-900)' }}>
-          {valor.toLocaleString('pt-BR')}
-        </span>
-      </p>
-    </div>
-  );
-}
-
-function CardPrevisaoDengue({ serie = DENGUE_SERIE }) {
-  return (
-    <Card className="p-5">
-      <SectionTitle>Previsão de casos — dengue</SectionTitle>
-      <ResponsiveContainer width="100%" height={270}>
-        <ComposedChart data={serie} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="var(--ink-100)" vertical={false} />
-          <XAxis
-            dataKey="mes" tick={{ fontSize: 11, fill: 'var(--ink-400)' }}
-            axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} interval={1}
-          />
-          <YAxis tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={40} />
-          <Tooltip content={<TooltipDengue />} />
-          <Area type="monotone" dataKey="icBaixo" stackId="ic" stroke="none" fill="transparent" isAnimationActive={false} />
-          <Area type="monotone" dataKey="icRange" stackId="ic" stroke="none" fill="var(--accent)" fillOpacity={0.16} isAnimationActive={false} />
-          <Line type="monotone" dataKey="real" stroke="var(--primary)" strokeWidth={2.5} dot={false} isAnimationActive={false} />
-          <Line type="monotone" dataKey="previsto" stroke="var(--accent)" strokeWidth={2.5} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
-        </ComposedChart>
-      </ResponsiveContainer>
-      <div style={{ display: 'flex', gap: 18, marginTop: 4, fontSize: 11, color: 'var(--ink-500)' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 14, height: 2, background: 'var(--primary)', display: 'inline-block' }} />
-          Real
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 14, borderTop: '2px dashed var(--accent)', display: 'inline-block' }} />
-          Previsto (IC 80%)
-        </span>
-      </div>
-    </Card>
   );
 }
 
@@ -698,15 +552,41 @@ function CardJanelaDecisao({ demoState, status, alertas = [] }) {
   );
 }
 
+// Compara os alertas ativos de hoje com os vistos na última visita (localStorage) e
+// devolve quantos são novos — dá a sensação de "o sistema trabalha enquanto você não
+// está olhando" (docs/telas/01-visao-geral.md, decisão 07/08/2026).
+// ponytail: chave única por navegador, sem multiusuário/expiração — troca por
+// campo real de "último acesso" quando existir autenticação de verdade.
+const CHAVE_ALERTAS_VISTOS = 'sus_predict_alertas_vistos';
+
+function useAlertasNovosDesdeUltimoAcesso(alertas) {
+  const [contagem, setContagem] = useState(0);
+  const idsAtivos = alertas.filter(a => (a.status || 'novo') !== 'resolvido').map(a => a.id).join(',');
+
+  useEffect(() => {
+    const idsAtuais = idsAtivos ? idsAtivos.split(',') : [];
+    let vistos = [];
+    try {
+      vistos = JSON.parse(localStorage.getItem(CHAVE_ALERTAS_VISTOS) || '[]');
+    } catch {
+      vistos = [];
+    }
+    setContagem(idsAtuais.filter(id => !vistos.includes(id)).length);
+    localStorage.setItem(CHAVE_ALERTAS_VISTOS, JSON.stringify(idsAtuais));
+  }, [idsAtivos]);
+
+  return contagem;
+}
+
 // ─── Página ─────────────────────────────────────────────────────────────────
 
 export default function VisaoGeral({ onNavigate, onGerarEtp, demoState }) {
   const demoAtiva = demoState?.enabled && demoState.payload;
   const municipio = obterMunicipioDemo(demoState, MUNICIPIO);
   const statusDemo = demoAtiva ? construirStatusDemo(demoState.payload) : STATUS;
-  const serieDemo = demoAtiva ? construirSerieDemo(demoState.payload) : DENGUE_SERIE;
   const alertasDemo = demoAtiva ? construirAlertasDemo(demoState.payload) : ALERTAS;
   const textoSusbot = demoAtiva ? (demoState.payload.susbot_briefing || []).join('\n') : SUSBOT_TEXTO;
+  const alertasNovos = useAlertasNovosDesdeUltimoAcesso(alertasDemo);
 
   return (
     <div className="rise">
@@ -752,16 +632,25 @@ export default function VisaoGeral({ onNavigate, onGerarEtp, demoState }) {
         </div>
       )}
 
-      <BannerStatus onNavigate={onNavigate} status={statusDemo} acao="alertas" rotuloAcao="Ver plano" />
-      <BlocoSusBot texto={textoSusbot} />
+      {alertasNovos > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16,
+          fontSize: 13, fontWeight: 700, color: 'var(--primary)',
+        }}>
+          <MIcon m="notifications_active" size={16} />
+          {alertasNovos} {alertasNovos === 1 ? 'alerta novo' : 'alertas novos'} desde seu último acesso
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 26, alignItems: 'stretch' }}>
+        <BannerStatus onNavigate={onNavigate} status={statusDemo} acao="alertas" rotuloAcao="Ver plano" />
+        <BlocoSusBot texto={textoSusbot} />
+      </div>
       <ProvaValorDemo demoState={demoState} />
       {demoAtiva && <RevelacaoCurvaDemo payload={demoState.payload} />}
       <AlertasPrioritarios onNavigate={onNavigate} onGerarEtp={onGerarEtp} alertas={alertasDemo} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
-        <CardPrevisaoDengue serie={serieDemo} />
-        <CardJanelaDecisao demoState={demoState} status={statusDemo} alertas={alertasDemo} />
-      </div>
+      <CardJanelaDecisao demoState={demoState} status={statusDemo} alertas={alertasDemo} />
     </div>
   );
 }

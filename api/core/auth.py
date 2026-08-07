@@ -168,6 +168,8 @@ def get_user(token: str) -> dict:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError:
         raise HTTPException(401, "Token inválido ou expirado")
+    except urllib.error.URLError as exc:
+        raise HTTPException(503, f"Supabase inacessível: {exc.reason}")
 
 
 def require_user(authorization: str = Header(default="")) -> dict:
