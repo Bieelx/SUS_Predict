@@ -168,6 +168,7 @@ def _request_json(
     bearer: str | None = None,
     headers: dict[str, str] | None = None,
     timeout: int = 30,
+    retries: int = 0,
 ) -> Any:
     request_headers = {
         "apikey": api_key,
@@ -187,15 +188,41 @@ def _request_json(
         headers=request_headers,
         method=method,
     )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            payload = response.read()
-            return json.loads(payload.decode("utf-8")) if payload else {}
-    except urllib.error.HTTPError as error:
-        raise _parse_error(error) from error
-    except (urllib.error.URLError, TimeoutError) as error:
-        log.warning("Falha de comunicação com Supabase Auth: %s", error)
-        raise HTTPException(503, "Serviço de autenticação temporariamente indisponível") from error
+    attempts = max(1, min(int(retries) + 1, 3))
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                payload = response.read()
+                return json.loads(payload.decode("utf-8")) if payload else {}
+        except urllib.error.HTTPError as error:
+            parsed = _parse_error(error)
+            if parsed.status >= 500 and attempt + 1 < attempts:
+                log.info(
+                    "Supabase respondeu %s; repetindo requisição segura (%s/%s)",
+                    parsed.status,
+                    attempt + 2,
+                    attempts,
+                )
+                time.sleep(0.25 * (attempt + 1))
+                continue
+            raise parsed from error
+        except (urllib.error.URLError, TimeoutError) as error:
+            if attempt + 1 < attempts:
+                log.info(
+                    "Falha transitória ao acessar Supabase; repetindo requisição segura (%s/%s): %s",
+                    attempt + 2,
+                    attempts,
+                    error,
+                )
+                time.sleep(0.25 * (attempt + 1))
+                continue
+            log.warning("Falha de comunicação com Supabase Auth: %s", error)
+            raise HTTPException(
+                503,
+                "Serviço de autenticação temporariamente indisponível",
+            ) from error
+
+    raise HTTPException(503, "Serviço de autenticação temporariamente indisponível")
 
 
 def _rest_select(table: str, params: dict[str, str]) -> list[dict[str, Any]]:
@@ -206,6 +233,8 @@ def _rest_select(table: str, params: dict[str, str]) -> list[dict[str, Any]]:
         f"/rest/v1/{table}?{query}",
         api_key=key,
         bearer=_admin_bearer(key),
+        timeout=10,
+        retries=1,
     )
     return result if isinstance(result, list) else []
 
@@ -383,9 +412,15 @@ def get_user(token: str) -> dict[str, Any]:
             "/auth/v1/user",
             api_key=_public_key(),
             bearer=token,
-            timeout=15,
+            timeout=10,
+            retries=1,
         )
     except SupabaseError as error:
+        if error.status >= 500:
+            raise HTTPException(
+                503,
+                "Serviço de autenticação temporariamente indisponível",
+            ) from error
         raise HTTPException(401, "Sessão inválida ou expirada") from error
     if not isinstance(result, dict) or not result.get("id"):
         raise HTTPException(401, "Sessão inválida ou expirada")

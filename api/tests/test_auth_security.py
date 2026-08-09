@@ -1,4 +1,5 @@
 import asyncio
+import urllib.error
 
 from fastapi import HTTPException
 from starlette.requests import Request
@@ -113,6 +114,40 @@ def test_recuperacao_nao_revela_se_email_existe(monkeypatch):
 
     monkeypatch.setattr(auth, "_request_json", fake_request)
     assert auth.request_password_recovery("pessoa@example.com") is None
+
+
+def test_validacao_de_token_repete_falha_transitoria_sem_expor_credencial(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test")
+    monkeypatch.setattr(auth.time, "sleep", lambda _seconds: None)
+    attempts = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        @staticmethod
+        def read():
+            return (
+                b'{"id":"00000000-0000-0000-0000-000000000001",'
+                b'"email":"admin@example.com"}'
+            )
+
+    def fake_urlopen(_request, timeout):
+        attempts.append(timeout)
+        if len(attempts) == 1:
+            raise urllib.error.URLError("falha DNS temporaria")
+        return FakeResponse()
+
+    monkeypatch.setattr(auth.urllib.request, "urlopen", fake_urlopen)
+
+    user = auth.get_user("token-opaco-nao-deve-apare-no-log")
+
+    assert user["email"] == "admin@example.com"
+    assert attempts == [10, 10]
 
 
 def _admin_autorizado():

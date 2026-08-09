@@ -127,6 +127,45 @@ test('link de convite é processado uma única vez mesmo com React StrictMode', 
   await expect(page).not.toHaveURL(/access_token|refresh_token/);
 });
 
+test('falha transitória ao validar convite permite tentar novamente sem expor tokens', async ({ page }) => {
+  let sessionRequests = 0;
+  await page.route('**/api/auth/recovery/session', async route => {
+    sessionRequests += 1;
+    if (sessionRequests === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          detail: 'Serviço de autenticação temporariamente indisponível',
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ user: ADMIN }),
+    });
+  });
+
+  await page.goto(
+    '/auth/update-password'
+    + '#access_token=token-de-convite-transitorio'
+    + '&refresh_token=refresh-de-convite-transitorio&type=invite',
+  );
+
+  await expect(page.getByRole('heading', {
+    name: /validação temporariamente indisponível/i,
+  })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText(/verifique sua conexão/i);
+  await expect(page).not.toHaveURL(/access_token|refresh_token/);
+
+  await page.getByRole('button', { name: /tentar validar novamente/i }).click();
+
+  await expect(page.getByRole('heading', { name: /crie sua senha/i })).toBeVisible();
+  expect(sessionRequests).toBe(2);
+});
+
 test('erro devolvido pelo link é apresentado e removido da URL', async ({ page }) => {
   await page.goto(
     '/auth/update-password?error=access_denied&error_code=otp_expired'

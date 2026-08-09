@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LogoIcon } from '../shared/ui.jsx';
 import {
   acceptAuthLink,
@@ -92,6 +92,38 @@ export default function LoginScreen({
   const [error, setError] = useState(initialMessage);
   const [message, setMessage] = useState('');
 
+  const validateAuthLink = useCallback(async () => {
+    if (!authLink || authLink.error) return;
+
+    // Retire credenciais da barra do navegador assim que forem capturadas.
+    // Em falhas transitórias, a cópia permanece somente na memória deste
+    // componente para permitir nova tentativa sem reutilizar o link do e-mail.
+    clearAuthLinkFromUrl();
+    setError('');
+    setLoading(true);
+    setMode('link');
+    setLinkType(authLink.type);
+
+    try {
+      await acceptAuthLink(authLink);
+      setMode('password');
+    } catch (err) {
+      if ([502, 503, 504].includes(err?.status)) {
+        setError(
+          'Não foi possível alcançar o serviço de autenticação. '
+          + 'Verifique sua conexão e tente validar novamente.',
+        );
+        return;
+      }
+
+      setError(err.message || 'O link de acesso é inválido ou expirou.');
+      setMode('login');
+      onAuthLinkFinished();
+    } finally {
+      setLoading(false);
+    }
+  }, [authLink, onAuthLinkFinished]);
+
   useEffect(() => {
     if (!authLink) {
       if (forceAuthLink) {
@@ -114,21 +146,8 @@ export default function LoginScreen({
       return;
     }
 
-    setLoading(true);
-    setLinkType(authLink.type);
-    acceptAuthLink(authLink)
-      .then(() => {
-        clearAuthLinkFromUrl();
-        setMode('password');
-      })
-      .catch(err => {
-        clearAuthLinkFromUrl();
-        setError(err.message || 'O link de acesso é inválido ou expirou.');
-        setMode('login');
-        onAuthLinkFinished();
-      })
-      .finally(() => setLoading(false));
-  }, [authLink, forceAuthLink, onAuthLinkFinished]);
+    void validateAuthLink();
+  }, [authLink, forceAuthLink, onAuthLinkFinished, validateAuthLink]);
 
   function resetFeedback() {
     setError('');
@@ -206,7 +225,7 @@ export default function LoginScreen({
     : mode === 'password'
       ? (linkType === 'invite' ? 'Crie sua senha' : 'Defina uma nova senha')
       : mode === 'link'
-        ? 'Validando link seguro'
+        ? (loading ? 'Validando link seguro' : 'Validação temporariamente indisponível')
         : 'Entrar na plataforma';
 
   return (
@@ -320,7 +339,9 @@ export default function LoginScreen({
               : mode === 'password'
                 ? 'Use uma senha exclusiva. Ela será protegida pelo Supabase Auth.'
                 : mode === 'link'
-                  ? 'Aguarde enquanto confirmamos a validade deste acesso.'
+                  ? (loading
+                    ? 'Aguarde enquanto confirmamos a validade deste acesso.'
+                    : 'O link foi preservado com segurança nesta página para uma nova tentativa.')
                   : 'Use seu e-mail institucional e sua senha.'}
           </p>
 
@@ -439,10 +460,30 @@ export default function LoginScreen({
           )}
 
           {mode === 'link' && (
-            <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 16, borderRadius: 11, background: '#EBF4F7', color: '#1B5E6E', fontSize: 13 }}>
-              <span className="material-symbols-rounded" aria-hidden="true">progress_activity</span>
-              Validando o link com o Supabase…
-            </div>
+            loading ? (
+              <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 16, borderRadius: 11, background: '#EBF4F7', color: '#1B5E6E', fontSize: 13 }}>
+                <span className="material-symbols-rounded" aria-hidden="true">progress_activity</span>
+                Validando o link com o Supabase…
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={validateAuthLink}
+                style={{
+                  width: '100%',
+                  padding: '13px 16px',
+                  background: '#1B5E6E',
+                  color: '#FFF',
+                  border: 0,
+                  borderRadius: 11,
+                  fontSize: 14,
+                  fontWeight: 750,
+                  cursor: 'pointer',
+                }}
+              >
+                Tentar validar novamente
+              </button>
+            )
           )}
 
           {error && <Feedback>{error}</Feedback>}

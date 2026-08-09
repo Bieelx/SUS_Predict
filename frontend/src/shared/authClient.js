@@ -12,7 +12,9 @@ function resolveApiUrl(path) {
 async function errorFromResponse(response, fallback) {
   const payload = await response.json().catch(() => ({}));
   const detail = typeof payload?.detail === 'string' ? payload.detail : '';
-  return new Error(detail || fallback);
+  const error = new Error(detail || fallback);
+  error.status = response.status;
+  return error;
 }
 
 async function fetchWithCookies(path, options = {}) {
