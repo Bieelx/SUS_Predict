@@ -122,8 +122,8 @@ existência de uma string no navegador não libera nenhuma tela, e todas as rota
 - Access e refresh tokens permanecem em cookies `HttpOnly`; não são gravados no `localStorage`.
 - O modo dev é desligado por padrão, não aparece no frontend e é recusado em produção.
 
-O tutorial completo do painel, SQL, primeiro Admin, SMTP e recuperação de senha
-está em [`supabase/SETUP.md`](supabase/SETUP.md).
+O tutorial de configuração do painel, primeiro Admin, SMTP e recuperação de
+senha está em [`supabase/SETUP.md`](supabase/SETUP.md).
 
 ## Supabase (cache + organização)
 
@@ -135,30 +135,21 @@ O Supabase é usado para evitar re-download e manter os dados tratados organizad
 - Nunca comite `.env`.
 - Se uma chave vazar, rotacione imediatamente no Supabase.
 
-### 1) Criar schema no Supabase (SQL)
+### Provisionamento do banco
 
-No Supabase, abra `SQL Editor` e rode, nesta ordem:
+Por decisão de segurança do projeto, os scripts de criação e as consultas SQL
+não são versionados neste repositório. O esquema, as roles e as políticas RLS
+devem ser provisionados diretamente no projeto Supabase pela equipe responsável
+antes de iniciar a aplicação.
 
-- `supabase/schema.sql`
-- `supabase/auth.sql`
-
-O schema cria:
-
-- `datasus_runs`: metadados de cada execução (run).
-- `datasus_serie`: série (real + previsto) por ano.
-- `datasus_sexo`: distribuição por sexo (%).
-- `datasus_faixa_etaria`: distribuição por faixa (%).
-- `datasus_top_causas`: top causas/diagnósticos (%).
-- `datasus_raw_objects`: objetos brutos no Storage associados ao run.
-
-### 2) Criar bucket no Storage
+### Criar bucket no Storage
 
 Crie um bucket (exemplo):
 
 - Nome: `datasus-raw`
 - Tipo: recomendado **Private**
 
-### 3) Configurar `.env`
+### Configurar `.env`
 
 Crie um arquivo `.env` na raiz (existe um modelo em `.env.example`).
 

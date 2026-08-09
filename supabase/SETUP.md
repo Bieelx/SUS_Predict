@@ -56,41 +56,22 @@ AUTH_COOKIE_SAMESITE=lax
 Não misture `localhost` e `127.0.0.1` durante o mesmo teste: cookies pertencem
 ao host que os criou.
 
-## 2. Criar tabelas, perfis, roles e RLS
+## 2. Provisionar o banco e as políticas de acesso
 
-No painel, abra **SQL Editor → New query**.
-
-Execute os arquivos nesta ordem:
-
-1. [`schema.sql`](schema.sql): tabelas agregadas do DATASUS;
-2. [`auth.sql`](auth.sql): `profiles`, `user_roles`, auditoria, triggers e policies.
-
-O segundo script:
-
-- cria um perfil automaticamente para cada entrada de `auth.users`;
-- não concede `admin` automaticamente;
-- cria a função segura `has_role`;
-- bloqueia `anon`;
-- habilita RLS nas tabelas da aplicação;
-- permite acesso direto aos dados somente a usuários autenticados com `admin`;
-- cria `admin_audit_log` para convites realizados pelo backend.
+Por decisão de segurança do projeto, os scripts de criação e as consultas SQL
+não são distribuídos neste repositório. O provisionamento do esquema, das roles,
+da auditoria e das políticas RLS deve ser realizado diretamente no projeto
+Supabase por uma pessoa autorizada da equipe.
 
 Não edite `auth.users` diretamente. O schema `auth` é administrado pelo Supabase;
-dados adicionais devem ficar em uma tabela pública relacionada por UUID. Esse é
-o padrão descrito em
+dados adicionais devem ficar em estruturas públicas relacionadas por UUID. Esse
+é o padrão descrito em
 [Managing user data](https://supabase.com/docs/guides/auth/managing-user-data).
 
-### Conferir a instalação
-
-No **Table Editor**, confirme a existência de:
-
-- `profiles`;
-- `user_roles`;
-- `admin_audit_log`;
-- as tabelas `datasus_*`.
-
-Em **Database → Policies**, confirme que RLS aparece habilitado. A proteção visual
-do React não substitui RLS nem a autorização do FastAPI. Veja
+Antes de seguir, confirme no **Table Editor** que as estruturas necessárias à
+aplicação foram provisionadas. Em **Database → Policies**, confirme que RLS está
+habilitado. A proteção visual do React não substitui RLS nem a autorização do
+FastAPI. Veja
 [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
 e
 [Securing the Data API](https://supabase.com/docs/guides/api/securing-your-api).
@@ -209,32 +190,10 @@ Esse é o único bootstrap manual. Depois dele, use a aba Perfil do SUS Predict.
 1. Abra **Authentication → Users**;
 2. escolha **Add user → Send invitation**;
 3. informe seu e-mail institucional;
-4. volte ao **SQL Editor**;
-5. execute o comando abaixo, substituindo o e-mail:
-
-```sql
-insert into public.user_roles (user_id, role)
-select id, 'admin'::public.app_role
-from auth.users
-where lower(email) = lower('seu-admin@exemplo.com')
-on conflict (user_id, role) do nothing;
-```
-
-Confirme:
-
-```sql
-select
-  users.email,
-  profiles.full_name,
-  roles.role
-from auth.users as users
-left join public.profiles as profiles on profiles.id = users.id
-left join public.user_roles as roles on roles.user_id = users.id
-where lower(users.email) = lower('seu-admin@exemplo.com');
-```
-
-O resultado deve mostrar `role = admin`. Agora abra o convite recebido, crie uma
-senha forte e faça login.
+4. solicite ao responsável pelo banco que conceda a role `admin` ao usuário pelo
+   procedimento interno de provisionamento;
+5. confirme no painel que a permissão foi aplicada;
+6. abra o convite recebido, crie uma senha forte e faça login.
 
 Não use `user_metadata` para conceder role: esse campo pode ser alterado pelo
 próprio usuário. O projeto consulta `user_roles` no backend. Consulte
@@ -356,12 +315,14 @@ reiniciado depois de alterar o `.env`.
 
 ### Login correto retorna “Usuário sem permissão de Administrador”
 
-O usuário existe em `auth.users`, mas não possui uma linha `admin` em
-`public.user_roles`. Repita o SQL da seção 7.
+O usuário existe no Supabase Auth, mas ainda não recebeu a role de Administrador.
+Solicite ao responsável pelo banco que valide e aplique a permissão pelo
+procedimento interno de provisionamento descrito na seção 7.
 
 ### Convite retorna erro de tabela/role
 
-Execute `supabase/auth.sql` e confirme `profiles`, `user_roles` e o trigger.
+Peça ao responsável pelo banco que confirme o provisionamento das estruturas de
+perfil, autorização e automações necessárias ao cadastro por convite.
 
 ### Link abre, mas a tela diz que expirou
 
