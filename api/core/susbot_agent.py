@@ -13,11 +13,16 @@ substituído por um mock simples com `planejar()` e `stream_resposta()`.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
 
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
+
+log = logging.getLogger("sus_predict.susbot_agent")
 
 try:  # pragma: no cover - depende do ambiente final da fase 7
     from langgraph.graph import END, StateGraph
@@ -334,6 +339,132 @@ class GeminiSusBotLLM:
                 yield texto
 
 
+class GroqSusBotLLM:
+    """Adapter pra Groq (API compatível com OpenAI) — sem SDK novo, via urllib puro.
+
+    Usado como fallback quando o Gemini falha (quota estourada, erro 429/5xx, etc).
+    ponytail: sem streaming de verdade — Groq já responde rápido o bastante que uma
+    chamada não-streamed inteira ainda cai dentro do orçamento de latência; se o
+    ganho de streaming token-a-token importar depois, trocar por SSE aqui.
+    """
+
+    def __init__(self, api_key: str | None = None, model: str | None = None):
+        self._chave = (api_key or os.getenv("GROQ_API_KEY") or "").strip()
+        if not self._chave:
+            raise RuntimeError("GROQ_API_KEY ausente")
+        self._modelo = model or os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"
+
+    def _chamar(self, mensagens: list[tuple[str, str]], *, json_mode: bool, max_tokens: int) -> str:
+        papel_openai = {"human": "user", "system": "system", "assistant": "assistant"}
+        payload = {
+            "model": self._modelo,
+            "temperature": 0.2,
+            "max_tokens": max_tokens,
+            "messages": [{"role": papel_openai.get(papel, papel), "content": texto} for papel, texto in mensagens],
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        req = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self._chave}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                corpo = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detalhe = exc.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"Groq HTTP {exc.code}: {detalhe}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Groq inacessível: {exc.reason}") from exc
+
+        return corpo["choices"][0]["message"]["content"] or ""
+
+    def planejar(self, pergunta: str, contexto: dict[str, Any], ferramentas: list[str]) -> dict[str, Any]:
+        sistema, humano = _prompt_planejamento(pergunta, contexto, ferramentas)
+        texto = self._chamar([sistema, humano], json_mode=True, max_tokens=256)
+        return _normalizar_plano(texto)
+
+    def stream_resposta(
+        self,
+        pergunta: str,
+        contexto: dict[str, Any],
+        plano: dict[str, Any],
+        resultado_ferramenta: dict[str, Any] | None,
+    ) -> Iterable[str]:
+        mensagens = _prompt_resposta(pergunta, contexto, plano, resultado_ferramenta)
+        texto = self._chamar(mensagens, json_mode=False, max_tokens=512)
+        if texto:
+            yield texto
+
+
+class FallbackSusBotLLM:
+    """Tenta o LLM primário; se falhar (quota, erro de rede, timeout), cai pro fallback.
+
+    Cobre o caso concreto pedido: "gemini acabou? cai no groq". Não protege contra
+    falha NO MEIO do streaming de stream_resposta (poucos tokens já emitidos e o
+    resto falha) — nesse caso o stream simplesmente para; cobrir isso exigiria
+    bufferizar a resposta inteira antes de emitir, o que mataria o streaming real
+    do caminho feliz. Fica como limite conhecido.
+    """
+
+    def __init__(self, primario: Any, fallback: Any | None):
+        self._primario = primario
+        self._fallback = fallback
+
+    def planejar(self, pergunta: str, contexto: dict[str, Any], ferramentas: list[str]) -> dict[str, Any]:
+        try:
+            return self._primario.planejar(pergunta, contexto, ferramentas)
+        except Exception as exc:
+            if self._fallback is None:
+                raise
+            log.warning("LLM primário falhou no planejamento (%s) — caindo pro fallback", exc)
+            return self._fallback.planejar(pergunta, contexto, ferramentas)
+
+    def stream_resposta(
+        self,
+        pergunta: str,
+        contexto: dict[str, Any],
+        plano: dict[str, Any],
+        resultado_ferramenta: dict[str, Any] | None,
+    ) -> Iterable[str]:
+        try:
+            yield from self._primario.stream_resposta(pergunta, contexto, plano, resultado_ferramenta)
+        except Exception as exc:
+            if self._fallback is None:
+                raise
+            log.warning("LLM primário falhou na resposta (%s) — caindo pro fallback", exc)
+            yield from self._fallback.stream_resposta(pergunta, contexto, plano, resultado_ferramenta)
+
+
+def _montar_llm_com_fallback() -> Any:
+    primario = None
+    erro_primario: Exception | None = None
+    try:
+        primario = GeminiSusBotLLM()
+    except Exception as exc:  # pragma: no cover - depende de GEMINI_API_KEY no ambiente
+        erro_primario = exc
+
+    fallback = None
+    try:
+        fallback = GroqSusBotLLM()
+    except Exception:  # pragma: no cover - depende de GROQ_API_KEY no ambiente
+        fallback = None
+
+    if primario is None:
+        if fallback is None:
+            raise erro_primario or RuntimeError("Nenhum LLM configurado (GEMINI_API_KEY ou GROQ_API_KEY)")
+        log.warning("GEMINI_API_KEY ausente/inválida — usando Groq como único LLM")
+        return fallback
+
+    return FallbackSusBotLLM(primario, fallback)
+
+
 @dataclass
 class SusBotAgent:
     ibge6: str
@@ -347,7 +478,7 @@ class SusBotAgent:
         if not self.tools:
             self.tools = criar_susbot_tools(self.ibge6)
         if self.llm is None:
-            self.llm = GeminiSusBotLLM()
+            self.llm = _montar_llm_com_fallback()
         self._graph = self._montar_grafo() if LANGGRAPH_OK else None
 
     def _montar_grafo(self):  # pragma: no cover - só valida integração quando disponível

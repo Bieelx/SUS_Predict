@@ -94,6 +94,45 @@ def test_stream_do_susbot_usa_llm_quando_nao_ha_ferramenta(db):
     assert llm.stream_chamadas
 
 
+def test_fallback_llm_cai_pro_fallback_quando_primario_falha():
+    from api.core.susbot_agent import FallbackSusBotLLM
+
+    class LLMQuebrado:
+        def planejar(self, pergunta, contexto, ferramentas):
+            raise RuntimeError("quota estourada")
+
+        def stream_resposta(self, pergunta, contexto, plano, resultado_ferramenta):
+            raise RuntimeError("quota estourada")
+            yield  # pragma: no cover - nunca alcançado, só define o generator
+
+    plano_fallback = {"acao": "resposta", "resposta": "", "referencia_rota": None}
+
+    class LLMReserva:
+        def planejar(self, pergunta, contexto, ferramentas):
+            return plano_fallback
+
+        def stream_resposta(self, pergunta, contexto, plano, resultado_ferramenta):
+            yield "resposta do fallback"
+
+    llm = FallbackSusBotLLM(LLMQuebrado(), LLMReserva())
+
+    assert llm.planejar("pergunta", {}, []) == plano_fallback
+    assert list(llm.stream_resposta("pergunta", {}, plano_fallback, None)) == ["resposta do fallback"]
+
+
+def test_fallback_llm_propaga_erro_sem_fallback_configurado():
+    from api.core.susbot_agent import FallbackSusBotLLM
+
+    class LLMQuebrado:
+        def planejar(self, pergunta, contexto, ferramentas):
+            raise RuntimeError("quota estourada")
+
+    llm = FallbackSusBotLLM(LLMQuebrado(), None)
+
+    with pytest.raises(RuntimeError):
+        llm.planejar("pergunta", {}, [])
+
+
 def test_stream_sse_formata_eventos_em_blocos(db):
     from api.core.susbot_agent import criar_susbot_agente
     from api.core.susbot_seed import seed_susbot_municipio
