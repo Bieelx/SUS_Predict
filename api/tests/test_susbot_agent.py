@@ -192,6 +192,51 @@ def test_internacoes_por_dengue_sao_roteadas_para_sih(db):
     assert "base SIH" in fim["data"]["resposta"]
 
 
+def test_consulta_de_utis_nao_e_confundida_com_perfil_de_outro_usuario(db):
+    from api.core.susbot_agent import criar_susbot_agente
+
+    class LLMIgnoraFerramenta(LLMMock):
+        def planejar(self, pergunta, contexto, ferramentas):
+            return {"acao": "resposta", "resposta": "sem dados"}
+
+    agente = criar_susbot_agente(
+        "351300",
+        usuario="user-gabriel",
+        memoria_usuario={"fatos": {"nome": "Gabriel"}},
+        llm=LLMIgnoraFerramenta(),
+    )
+    eventos = list(agente.stream_eventos("Me fale sobre a situação atual das UTIs em Cotia"))
+    fim = next(evento for evento in eventos if evento["event"] == "fim")
+
+    assert fim["data"]["plano"]["ferramenta"] == "consultar_epidemiologia"
+    assert fim["data"]["plano"]["argumentos"]["sistema"] == "SIH"
+    assert fim["data"]["plano"]["argumentos"]["escopo_solicitado"] == "uti"
+    assert "Não tenho acesso à memória" not in fim["data"]["resposta"]
+
+
+def test_consulta_de_insumos_nao_e_confundida_com_perfil_de_outro_usuario(db):
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.susbot_seed import seed_susbot_municipio
+
+    class LLMIgnoraFerramenta(LLMMock):
+        def planejar(self, pergunta, contexto, ferramentas):
+            return {"acao": "resposta", "resposta": "sem dados"}
+
+    seed_susbot_municipio("351300")
+    agente = criar_susbot_agente(
+        "351300",
+        usuario="user-gabriel",
+        memoria_usuario={"fatos": {"nome": "Gabriel"}},
+        llm=LLMIgnoraFerramenta(),
+    )
+    eventos = list(agente.stream_eventos("Me fale sobre os insumos de Cotia"))
+    fim = next(evento for evento in eventos if evento["event"] == "fim")
+
+    assert fim["data"]["plano"]["ferramenta"] == "consultar_estoque"
+    assert "Amoxicilina 500mg" in fim["data"]["resposta"]
+    assert "Não tenho acesso à memória" not in fim["data"]["resposta"]
+
+
 def test_fallback_llm_cai_pro_fallback_quando_primario_falha():
     from api.core.susbot_agent import FallbackSusBotLLM
 

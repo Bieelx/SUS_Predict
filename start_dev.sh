@@ -97,6 +97,7 @@ registrar_webhook_telegram() {
     TUNNEL_PUBLIC_URL="$1" python - <<'PY'
 import json
 import os
+import socket
 import sys
 import urllib.error
 import urllib.request
@@ -104,37 +105,77 @@ import urllib.request
 token = os.environ["TELEGRAM_BOT_TOKEN"]
 secret = os.environ["TELEGRAM_WEBHOOK_SECRET"]
 public_url = os.environ["TUNNEL_PUBLIC_URL"].rstrip("/")
-payload = json.dumps({
+
+
+def chamar_set_webhook(corpo):
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/setWebhook",
+        data=json.dumps(corpo).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            return json.loads(exc.read().decode("utf-8"))
+        except json.JSONDecodeError:
+            raise exc
+
+
+corpo = {
     "url": f"{public_url}/api/susbot/telegram/webhook",
     "secret_token": secret,
     "allowed_updates": ["message"],
-}).encode("utf-8")
-request = urllib.request.Request(
-    f"https://api.telegram.org/bot{token}/setWebhook",
-    data=payload,
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
+}
 try:
-    with urllib.request.urlopen(request, timeout=20) as response:
-        resultado = json.loads(response.read().decode("utf-8"))
-except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+    resultado = chamar_set_webhook(corpo)
+
+    # Quick Tunnels podem estar acessíveis no navegador antes de o DNS usado
+    # pelo Telegram reconhecê-los. O IP fixado evita deixar o bot sem webhook.
+    descricao = resultado.get("description", "")
+    if not resultado.get("ok") and "Failed to resolve host" in descricao:
+        hostname = public_url.removeprefix("https://").split("/", 1)[0]
+        enderecos = socket.getaddrinfo(hostname, 443, socket.AF_INET)
+        corpo["ip_address"] = enderecos[0][4][0]
+        resultado = chamar_set_webhook(corpo)
+except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
     print(f"Falha ao registrar webhook: {exc}", file=sys.stderr)
     raise SystemExit(1)
+
 if not resultado.get("ok"):
-    print(f"Telegram recusou o webhook: {resultado.get('description', 'erro desconhecido')}", file=sys.stderr)
+    print(
+        f"Telegram recusou o webhook: {resultado.get('description', 'erro desconhecido')}",
+        file=sys.stderr,
+    )
     raise SystemExit(1)
 PY
 }
 
 remover_webhook_telegram() {
-    python - <<'PY'
+    EXPECTED_TUNNEL_PUBLIC_URL="${1:-}" python - <<'PY'
 import json
 import os
 import urllib.request
 
 token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-if token:
+expected_public_url = os.environ.get("EXPECTED_TUNNEL_PUBLIC_URL", "").rstrip("/")
+expected_webhook = f"{expected_public_url}/api/susbot/telegram/webhook"
+if token and expected_public_url:
+    try:
+        with urllib.request.urlopen(
+            f"https://api.telegram.org/bot{token}/getWebhookInfo", timeout=8
+        ) as response:
+            current_webhook = json.loads(response.read().decode("utf-8"))["result"]["url"]
+    except Exception:
+        current_webhook = ""
+
+    # Uma instância antiga pode encerrar depois de uma nova iniciar. Nesse caso,
+    # ela não é dona do webhook atual e não deve removê-lo.
+    if current_webhook != expected_webhook:
+        raise SystemExit(0)
+
     request = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/deleteWebhook",
         data=json.dumps({"drop_pending_updates": False}).encode("utf-8"),
@@ -279,7 +320,7 @@ cleanup() {
     [ -n "${FRONTEND_PID:-}" ] && kill "$FRONTEND_PID" 2>/dev/null
     if [ "$TELEGRAM_WEBHOOK_REGISTERED" = "true" ]; then
         info "Removendo webhook temporário do Telegram..."
-        remover_webhook_telegram
+        remover_webhook_telegram "$TUNNEL_PUBLIC_URL"
     fi
     if [ -n "$TUNNEL_PID" ]; then
         kill "$TUNNEL_PID" 2>/dev/null || true
@@ -356,7 +397,19 @@ elif tem_config_telegram; then
 
             if [ -n "$TUNNEL_PUBLIC_URL" ]; then
                 ok "Túnel HTTPS      → $TUNNEL_PUBLIC_URL"
-                if registrar_webhook_telegram "$TUNNEL_PUBLIC_URL"; then
+                info "Validando acesso público ao túnel..."
+                TUNNEL_READY=""
+                for i in $(seq 1 15); do
+                    if curl -sf --max-time 5 "$TUNNEL_PUBLIC_URL/" >/dev/null 2>&1; then
+                        TUNNEL_READY="true"
+                        break
+                    fi
+                    sleep 1
+                done
+
+                if [ "$TUNNEL_READY" != "true" ]; then
+                    warn "Túnel criado, mas ainda não responde publicamente; webhook não registrado."
+                elif registrar_webhook_telegram "$TUNNEL_PUBLIC_URL"; then
                     TELEGRAM_WEBHOOK_REGISTERED="true"
                     ok "Webhook Telegram → registrado para @${TELEGRAM_BOT_USERNAME#@}"
                 else

@@ -183,6 +183,7 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
         ano_ini: int | None = None,
         ano_fim: int | None = None,
         doenca_cod: str | None = None,
+        escopo_solicitado: str | None = None,
         **_kwargs,
     ) -> dict:
         sistema_norm = str(sistema or "").strip().upper()
@@ -276,6 +277,7 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
             "ano_ini": meta.get("ano_ini"),
             "ano_fim": meta.get("ano_fim"),
             "doenca_cod": meta.get("doenca_cod"),
+            "escopo_solicitado": escopo_solicitado,
             "dados": {
                 "meta": meta,
                 "stats": resultado.get("stats") or {},

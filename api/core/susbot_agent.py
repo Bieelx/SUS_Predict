@@ -113,7 +113,7 @@ def _plano_deterministico(pergunta: str) -> dict[str, Any] | None:
             "referencia_rota": "/alertas",
         }
 
-    termos_internacao = {"internac", "hospitaliz", "hospitalar", "leito"}
+    termos_internacao = {"internac", "hospitaliz", "hospitalar", "leito", "uti"}
     termos_epidemiologia = {
         "dengue", "caso", "epidemiologia", "notific", "obito", "mortalidade",
         "nascimento", "ambulatorial",
@@ -129,10 +129,13 @@ def _plano_deterministico(pergunta: str) -> dict[str, Any] | None:
             sistema = "SIA"
         else:
             sistema = "SINAN"
+        argumentos = {"sistema": sistema}
+        if _contem_termo(texto, {"uti"}):
+            argumentos["escopo_solicitado"] = "uti"
         return {
             "acao": "ferramenta",
             "ferramenta": "consultar_epidemiologia",
-            "argumentos": {"sistema": sistema},
+            "argumentos": argumentos,
             "resposta": "",
             "referencia_rota": "/epidemiologia",
         }
@@ -207,10 +210,16 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
         if not stats:
             return None
         linhas = [f"- **{chave.replace('_', ' ')}**: {valor}" for chave, valor in stats.items()]
-        return (
+        resposta = (
             f"Dados de {resultado.get('sistema')} ({resultado.get('ano_ini')}–{resultado.get('ano_fim')}):\n"
             + "\n".join(linhas)
         )
+        if resultado.get("escopo_solicitado") == "uti":
+            resposta += (
+                "\n\n**Limitação:** o SIH descreve internações hospitalares e não informa "
+                "ocupação ou disponibilidade de leitos de UTI em tempo real."
+            )
+        return resposta
 
     if ferramenta == "gerar_etp":
         return (
@@ -771,21 +780,25 @@ class SusBotAgent:
     def stream_eventos(self, pergunta: str) -> Iterable[dict[str, Any]]:
         yield {"event": "status", "data": {"mensagem": "Planejando resposta"}}
 
-        resposta_contextual = self._resposta_contextual(pergunta)
-        if resposta_contextual is not None:
-            yield {"event": "token", "data": {"texto": resposta_contextual}}
-            yield {
-                "event": "fim",
-                "data": {
-                    "resposta": resposta_contextual,
-                    "referencia_rota": None,
-                    "plano": {"acao": "resposta", "origem": "contexto_seguro"},
-                    "resultado_ferramenta": None,
-                },
-            }
-            return
-
         plano_obrigatorio = _plano_deterministico(pergunta)
+        # Perguntas operacionais sobre saúde/estoque precisam chegar à ferramenta
+        # antes das heurísticas de perfil. Expressões como "fale sobre a situação"
+        # e "fale sobre os insumos" não são consultas sobre outra pessoa.
+        if plano_obrigatorio is None:
+            resposta_contextual = self._resposta_contextual(pergunta)
+            if resposta_contextual is not None:
+                yield {"event": "token", "data": {"texto": resposta_contextual}}
+                yield {
+                    "event": "fim",
+                    "data": {
+                        "resposta": resposta_contextual,
+                        "referencia_rota": None,
+                        "plano": {"acao": "resposta", "origem": "contexto_seguro"},
+                        "resultado_ferramenta": None,
+                    },
+                }
+                return
+
         if plano_obrigatorio is None:
             plano = _normalizar_plano(self.llm.planejar(pergunta, self._contexto(), list(self.tools.keys())))
         else:
