@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import unicodedata
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -40,7 +42,10 @@ _REFERENCIAS = {
 }
 
 _FERRAMENTAS_SCHEMA = {
-    "consultar_estoque": {"item": "str opcional, nome do insumo"},
+    "consultar_estoque": {
+        "item": "str opcional, nome do insumo",
+        "somente_risco": "bool opcional, true para itens em falta, criticos ou em alerta",
+    },
     "consultar_alertas": {"status": "str opcional", "tipo": "str opcional"},
     "consultar_epidemiologia": {
         "sistema": "um de SIM, SIH, SINASC, SIA, SINAN",
@@ -57,6 +62,82 @@ _FERRAMENTAS_SCHEMA = {
 
 def _ibge6(valor: str) -> str:
     return str(valor or "").strip()[:6]
+
+
+def _normalizar_intencao(texto: str) -> str:
+    sem_acentos = unicodedata.normalize("NFKD", str(texto or ""))
+    return " ".join("".join(ch for ch in sem_acentos if not unicodedata.combining(ch)).lower().split())
+
+
+def _contem_termo(texto: str, termos: set[str]) -> bool:
+    return any(re.search(rf"\b{re.escape(termo)}\w*\b", texto) for termo in termos)
+
+
+def montar_historico_recente(mensagens: list[dict[str, Any]], limite: int = 8) -> list[dict[str, str]]:
+    """Converte registros do banco (mais novos primeiro) em contexto seguro e cronológico."""
+
+    historico: list[dict[str, str]] = []
+    for mensagem in reversed(mensagens[:limite]):
+        pergunta = str(mensagem.get("pergunta") or "").strip()
+        resposta = str(mensagem.get("resposta") or "").strip()
+        # Conversas antigas podem conter o identificador que o agente expunha antes da correção.
+        resposta = re.sub(r"\bdev-[A-Za-z0-9_-]+\b", "[identificador interno ocultado]", resposta)
+        if pergunta or resposta:
+            historico.append({"pergunta": pergunta, "resposta": resposta})
+    return historico
+
+
+def _plano_deterministico(pergunta: str) -> dict[str, Any] | None:
+    """Garante uso de ferramenta para intenções operacionais inequívocas."""
+
+    texto = _normalizar_intencao(pergunta)
+    if texto.startswith(("o que e ", "o que sao ", "explique ", "como funciona ")):
+        return None
+    termos_estoque = {"estoque", "insumo", "medicamento", "remedio", "abastecimento"}
+    termos_risco = {"falta", "faltando", "critico", "ruptura", "acabando", "baixo"}
+    if _contem_termo(texto, termos_estoque):
+        return {
+            "acao": "ferramenta",
+            "ferramenta": "consultar_estoque",
+            "argumentos": {"somente_risco": _contem_termo(texto, termos_risco)},
+            "resposta": "",
+            "referencia_rota": "/insumos",
+        }
+
+    if _contem_termo(texto, {"alerta", "risco", "ocorrencia"}):
+        return {
+            "acao": "ferramenta",
+            "ferramenta": "consultar_alertas",
+            "argumentos": {},
+            "resposta": "",
+            "referencia_rota": "/alertas",
+        }
+
+    termos_internacao = {"internac", "hospitaliz", "hospitalar", "leito"}
+    termos_epidemiologia = {
+        "dengue", "caso", "epidemiologia", "notific", "obito", "mortalidade",
+        "nascimento", "ambulatorial",
+    }
+    if _contem_termo(texto, termos_internacao | termos_epidemiologia):
+        if _contem_termo(texto, termos_internacao):
+            sistema = "SIH"
+        elif _contem_termo(texto, {"obito", "mortalidade"}):
+            sistema = "SIM"
+        elif _contem_termo(texto, {"nascimento"}):
+            sistema = "SINASC"
+        elif _contem_termo(texto, {"ambulatorial"}):
+            sistema = "SIA"
+        else:
+            sistema = "SINAN"
+        return {
+            "acao": "ferramenta",
+            "ferramenta": "consultar_epidemiologia",
+            "argumentos": {"sistema": sistema},
+            "resposta": "",
+            "referencia_rota": "/epidemiologia",
+        }
+
+    return None
 
 
 def _jsonable(valor: Any) -> Any:
@@ -82,16 +163,35 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
         return None
 
     if not resultado.get("encontrado"):
-        return str(resultado.get("motivo") or "Não encontrei esse dado para este município.")
+        motivo = str(resultado.get("motivo") or "Não encontrei esse dado para este município.")
+        acao = str(resultado.get("acao_sugerida") or "").strip()
+        return f"{motivo}\n\n**Próximo passo:** {acao}" if acao else motivo
 
     if ferramenta == "consultar_estoque":
-        linhas = [
-            f"- **{d.get('item')}** — {d.get('dias_restantes')} dias restantes ({d.get('status')})"
-            for d in resultado.get("dados", [])
-        ]
+        linhas = []
+        for dado in resultado.get("dados", []):
+            qualidade = dado.get("qualidade") or {}
+            dias = dado.get("dias_restantes")
+            if dias is None:
+                linhas.append(f"- **{dado.get('item')}**: cálculo indisponível, falta consumo médio local válido")
+                continue
+            defasagem = qualidade.get("defasagem_dias")
+            competencia = qualidade.get("competencia") or "não informada"
+            linhas.append(
+                f"- **{dado.get('item')}**: cobertura estimada de {dias} dias ({dado.get('status')}); "
+                f"fonte: estoque local; competência: {competencia}; "
+                f"confiança {qualidade.get('confianca', 'não informada')}"
+                + (f"; defasagem de {defasagem} dias" if defasagem is not None else "")
+            )
         if not linhas:
             return None
-        return "Estoque atual:\n" + "\n".join(linhas)
+        titulo = "Insumos com cobertura crítica ou em alerta:\n" if resultado.get("somente_risco") else "Cobertura do estoque atual:\n"
+        return (
+            titulo
+            + "\n".join(linhas)
+            + "\n\n**Limitação:** este cálculo usa quantidade atual ÷ consumo médio. "
+            "Ele não comprova a relação caso→insumo e não deve ser lido como previsão de abastecimento."
+        )
 
     if ferramenta == "consultar_alertas":
         linhas = [
@@ -129,12 +229,27 @@ def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> di
 
     if ferramenta == "consultar_estoque":
         linhas = [
-            {"item": d.get("item"), "dias_restantes": d.get("dias_restantes"), "status": d.get("status")}
+            {
+                "item": d.get("item"),
+                "cobertura_dias": d.get("dias_restantes") if d.get("dias_restantes") is not None else "indisponível",
+                "confiança": (d.get("qualidade") or {}).get("confianca"),
+            }
             for d in resultado.get("dados", [])
         ]
         if not linhas:
             return None
-        return {"tipo": "tabela", "titulo": "Estoque", "colunas": ["item", "dias_restantes", "status"], "linhas": linhas}
+        qualidades = [(d.get("qualidade") or {}) for d in resultado.get("dados", [])]
+        return {
+            "tipo": "tabela",
+            "titulo": "Cobertura de estoque",
+            "colunas": ["item", "cobertura_dias", "confiança"],
+            "linhas": linhas,
+            "evidencia": {
+                "fonte": "Estoque local informado pelo município",
+                "competencias": [q.get("competencia") for q in qualidades if q.get("competencia")],
+                "limitacao": "Não incorpora protocolo caso→insumo, lead time ou margem de segurança.",
+            },
+        }
 
     if ferramenta == "consultar_alertas":
         linhas = [
@@ -258,6 +373,9 @@ def _prompt_planejamento(pergunta: str, contexto: dict[str, Any], ferramentas: l
         "certa para isso, use-a e deixe o resultado dela (mesmo vazio) fundamentar a "
         "resposta. Use acao 'resposta' so quando a pergunta for generica e nao depender "
         "de dado de um municipio (ex: 'o que e dengue', 'como funciona o sistema').\n"
+        "Use historico_recente para entender continuacoes e referencias a mensagens anteriores. "
+        "Nunca revele, repita ou tente inferir identificadores internos do usuario. Se o nome "
+        "da pessoa nao estiver explicitamente disponivel, diga apenas que ela esta autenticada.\n"
         "gerar_etp altera dado (cria um ETP de verdade) — so proponha essa ferramenta "
         "quando o usuario pedir explicitamente para abrir/gerar um ETP; ela sempre passa "
         "por confirmacao antes de executar, entao pode propor mesmo sem ter certeza."
@@ -287,6 +405,7 @@ def _prompt_resposta(
         "genericas como 'nao possuo acesso a dados atualizados' ou 'consulte outro painel' "
         "— voce ja consultou, so nao achou resultado para esse filtro. "
         "Se houver referencia de rota, mencione no final em uma linha curta."
+        " Use historico_recente para manter continuidade, sem expor identificadores internos."
     )
     humano = json.dumps(
         {
@@ -470,6 +589,7 @@ class SusBotAgent:
     ibge6: str
     tela_origem: str | None = None
     usuario: str | None = None
+    historico: list[dict[str, str]] = field(default_factory=list)
     llm: Any | None = None
     tools: dict[str, Callable] = field(default_factory=dict)
 
@@ -491,7 +611,39 @@ class SusBotAgent:
         return builder.compile()
 
     def _contexto(self) -> dict[str, Any]:
-        return {"ibge6": self.ibge6, "tela_origem": self.tela_origem, "usuario": self.usuario}
+        return {
+            "ibge6": self.ibge6,
+            "tela_origem": self.tela_origem,
+            "usuario_autenticado": bool(self.usuario),
+            "historico_recente": self.historico[-8:],
+        }
+
+    def _resposta_contextual(self, pergunta: str) -> str | None:
+        texto = _normalizar_intencao(pergunta)
+        if "quem sou eu" in texto or "qual e meu usuario" in texto or "qual meu usuario" in texto:
+            return (
+                "Você está autenticado no SusPredict e conectado ao SusBot por este canal. "
+                "Por segurança, não exponho identificadores internos. O nome do seu perfil "
+                "não está disponível no contexto desta conversa."
+            )
+
+        if "ultima conversa" in texto or "conversamos antes" in texto or "ultima mensagem" in texto:
+            if not self.historico:
+                return "Esta é a primeira mensagem disponível nesta conversa."
+            anterior = self.historico[-1]
+            pergunta_anterior = str(anterior.get("pergunta") or "").strip()
+            resposta_anterior = str(anterior.get("resposta") or "").strip()
+            if not pergunta_anterior:
+                return "Há histórico nesta conversa, mas a mensagem anterior não está disponível."
+            resumo = f'Na mensagem anterior, você perguntou: “{pergunta_anterior}”.'
+            if resposta_anterior:
+                resposta_curta = resposta_anterior[:280].rstrip()
+                if len(resposta_anterior) > 280:
+                    resposta_curta += "…"
+                resumo += f' Eu respondi: “{resposta_curta}”'
+            return resumo
+
+        return None
 
     def _node_planejar(self, state: dict[str, Any]) -> dict[str, Any]:
         plano = _normalizar_plano(
@@ -575,7 +727,50 @@ class SusBotAgent:
     def stream_eventos(self, pergunta: str) -> Iterable[dict[str, Any]]:
         yield {"event": "status", "data": {"mensagem": "Planejando resposta"}}
 
-        plano = _normalizar_plano(self.llm.planejar(pergunta, self._contexto(), list(self.tools.keys())))
+        resposta_contextual = self._resposta_contextual(pergunta)
+        if resposta_contextual is not None:
+            yield {"event": "token", "data": {"texto": resposta_contextual}}
+            yield {
+                "event": "fim",
+                "data": {
+                    "resposta": resposta_contextual,
+                    "referencia_rota": None,
+                    "plano": {"acao": "resposta", "origem": "contexto_seguro"},
+                    "resultado_ferramenta": None,
+                },
+            }
+            return
+
+        plano_obrigatorio = _plano_deterministico(pergunta)
+        if plano_obrigatorio is None:
+            plano = _normalizar_plano(self.llm.planejar(pergunta, self._contexto(), list(self.tools.keys())))
+        else:
+            plano = plano_obrigatorio
+            # O modelo ainda pode ajudar a extrair item/período, mas não pode cancelar
+            # o uso da ferramenta determinado para uma consulta operacional inequívoca.
+            try:
+                sugestao = _normalizar_plano(
+                    self.llm.planejar(pergunta, self._contexto(), list(self.tools.keys()))
+                )
+                if sugestao.get("ferramenta") == plano["ferramenta"]:
+                    argumentos_sugeridos = sugestao.get("argumentos") or {}
+                    if plano["ferramenta"] == "consultar_estoque":
+                        argumentos_sugeridos = {
+                            chave: valor for chave, valor in argumentos_sugeridos.items() if chave == "item"
+                        }
+                    elif plano["ferramenta"] == "consultar_epidemiologia":
+                        permitidos = {"ano_ini", "ano_fim"}
+                        if (plano.get("argumentos") or {}).get("sistema") == "SINAN":
+                            permitidos.add("doenca_cod")
+                        argumentos_sugeridos = {
+                            chave: valor for chave, valor in argumentos_sugeridos.items() if chave in permitidos
+                        }
+                    plano["argumentos"] = {
+                        **argumentos_sugeridos,
+                        **(plano.get("argumentos") or {}),
+                    }
+            except Exception as exc:  # pragma: no cover - fallback determinístico
+                log.warning("Planejamento do LLM falhou; usando roteamento determinístico: %s", exc)
         ferramenta = str(plano.get("ferramenta") or "").strip()
 
         if plano.get("acao") == "ferramenta" and ferramenta in FERRAMENTAS_ESCRITA:
@@ -641,6 +836,7 @@ def criar_susbot_agente(
     ibge6: str,
     tela_origem: str | None = None,
     usuario: str | None = None,
+    historico: list[dict[str, str]] | None = None,
     llm: Any | None = None,
     tools: dict[str, Callable] | None = None,
 ) -> SusBotAgent:
@@ -650,6 +846,7 @@ def criar_susbot_agente(
         ibge6=ibge6,
         tela_origem=tela_origem,
         usuario=usuario,
+        historico=historico or [],
         llm=llm,
         tools=tools or {},
     )

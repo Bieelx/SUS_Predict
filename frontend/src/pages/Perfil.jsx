@@ -7,20 +7,18 @@ function LocalCardHead({ title, hint }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4, paddingBottom: 12, borderBottom: '1px solid #EFEBE0' }}>
       <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>{title}</h2>
-      {hint && <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A8A39A' }}>{hint}</span>}
+      {hint && <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-300)' }}>{hint}</span>}
     </div>
   );
 }
 
 // ─── Page: Perfil ──────────────────────────────────────────────────────────────
-
-const PERFIL_ATIVIDADES = [
-  { icon: 'check', cor: '#2A6B40', titulo: 'Aprovou ETP-2026-087',               tempo: 'há 2 horas' },
-  { icon: 'error', cor: '#D94F4F', titulo: 'Visualizou Alerta AL-2026-0184',     tempo: 'há 3 horas' },
-  { icon: 'edit',  cor: '#4A7FBF', titulo: 'Atualizou estoque UBS Cotia Centro', tempo: 'ontem, 16:20' },
-  { icon: 'download', cor: '#6B665D', titulo: 'Exportou relatório de cobertura vacinal Q1', tempo: 'ontem, 11:08' },
-  { icon: 'notifications', cor: '#8A8579', titulo: 'Configurou alerta de Hantavirose para Cotia', tempo: 'há 3 dias' },
-];
+//
+// A auditoria de UX (P1-2) removeu o log de "atividades recentes" — era uma
+// lista estática inventada, sem lastro em nenhum evento real do backend, e
+// os botões "Editar perfil" / "Trocar senha" não tinham destino nenhum. Sem
+// endpoint de auditoria de ações do usuário no MVP, a tela mostra só o que
+// `/api/auth/me` de fato retorna, e nada que pareça funcionalidade ausente.
 
 const PERFIL_UBSS = [
   { nome: 'UBS Cotia Centro', leitos: '38 leitos · Cotia', status: 'crítico' },
@@ -66,12 +64,12 @@ export default function PagePerfil({ onNavigate, onLogout }) {
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', letterSpacing: '-0.02em', marginBottom: 4 }}>Perfil do Usuário</h1>
-        <p style={{ fontSize: 13, color: '#8A8579' }}>Suas informações, permissões e histórico de atividades no SusPredict.</p>
+        <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>Suas informações, permissões e histórico de atividades no SusPredict.</p>
       </div>
 
       {erro && <Card className="p-4 mb-5" style={{ color: '#8A2A38', background: '#FBEAEA', border: '1px solid #E9C2C2' }}>{erro}</Card>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 20, alignItems: 'start' }}>
+      <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 20, alignItems: 'start' }}>
         {/* Coluna esquerda */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Cartão de identidade */}
@@ -82,44 +80,13 @@ export default function PagePerfil({ onNavigate, onLogout }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 20, fontWeight: 800, color: '#1A1814', lineHeight: 1.1, marginBottom: 4 }}>{carregando ? 'Carregando…' : nome}</h2>
-                <p style={{ fontSize: 13, color: '#8A8579', marginBottom: 12 }}>{email}</p>
+                <p style={{ fontSize: 13, color: 'var(--ink-400)', marginBottom: 12 }}>{email}</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {['Admin', 'Aprovador de ETP', 'Gestão de UBS'].map(p => (
                     <span key={p} style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 99, fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)' }}>{p}</span>
                   ))}
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                <button style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)', cursor: 'pointer' }}>
-                  <span className="material-symbols-rounded" style={{ fontSize: 20 }}>edit</span>
-                  Editar perfil
-                </button>
-                <button style={{ padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#3D3A33', background: '#FFFFFF', border: '1px solid #E5E1D6', cursor: 'pointer' }}>
-                  Trocar senha
-                </button>
-              </div>
-            </div>
-          </Card>
-
-          {/* Atividades recentes */}
-          <Card className="p-5">
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-              <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>Atividades recentes</h2>
-              <span style={{ fontSize: 11, color: '#A8A39A' }}>últimos 7 dias</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {PERFIL_ATIVIDADES.map((a, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: i < PERFIL_ATIVIDADES.length - 1 ? '1px solid #EFEBE0' : 'none', cursor: 'pointer' }}>
-                  <span style={{ width: 32, height: 32, borderRadius: 8, background: a.cor + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: a.cor }}>
-                    <span className="material-symbols-rounded" style={{ fontSize: 20 }}>{a.icon}</span>
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: '#1A1814', lineHeight: 1.3 }}>{a.titulo}</p>
-                    <p style={{ fontSize: 11, color: '#8A8579', marginTop: 1 }}>{a.tempo}</p>
-                  </div>
-                  <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#C9C4BA', flexShrink: 0 }}>chevron_right</span>
-                </div>
-              ))}
             </div>
           </Card>
         </div>
@@ -153,7 +120,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: '#1A1814', lineHeight: 1.3 }}>{u.nome}</p>
-                  <p style={{ fontSize: 11, color: '#8A8579' }}>{u.leitos}</p>
+                  <p style={{ fontSize: 11, color: 'var(--ink-400)' }}>{u.leitos}</p>
                 </div>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600, color: '#D94F4F', background: '#D94F4F18', flexShrink: 0 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#D94F4F' }} />
@@ -168,7 +135,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: '#1A1814', marginBottom: 2 }}>Sair do SusPredict</p>
-                <p style={{ fontSize: 11, color: '#8A8579', lineHeight: 1.4 }}>Você será desconectado em todos os dispositivos.</p>
+                <p style={{ fontSize: 11, color: 'var(--ink-400)', lineHeight: 1.4 }}>Você será desconectado em todos os dispositivos.</p>
               </div>
               <button onClick={onLogout} style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#D94F4F', background: '#D94F4F12', border: '1px solid #D94F4F33', cursor: 'pointer', flexShrink: 0 }}>
                 Sair

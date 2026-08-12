@@ -88,7 +88,7 @@ function TabelaDocumentos({ documentos, onGerarEtp }) {
                 <td style={estiloTd}><StatusChip status={doc.status} /></td>
                 <td style={{ ...estiloTd, textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {doc.status === 'finalizado' ? (
-                    <button onClick={() => baixarEtpPdf(doc)} style={estiloBotaoOutline}>
+                    <button onClick={() => baixarEtpPdf({ ...doc, demo: doc.demoHistorica })} style={estiloBotaoOutline}>
                       <MIcon m="download" size={14} /> Baixar
                     </button>
                   ) : (

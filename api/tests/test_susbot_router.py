@@ -97,6 +97,35 @@ def test_perguntar_cria_reutiliza_e_persiste_historico(router):
     assert body_mensagens_2["itens"][0]["pergunta"] == payload["pergunta"]
 
 
+def test_web_entrega_historico_recente_ao_agente(router, monkeypatch):
+    router_module, _db = router
+    historicos = []
+
+    def criar_agente_fake(*_args, **kwargs):
+        historicos.append(kwargs.get("historico") or [])
+        return FakeAgent()
+
+    monkeypatch.setattr(router_module, "criar_susbot_agente", criar_agente_fake)
+    user = {"id": "user-abc", "email": "user@example.com"}
+    primeira = router_module.perguntar(
+        router_module.PerguntaSusBotRequest(pergunta="Primeira pergunta", ibge6="355030"),
+        user=user,
+    )
+    asyncio.run(_ler_streaming_response(primeira))
+    conversa_id = primeira.headers["x-conversa-id"]
+
+    segunda = router_module.perguntar(
+        router_module.PerguntaSusBotRequest(
+            pergunta="O que perguntei antes?", ibge6="355030", conversa_id=conversa_id,
+        ),
+        user=user,
+    )
+    asyncio.run(_ler_streaming_response(segunda))
+
+    assert historicos[0] == []
+    assert historicos[1][0]["pergunta"] == "Primeira pergunta"
+
+
 def test_perguntar_cria_outra_conversa_e_lista_paginado(router):
     router_module, _db = router
     user = {"id": "user-abc", "email": "user@example.com"}

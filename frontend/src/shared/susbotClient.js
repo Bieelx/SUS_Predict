@@ -40,6 +40,66 @@ async function lerJson(response) {
   return response.json();
 }
 
+async function requisicaoJson(path, {
+  baseUrl = '', fetchImpl = globalThis.fetch, method = 'GET', body, signal, headers = {},
+} = {}) {
+  const fetchFn = fetchImpl || globalThis.fetch;
+  if (typeof fetchFn !== 'function') throw new Error('fetch indisponivel para consultar canais do SusBot');
+  const response = await fetchFn(resolverUrl(baseUrl, path), {
+    method,
+    headers: {
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal,
+  });
+  if (response.status === 204) return null;
+  return lerJson(response);
+}
+
+export function listarCanaisSusbot(opcoes = {}) {
+  return requisicaoJson(SUSBOT_ENDPOINTS.canais, opcoes);
+}
+
+export function criarPareamentoCanalSusbot({ provedor = 'telegram', ibge6, ...opcoes } = {}) {
+  return requisicaoJson(SUSBOT_ENDPOINTS.pareamentos, {
+    ...opcoes,
+    method: 'POST',
+    body: { provedor, ibge6 },
+  });
+}
+
+export function consultarPareamentoCanalSusbot({ pareamentoId, ...opcoes } = {}) {
+  if (!pareamentoId) throw new Error('pareamentoId ausente');
+  return requisicaoJson(SUSBOT_ENDPOINTS.pareamento(pareamentoId), opcoes);
+}
+
+export function confirmarPareamentoCanalSusbot({ pareamentoId, ...opcoes } = {}) {
+  if (!pareamentoId) throw new Error('pareamentoId ausente');
+  return requisicaoJson(SUSBOT_ENDPOINTS.confirmarPareamento(pareamentoId), {
+    ...opcoes,
+    method: 'POST',
+  });
+}
+
+export function cancelarPareamentoCanalSusbot({ pareamentoId, ...opcoes } = {}) {
+  if (!pareamentoId) throw new Error('pareamentoId ausente');
+  return requisicaoJson(SUSBOT_ENDPOINTS.pareamento(pareamentoId), {
+    ...opcoes,
+    method: 'DELETE',
+  });
+}
+
+export function revogarCanalSusbot({ provedor, ...opcoes } = {}) {
+  if (!provedor) throw new Error('provedor ausente');
+  return requisicaoJson(SUSBOT_ENDPOINTS.canal(provedor), {
+    ...opcoes,
+    method: 'DELETE',
+  });
+}
+
 export async function listarConversasSusbot({
   baseUrl = '',
   fetchImpl = globalThis.fetch,

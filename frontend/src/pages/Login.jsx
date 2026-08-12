@@ -1,247 +1,192 @@
 import { useState } from 'react';
-import { LogoIcon, API_BASE } from '../shared/ui.jsx';
+import { LogoIcon, API_BASE, MIcon, THEMES } from '../shared/ui.jsx';
 
-// ─── Tela de login / cadastro ─────────────────────────────────────────────────
-//
-// Sistema de autenticação ainda não implementado. Único caminho funcional é
-// entrar como Márcia Oliveira (usuário de demonstração). "Criar conta" exibe
-// aviso de que o cadastro está em construção.
-
+// O acesso institucional usa autenticação real. A entrada de demonstração
+// existe somente no servidor de desenvolvimento e nunca aparece no build final.
 export default function LoginScreen({ onEnter }) {
   const [erro, setErro] = useState('');
-  const [modo, setModo] = useState('login'); // 'login' | 'signup'
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [carregando, setCarregando] = useState(false);
+  const [acaoCarregando, setAcaoCarregando] = useState('');
+  const ambienteDesenvolvimento = import.meta.env.DEV;
 
-  async function loginDev() {
+  async function concluirLogin(resp) {
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.detail || 'Não foi possível autenticar com os dados informados.');
+    if (!data.access_token) throw new Error('A autenticação não retornou uma sessão válida.');
+    localStorage.setItem('sus_predict_token', data.access_token);
+    onEnter();
+  }
+
+  async function loginDemonstracao() {
     setErro('');
-    setCarregando(true);
+    setAcaoCarregando('demo');
     try {
       const resp = await fetch(`${API_BASE}/api/auth/dev-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: 'marcia.oliveira@dev.local', password: 'dev' }),
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || 'Falha ao gerar login de desenvolvimento.');
-      if (!data.access_token) throw new Error('Resposta de login sem token.');
-      localStorage.setItem('sus_predict_token', data.access_token);
-      onEnter();
+      await concluirLogin(resp);
     } catch (err) {
-      setErro(err.message || 'Erro ao autenticar.');
+      setErro(err.message || 'Não foi possível acessar a demonstração.');
     } finally {
-      setCarregando(false);
+      setAcaoCarregando('');
     }
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setErro('');
-    setCarregando(true);
+    if (!email.trim() || !senha) {
+      setErro('Informe o e-mail institucional e a senha para continuar.');
+      return;
+    }
+
+    setAcaoCarregando('login');
     try {
-      const path = modo === 'login' ? 'login' : 'signup';
-      const resp = await fetch(`${API_BASE}/api/auth/${path}`, {
+      const resp = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: senha }),
+        body: JSON.stringify({ email: email.trim(), password: senha }),
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || 'Falha na autenticação.');
-
-      if (modo === 'signup') {
-        setModo('login');
-        setErro('Conta criada. Verifique seu e-mail (se confirmação estiver ativa) e entre.');
-        return;
-      }
-      if (!data.access_token) throw new Error('Resposta de login sem token.');
-      localStorage.setItem('sus_predict_token', data.access_token);
-      onEnter();
+      await concluirLogin(resp);
     } catch (err) {
-      setErro(err.message || 'Erro ao autenticar.');
+      setErro(err.message || 'Não foi possível autenticar.');
     } finally {
-      setCarregando(false);
+      setAcaoCarregando('');
     }
   }
 
+  const carregando = !!acaoCarregando;
+  const temaLogin = THEMES.teal.vars;
+
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', background: '#F6F5F2',
-      fontFamily: 'Inter, sans-serif', overflow: 'hidden',
-    }}>
-      {/* ── Painel de marca (esquerda) ─────────────────────────────────── */}
-      <div style={{
-        flex: '1 1 52%', position: 'relative', display: 'flex', flexDirection: 'column',
-        justifyContent: 'space-between', padding: '48px 56px',
-        background: 'linear-gradient(150deg, #1E3C3C 0%, #1B5E6E 100%)',
-        color: '#C8D8D5', overflow: 'hidden',
-        // dá ao LogoIcon (usa var(--sb-text)) um tom claro sobre o teal escuro
-        '--sb-text': '#DCEBE8',
-      }}>
-        {/* textura de grade sutil */}
-        <div style={{
-          position: 'absolute', inset: 0, opacity: 0.06, pointerEvents: 'none',
-          backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-        }} />
-        {/* brilho radial */}
-        <div style={{
-          position: 'absolute', top: '-20%', right: '-10%', width: 520, height: 520,
-          borderRadius: '50%', pointerEvents: 'none',
-          background: 'radial-gradient(circle, rgba(77,184,160,0.28) 0%, transparent 70%)',
-        }} />
-
-        {/* topo: logo */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <LogoIcon size={44} />
-          <p style={{ fontFamily: 'Inter Tight, sans-serif', fontWeight: 800, fontSize: 20, color: '#FFFFFF', lineHeight: 1, margin: 0 }}>
-            SusPredict
-          </p>
-        </div>
-
-        {/* meio: headline */}
-        <div style={{ position: 'relative', maxWidth: 460 }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11, fontWeight: 700,
-            letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8FCFC0',
-            background: 'rgba(77,184,160,0.12)', border: '1px solid rgba(77,184,160,0.3)',
-            padding: '5px 11px', borderRadius: 999, marginBottom: 22,
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4DB8A0' }} />
-            Inteligência epidemiológica
-          </span>
-          <h1 style={{
-            fontFamily: 'Inter Tight, sans-serif', fontWeight: 800, fontSize: 38, lineHeight: 1.08,
-            color: '#FFFFFF', margin: '0 0 16px', letterSpacing: '-0.02em',
-          }}>
-            Antecipe a demanda do SUS{' '}
-            <span style={{ color: '#7FD4C0' }}>
-              antes que ela chegue.
-            </span>
-          </h1>
-          <p style={{ fontSize: 15, lineHeight: 1.6, color: '#A9CFC9', margin: 0 }}>
-            Análise preditiva de óbitos, internações e notificações por município e período.
-            Modelos sobre dados públicos do DATASUS.
-          </p>
-
-          {/* mini-stats */}
-          <div style={{ display: 'flex', gap: 36, marginTop: 36 }}>
-            {[['5.570', 'municípios'], ['6', 'bases SUS'], ['Prophet', '+ OLS']].map(([v, l]) => (
-              <div key={l}>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>{v}</div>
-                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7FA8A2', marginTop: 6 }}>{l}</div>
-              </div>
-            ))}
+    <div className="login-page" style={temaLogin}>
+      <header className="login-masthead">
+        <div className="login-masthead__brand">
+          <LogoIcon size={38} />
+          <div>
+            <p className="login-masthead__name">SusPredict</p>
+            <p className="login-masthead__descriptor">Inteligência municipal em saúde</p>
           </div>
         </div>
+        <div className="login-masthead__meta">
+          <span>Dados públicos</span>
+          <span aria-hidden="true">·</span>
+          <span>Decisão auditável</span>
+        </div>
+      </header>
 
-        {/* rodapé */}
-        <p style={{ position: 'relative', fontSize: 11, color: '#6B928C', margin: 0, fontFamily: 'JetBrains Mono, monospace' }}>
-          TCC 2026 · FIAP · Dados públicos DATASUS
-        </p>
-      </div>
-
-      {/* ── Painel de acesso (direita) ─────────────────────────────────── */}
-      <div style={{
-        flex: '1 1 48%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32,
-      }}>
-        <div style={{ width: '100%', maxWidth: 380 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#6B665D', margin: '0 0 6px' }}>
-            Bem-vinda de volta
+      <main className="login-main">
+        <section className="login-context" aria-labelledby="login-context-title">
+          <p className="login-eyebrow">Plataforma de trabalho municipal</p>
+          <h1 id="login-context-title">Inteligência operacional para a saúde pública</h1>
+          <p className="login-context__intro">
+            Acompanhe alertas, evidências e necessidades de insumos em um ambiente orientado à decisão. Cada recomendação identifica fonte, competência e limitações.
           </p>
-          <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', margin: '0 0 28px', letterSpacing: '-0.01em' }}>
-            Entrar na plataforma
-          </h2>
 
-          {/* formulário de acesso */}
-          <form onSubmit={handleSubmit}>
-            <input
-              type="email" required placeholder="E-mail" value={email}
-              onChange={e => setEmail(e.target.value)}
-              style={{
-                width: '100%', padding: '13px 16px', marginBottom: 10, background: '#FFFFFF',
-                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 15, color: '#1A1814',
-                boxSizing: 'border-box', outline: 'none',
-              }}
-            />
-            <input
-              type="password" required placeholder="Senha" value={senha}
-              onChange={e => setSenha(e.target.value)}
-              style={{
-                width: '100%', padding: '13px 16px', marginBottom: 14, background: '#FFFFFF',
-                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 15, color: '#1A1814',
-                boxSizing: 'border-box', outline: 'none',
-              }}
-            />
-            <button
-              type="submit" disabled={carregando}
-              style={{
-                width: '100%', padding: '13px 16px', background: '#1B5E6E', color: '#fff',
-                border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700,
-                cursor: carregando ? 'default' : 'pointer', opacity: carregando ? 0.7 : 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}
-            >
-              {carregando ? 'Aguarde...' : (modo === 'login' ? 'Entrar' : 'Criar conta')}
+          <dl className="login-institution">
+            <div>
+              <dt>Organização</dt>
+              <dd>Secretaria Municipal de Saúde</dd>
+            </div>
+            <div>
+              <dt>Escopo operacional</dt>
+              <dd>Vigilância epidemiológica, estoque e planejamento</dd>
+            </div>
+            <div>
+              <dt>Rastreabilidade</dt>
+              <dd>Fontes, cálculos e competências visíveis na análise</dd>
+            </div>
+          </dl>
+
+          <div className="login-assurance">
+            <MIcon m="verified_user" size={19} />
+            <p>
+              O sistema diferencia dados observados, simulações e informações indisponíveis antes de apoiar uma decisão.
+            </p>
+          </div>
+        </section>
+
+        <section className="login-access" aria-labelledby="login-access-title">
+          <div className="login-access__heading">
+            <p className="login-eyebrow">Acesso institucional</p>
+            <h2 id="login-access-title">Entrar no ambiente de trabalho</h2>
+            <p>Use as credenciais fornecidas pela sua organização.</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="login-form" noValidate>
+            <div className="login-field">
+              <label htmlFor="login-email">E-mail institucional</label>
+              <input
+                id="login-email"
+                type="email"
+                required
+                autoComplete="username"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="nome@saude.municipio.gov.br"
+                disabled={carregando}
+              />
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="login-senha">Senha</label>
+              <input
+                id="login-senha"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={senha}
+                onChange={e => setSenha(e.target.value)}
+                disabled={carregando}
+              />
+            </div>
+
+            <button type="submit" disabled={carregando} className="login-submit touch-target">
+              {acaoCarregando === 'login' ? 'Verificando credenciais…' : 'Entrar com credenciais'}
             </button>
           </form>
 
-          {/* acesso rápido — login de desenvolvimento */}
-          <button
-            type="button"
-            onClick={loginDev}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left',
-              padding: '14px 16px', background: '#FFFFFF', border: '1px solid #E5E1D6',
-              borderRadius: 14, cursor: 'pointer', transition: 'all 0.15s', margin: '14px 0',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#4DB8A0'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(27,94,110,0.12)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E1D6'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; }}
-          >
-            <span style={{
-              width: 44, height: 44, flexShrink: 0, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #1B5E6E 0%, #4DB8A0 100%)', color: '#fff',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 15, fontWeight: 700, fontFamily: 'Inter Tight, sans-serif',
-            }}>MO</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#1A1814', lineHeight: 1.2 }}>Entrar como dev</span>
-              <span style={{ display: 'block', fontSize: 13, color: '#8A8579', marginTop: 2 }}>Gera um token real para testar o SusBot</span>
-            </span>
-            <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#1B5E6E' }}>arrow_forward</span>
-          </button>
-
-          {/* alternar login/cadastro */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '18px 0 4px' }}>
-            <button
-              type="button"
-              onClick={() => { setModo(modo === 'login' ? 'signup' : 'login'); setErro(''); }}
-              style={{
-                width: '100%', padding: '11px 16px', background: 'transparent', color: '#1B5E6E',
-                border: '1.5px solid #E5E1D6', borderRadius: 12, fontSize: 13, fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              {modo === 'login' ? 'Não tem conta? Criar conta' : 'Já tem conta? Entrar'}
-            </button>
-          </div>
-
           {erro && (
-            <div className="rise" style={{
-              marginTop: 18, padding: '13px 15px', background: '#FBF1E3', border: '1px solid #ECDCC2',
-              borderRadius: 12, display: 'flex', gap: 11, alignItems: 'flex-start',
-            }}>
-              <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#A6580F', flexShrink: 0 }}>construction</span>
-              <span style={{ color: '#7A4A12', fontSize: 13, lineHeight: 1.5 }}>{erro}</span>
+            <div className="login-feedback" role="alert" aria-live="assertive">
+              <MIcon m="error" size={19} />
+              <span>{erro}</span>
             </div>
           )}
 
-          <p style={{ marginTop: 28, fontSize: 11, color: '#A8A39A', textAlign: 'center', lineHeight: 1.5 }}>
-            Ao continuar você concorda com o uso de dados públicos<br />conforme a política de privacidade do SUS Predict.
+          {ambienteDesenvolvimento && (
+            <div className="login-demo">
+              <div className="login-demo__copy">
+                <div>
+                  <span className="login-demo__badge">Ambiente de demonstração</span>
+                  <h3>Explorar sem credenciais institucionais</h3>
+                </div>
+                <p>Casos históricos reais; estoques, preços e ações operacionais são cenário fictício.</p>
+              </div>
+              <button
+                type="button"
+                onClick={loginDemonstracao}
+                disabled={carregando}
+                className="login-demo__button touch-target"
+              >
+                {acaoCarregando === 'demo' ? 'Preparando demonstração…' : 'Acessar demonstração'}
+                <MIcon m="arrow_forward" size={17} />
+              </button>
+            </div>
+          )}
+
+          <p className="login-access__footer">
+            Acesso restrito. As ações realizadas no ambiente institucional devem seguir os fluxos de revisão e aprovação do município.
           </p>
-        </div>
-      </div>
+        </section>
+      </main>
+
+      <footer className="login-footer">
+        <span>Projeto acadêmico FIAP 2026</span>
+        <span>Fontes públicas DATASUS</span>
+      </footer>
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import { createContext, useContext } from 'react';
-import logoImage from '../../assets/logo.png';
+import { createContext, useContext, Fragment } from 'react';
+import logoImage from '../../assets/logo-128.png';
 
 // ─── Esquemas de cores (sidebar + cor primária unificados) ────────────────────
 //
@@ -9,15 +9,15 @@ import logoImage from '../../assets/logo.png';
 
 export const THEMES = {
   teal: {
-    label: 'Teal SusPredict', dot: '#1B5E6E',
+    label: 'Azul SusPredict', dot: '#336FA1',
     vars: {
-      '--sb': '#92B6AB', '--sb-border': '#7DA399', '--sb-text': '#2C4A47',
-      '--sb-section': '#4A7A76', '--sb-strong': '#1A2E2C', '--sb-icon-bg': '#E9E9E9',
-      '--sb-icon-fg': '#5C656B', '--sb-icon-active-bg': '#2D5449', '--sb-icon-active-fg': '#FDFDFD',
-      '--sb-accent-bar': '#2D5449',
-      '--primary': '#1B5E6E', '--primary-dark': '#1E3C3C', '--accent': '#4DB8A0',
-      '--primary-soft': '#EBF4F7', '--primary-soft-border': '#D6E9EE',
-      '--primary-field': '#2A5050', '--primary-label': '#6A9090', '--primary-on-dark': '#C8D8D5',
+      '--sb': '#6FADD2', '--sb-border': '#4E8BB8', '--sb-text': '#1B3F5C',
+      '--sb-section': '#336FA1', '--sb-strong': '#14324A', '--sb-icon-bg': '#E9E9E9',
+      '--sb-icon-fg': '#5C656B', '--sb-icon-active-bg': '#336FA1', '--sb-icon-active-fg': '#FDFDFD',
+      '--sb-accent-bar': '#336FA1',
+      '--primary': '#336FA1', '--primary-dark': '#2A5980', '--accent': '#4E8BB8',
+      '--primary-soft': '#EAF3FA', '--primary-soft-border': '#9ECAE3',
+      '--primary-field': '#2A5980', '--primary-label': '#6FADD2', '--primary-on-dark': '#C9E1EF',
     },
   },
   verde: {
@@ -117,6 +117,131 @@ export function LogoIcon({ size = 30, style = {} }) {
       height={size}
       style={{ display: 'block', objectFit: 'contain', flexShrink: 0, ...style }}
     />
+  );
+}
+
+// Aviso de dado simulado — usar quando a tela recebe `meta.dados_reais === false`
+// (ou equivalente) por fallback do backend (PySUS/Supabase indisponível). Não
+// bloqueia a tela, só avisa: o dado segue navegável, mas não é o real.
+export function MockDataBanner({ visible, mensagem = 'Dados simulados — fonte real indisponível no momento.' }) {
+  if (!visible) return null;
+  return (
+    <div
+      className="data-state-bar"
+      data-data-state-bar
+      role="status"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 14px', borderRadius: 10, marginBottom: 16,
+        background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)',
+        color: 'var(--primary-dark)', fontSize: 13, fontWeight: 600,
+      }}
+    >
+      <MIcon m="warning" size={18} />
+      <span>{mensagem}</span>
+    </div>
+  );
+}
+
+// ─── Estado global de origem do dado (auditoria P1-1) ──────────────────────
+//
+// Todo dado mostrado no produto vem de um destes três estados. Nunca deve
+// existir um quarto caminho silencioso ("mock" aparecendo como se fosse
+// real). O App decide o estado a partir de `demoState` e da disponibilidade
+// da API; cada página herda esse estado via prop e é responsável por não
+// afirmar mais confiança do que o estado permite.
+export const DATA_STATE = {
+  REAL: 'real',
+  DEMONSTRACAO: 'demonstracao',
+  INDISPONIVEL: 'indisponivel',
+};
+
+const DATA_STATE_META = {
+  [DATA_STATE.REAL]: { label: 'Dado real', icon: 'verified', cor: 'var(--good)' },
+  [DATA_STATE.DEMONSTRACAO]: { label: 'Demonstração', icon: 'auto_awesome', cor: 'var(--warn)' },
+  [DATA_STATE.INDISPONIVEL]: { label: 'Sem dados — fonte indisponível', icon: 'cloud_off', cor: 'var(--bad)' },
+};
+
+export function dataStateFromDemo(demoState) {
+  if (demoState?.enabled) return DATA_STATE.DEMONSTRACAO;
+  if (demoState?.error) return DATA_STATE.INDISPONIVEL;
+  return DATA_STATE.REAL;
+}
+
+// Faixa persistente exigida pela auditoria: aparece em TODAS as telas quando
+// o ambiente não é 100% real, para que uma captura de tela isolada continue
+// permitindo identificar que aquilo é demonstração ou dado indisponível.
+// Fica fora do fluxo de rolagem do conteúdo — reforça mesmo quando a página
+// troca — e é o mesmo componente usado para marca d'água em PDFs/exports
+// (ver `watermarkLabel`).
+export function DataStateBar({ state }) {
+  if (!state || state === DATA_STATE.REAL) return null;
+  const meta = DATA_STATE_META[state] || DATA_STATE_META[DATA_STATE.INDISPONIVEL];
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        padding: '7px 16px', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em',
+        color: 'white', background: meta.cor, flexShrink: 0,
+      }}
+    >
+      <MIcon m={meta.icon} size={16} />
+      <span>
+        {state === DATA_STATE.DEMONSTRACAO
+          ? 'MODO DEMONSTRAÇÃO — dados de um cenário histórico simulado, não é o município real em tempo real'
+          : 'DADOS INDISPONÍVEIS — a fonte real falhou e nenhum dado fictício está sendo exibido no lugar'}
+      </span>
+    </div>
+  );
+}
+
+// Rótulo textual para carimbar em PDFs/exportações geradas durante a
+// demonstração (marca d'água exigida pela auditoria P1-1). Usar como texto
+// visível repetido no documento exportado, não só como metadado invisível.
+export function watermarkLabel(state) {
+  if (state !== DATA_STATE.DEMONSTRACAO) return null;
+  return 'DOCUMENTO GERADO EM MODO DEMONSTRAÇÃO — NÃO É UM DOCUMENTO OFICIAL';
+}
+
+// Bloco de "cadeia de evidência" (auditoria P1-3): todo alerta/recomendação
+// numérica deve poder mostrar de onde veio o número, não só o número.
+// Renderiza null quando faltar o mínimo de evidência — preferimos omitir a
+// mostrar uma caixa de evidência vazia fingindo rigor.
+export function EvidenceChain({ fontes, competencia, atualizadoEm, calculo, premissas, intervaloConfianca, limitacoes, versaoModelo }) {
+  const linhas = [
+    fontes?.length ? { k: 'Fontes', v: fontes.join(', ') } : null,
+    competencia ? { k: 'Competência dos dados', v: competencia } : null,
+    atualizadoEm ? { k: 'Atualizado em', v: atualizadoEm } : null,
+    calculo ? { k: 'Cálculo', v: calculo } : null,
+    premissas ? { k: 'Premissas locais', v: premissas } : null,
+    intervaloConfianca ? { k: 'Intervalo de confiança', v: intervaloConfianca } : null,
+    versaoModelo ? { k: 'Versão do modelo', v: versaoModelo } : null,
+    limitacoes ? { k: 'Limitações conhecidas', v: limitacoes } : null,
+  ].filter(Boolean);
+  if (!linhas.length) return null;
+  return (
+    <details style={{ borderRadius: 10, border: '1px solid var(--ink-100)', background: 'var(--subtle)', padding: '8px 12px', marginTop: 10 }}>
+      <summary
+        style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+          color: 'var(--ink-400)', cursor: 'pointer', listStyle: 'none',
+          display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none',
+        }}
+      >
+        <MIcon m="expand_more" size={14} />
+        Cadeia de evidência
+      </summary>
+      <dl style={{ margin: '8px 0 0', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 10px' }}>
+        {linhas.map(l => (
+          <Fragment key={l.k}>
+            <dt style={{ fontSize: 12, color: 'var(--ink-500)', fontWeight: 600, whiteSpace: 'nowrap' }}>{l.k}</dt>
+            <dd style={{ fontSize: 12, color: 'var(--ink-700)', margin: 0 }}>{l.v}</dd>
+          </Fragment>
+        ))}
+      </dl>
+    </details>
   );
 }
 

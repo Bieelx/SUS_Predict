@@ -10,7 +10,7 @@ import {
   ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Line,
   ReferenceLine, ReferenceDot,
 } from 'recharts';
-import { Card, Badge, MIcon } from '../shared/ui.jsx';
+import { Card, Badge, MIcon, EvidenceChain } from '../shared/ui.jsx';
 import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
 
 // ─── Mock: fatos canônicos do município (Cotia — SP) ──────────────────────────
@@ -56,23 +56,28 @@ const SETORES_CONSUMO = [
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function diasRestantesDe(item) {
-  if (!item.consumoSemanal) return Infinity;
+  const quantidade = Number(item.qtdAtual);
+  const consumo = Number(item.consumoSemanal);
+  if (!Number.isFinite(quantidade) || quantidade < 0 || !Number.isFinite(consumo) || consumo <= 0) return null;
   return Math.round((item.qtdAtual / item.consumoSemanal) * 7);
 }
 
 function statusDe(dias) {
+  if (dias == null) return 'indisponivel';
   if (dias < LIMIAR_CRITICO) return 'critico';
   if (dias <= LIMIAR_ALERTA) return 'alerta';
   return 'ok';
 }
 
 function corStatus(status) {
+  if (status === 'indisponivel') return 'var(--ink-400)';
   if (status === 'critico') return 'var(--risk-alto)';
   if (status === 'alerta') return 'var(--risk-medio)';
   return 'var(--risk-baixo)';
 }
 
 function rotuloStatus(status) {
+  if (status === 'indisponivel') return 'Cálculo indisponível';
   if (status === 'critico') return 'Crítico';
   if (status === 'alerta') return 'Alerta';
   return 'OK';
@@ -96,6 +101,7 @@ function formatarPreco(valor) {
 }
 
 function gerarSerieProjecao(item) {
+  if (diasRestantesDe(item) == null) return [];
   const semanas = [];
   for (let s = 0; s <= 20; s++) {
     semanas.push({ semana: s, estoque: Math.max(0, item.qtdAtual - item.consumoSemanal * s) });
@@ -299,16 +305,18 @@ function LinhaItem({ item, isLast, onAbrirDrawer, onGerarEtp }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 22, flexShrink: 0 }}>
         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 15, fontWeight: 700, color: cor, width: 58, textAlign: 'right' }}>
-          {dias} d
+          {dias == null ? '—' : `${dias} d`}
         </span>
         <span style={{ fontSize: 13, color: 'var(--ink-500)', width: 68, textAlign: 'right' }}>
           {item.consumoSemanal.toLocaleString('pt-BR')}/sem
         </span>
         <button
           onClick={e => { e.stopPropagation(); onGerarEtp(item); }}
+          disabled={dias == null}
+          title={dias == null ? 'Informe estoque e consumo médio para preparar o ETP' : 'Preparar ETP para revisão'}
           style={{ ...estiloBotaoPrimario, padding: '6px 13px', fontSize: 11 }}
         >
-          Gerar ETP
+          Preparar ETP
         </button>
       </div>
     </div>
@@ -373,13 +381,23 @@ function TooltipProjecao({ active, payload, label }) {
 }
 
 function DrawerDetalhe({ item, onClose, onGerarEtp }) {
+  const [variacaoConsumo, setVariacaoConsumo] = useState(0);
+
+  useEffect(() => {
+    setVariacaoConsumo(0);
+  }, [item?.id]);
+
   if (!item) return null;
-  const dias = diasRestantesDe(item);
+  const consumoCenario = item.consumoSemanal * (1 + variacaoConsumo / 100);
+  const itemCenario = { ...item, consumoSemanal: consumoCenario };
+  const dias = diasRestantesDe(itemCenario);
+  const diasBase = diasRestantesDe(item);
   const status = statusDe(dias);
   const cor = corStatus(status);
   const desatualizado = item.atualizadoHaDias > LIMIAR_DESATUALIZADO;
-  const serie = gerarSerieProjecao(item);
-  const semanaRuptura = Math.min(20, Math.round(dias / 7));
+  const serie = gerarSerieProjecao(itemCenario);
+  const semanaRuptura = dias == null ? null : Math.min(20, Math.round(dias / 7));
+  const confianca = item.estoque_demo ? 'Cenário demonstrativo' : (desatualizado ? 'Reduzida' : 'Moderada');
 
   return (
     <>
@@ -428,28 +446,76 @@ function DrawerDetalhe({ item, onClose, onGerarEtp }) {
             <Tooltip content={<TooltipProjecao />} />
             <ReferenceLine y={0} stroke="var(--bad)" strokeDasharray="4 3" label={{ value: 'ruptura', position: 'insideBottomRight', fontSize: 11, fill: 'var(--bad)' }} />
             <Line type="monotone" dataKey="estoque" stroke={cor} strokeWidth={2.5} dot={false} isAnimationActive={false} />
-            <ReferenceDot x={semanaRuptura} y={0} r={5} fill="var(--bad)" stroke="var(--elev)" strokeWidth={2} />
+            {semanaRuptura != null && <ReferenceDot x={semanaRuptura} y={0} r={5} fill="var(--bad)" stroke="var(--elev)" strokeWidth={2} />}
           </LineChart>
         </ResponsiveContainer>
+
+        <div style={{ margin: '18px 0', padding: '14px 16px', border: '1px solid var(--ink-100)', borderRadius: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-400)', margin: 0 }}>
+                Simulação de cenário
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--ink-500)', margin: '4px 0 0' }}>
+                Não altera o estoque cadastrado.
+              </p>
+            </div>
+            <Badge label={`${variacaoConsumo >= 0 ? '+' : ''}${variacaoConsumo}% consumo`} color="var(--info)" />
+          </div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--ink-700)' }}>
+            Variação do consumo semanal
+            <input
+              type="range"
+              min="-30"
+              max="50"
+              step="5"
+              value={variacaoConsumo}
+              onChange={event => setVariacaoConsumo(Number(event.target.value))}
+              style={{ width: '100%', marginTop: 8, accentColor: 'var(--primary)' }}
+            />
+          </label>
+          <p style={{ fontSize: 12, color: 'var(--ink-500)', margin: '8px 0 0' }} aria-live="polite">
+            Base: {diasBase == null ? 'indisponível' : `${diasBase} dias`}. Cenário: {dias == null ? 'indisponível' : `${dias} dias de cobertura`}.
+          </p>
+        </div>
 
         <div style={{ background: 'var(--subtle)', borderRadius: 10, padding: '14px 16px', margin: '18px 0' }}>
           <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-400)', margin: '0 0 6px' }}>
             Composição do cálculo
           </p>
           <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--ink-700)', margin: 0 }}>
-            Estoque atual ({item.qtdAtual.toLocaleString('pt-BR')} {item.unidade}) ÷ consumo médio
-            ({item.consumoSemanal.toLocaleString('pt-BR')}/sem, ajustado pela previsão epidemiológica
-            do modelo Holt/OLS) = <strong style={{ color: 'var(--ink-900)' }}>{dias} dias restantes</strong> até a ruptura.
+            Estoque atual ({item.qtdAtual.toLocaleString('pt-BR')} {item.unidade}) ÷ consumo médio local
+            ({consumoCenario.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}/sem)
+            = <strong style={{ color: 'var(--ink-900)' }}>{dias == null ? 'cálculo indisponível' : `${dias} dias de cobertura estimada`}</strong>.
+          </p>
+          <p style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--warn)', margin: '8px 0 0' }}>
+            Não é previsão de abastecimento. O protocolo caso→insumo ainda não foi validado e o cálculo não incorpora severidade clínica, pedidos em trânsito, lead time ou margem de segurança.
           </p>
         </div>
 
-        <div style={{ marginBottom: 22 }}>
+        <EvidenceChain
+          fontes={[`Estoque cadastrado (${ORIGEM_LABEL[item.origem] || 'origem não informada'})`]}
+          competencia={dataDeHaDias(item.atualizadoHaDias)}
+          atualizadoEm={`${dataDeHaDias(item.atualizadoHaDias)} (há ${item.atualizadoHaDias} dias)`}
+          calculo={`Estoque atual (${item.qtdAtual.toLocaleString('pt-BR')} ${item.unidade}) ÷ consumo médio semanal (${consumoCenario.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}/sem) = ${dias == null ? 'cálculo indisponível' : `${dias} dias de cobertura`}.`}
+          premissas="Não incorpora severidade clínica, pedidos em trânsito, lead time ou margem de segurança."
+          limitacoes="Cálculo determinístico, sensível a erro de cadastro de estoque e consumo; protocolo caso→insumo ainda não validado."
+          versaoModelo="Cálculo determinístico (sem modelo preditivo)"
+        />
+
+        <div style={{ marginBottom: 22, marginTop: 18 }}>
           <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: '0 0 4px' }}>
             Última atualização: <strong style={{ color: 'var(--ink-900)' }}>{dataDeHaDias(item.atualizadoHaDias)}</strong>
             {' '}({item.atualizadoHaDias} dias atrás)
           </p>
           <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: 0 }}>
             Origem do dado: <strong style={{ color: 'var(--ink-900)' }}>{ORIGEM_LABEL[item.origem]}</strong>
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: '4px 0 0' }}>
+            Competência: <strong style={{ color: 'var(--ink-900)' }}>{dataDeHaDias(item.atualizadoHaDias)}</strong>
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: '4px 0 0' }}>
+            Confiança: <strong style={{ color: desatualizado ? 'var(--warn)' : 'var(--ink-900)' }}>{confianca}</strong>
           </p>
           {desatualizado && (
             <p style={{ fontSize: 13, color: 'var(--warn)', display: 'flex', alignItems: 'center', gap: 4, margin: '8px 0 0' }}>
@@ -463,8 +529,13 @@ function DrawerDetalhe({ item, onClose, onGerarEtp }) {
           )}
         </div>
 
-        <button onClick={() => onGerarEtp(item)} style={{ ...estiloBotaoPrimario, width: '100%', justifyContent: 'center', padding: '11px 0' }}>
-          Gerar ETP
+        <button
+          onClick={() => onGerarEtp(item)}
+          disabled={diasBase == null}
+          title={diasBase == null ? 'Informe estoque e consumo médio para preparar o ETP' : 'Preparar rascunho para revisão humana'}
+          style={{ ...estiloBotaoPrimario, width: '100%', justifyContent: 'center', padding: '11px 0', opacity: diasBase == null ? 0.55 : 1 }}
+        >
+          Preparar ETP para revisão
         </button>
       </div>
     </>
@@ -543,7 +614,7 @@ function FormItemEstoque({ inicial, onSalvar, onCancelar }) {
       <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-400)', margin: '0 0 14px' }}>
         {inicial ? 'Editar item' : 'Novo item de estoque'}
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 0.8fr 1fr', gap: 12, marginBottom: 16 }}>
+      <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 0.8fr 1fr', gap: 12, marginBottom: 16 }}>
         <CampoTexto label="Nome do insumo" value={nome} onChange={setNome} />
         <CampoTexto label="Qtd. atual" value={qtdAtual} onChange={setQtdAtual} type="number" />
         <CampoTexto label="Consumo médio /sem" value={consumoSemanal} onChange={setConsumoSemanal} type="number" />
@@ -724,7 +795,7 @@ export default function Insumos({ onNavigate, onGerarEtp, demoState }) {
     if (demoAtiva && view === 'crud') setView('lista');
   }, [demoAtiva, view]);
 
-  const itensOrdenados = [...estoque].sort((a, b) => diasRestantesDe(a) - diasRestantesDe(b));
+  const itensOrdenados = [...estoque].sort((a, b) => (diasRestantesDe(a) ?? Infinity) - (diasRestantesDe(b) ?? Infinity));
   const criticos = itensOrdenados.filter(it => statusDe(diasRestantesDe(it)) === 'critico').length;
   const alertas = itensOrdenados.filter(it => statusDe(diasRestantesDe(it)) === 'alerta').length;
   const economiaEstimada = demoAtiva ? (demoState.payload?.prova_valor?.economia_estimada ?? ECONOMIA_ESTIMADA) : ECONOMIA_ESTIMADA;
@@ -732,6 +803,7 @@ export default function Insumos({ onNavigate, onGerarEtp, demoState }) {
   const mesAcaoRecomendado = demoAtiva ? (demoState.payload?.prova_valor?.mes_acao_recomendado || demoState.payload?.prova_valor?.etp_recomendado_em || null) : null;
 
   const acionarGerarEtp = item => {
+    if (diasRestantesDe(item) == null) return;
     if (typeof onGerarEtp !== 'function') return;
     onGerarEtp({
       tipo: 'insumo',

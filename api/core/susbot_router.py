@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from api.core.auth import require_user
 from api.core import db
-from api.core.susbot_agent import criar_susbot_agente
+from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_seed import seed_susbot_municipio
 
 log = logging.getLogger("sus_predict.susbot_router")
@@ -65,6 +65,11 @@ def _verificar_ownership(conversa: dict | None, usuario: str) -> dict:
     if str(conversa.get("usuario") or "").strip() != usuario:
         raise HTTPException(403, "Conversa nao pertence ao usuario autenticado")
     return conversa
+
+
+def _historico_da_conversa(usuario: str, conversa_id: str) -> list[dict[str, str]]:
+    conversa = _verificar_ownership(db.get_conversa(conversa_id), usuario)
+    return montar_historico_recente(db.listar_mensagens(conversa["id"], page_size=8))
 
 
 def _meta_paginacao(page: int, page_size: int, total: int) -> dict[str, Any]:
@@ -117,10 +122,12 @@ def perguntar(req: PerguntaSusBotRequest, user: dict = Depends(require_user)):
         conversa = db.criar_conversa(usuario=usuario, titulo=_titulo_da_pergunta(pergunta_registro))
         conversa_criada = True
 
+    historico = _historico_da_conversa(usuario, conversa["id"])
     agente = criar_susbot_agente(
         ibge6,
         tela_origem=req.tela_origem,
         usuario=usuario,
+        historico=historico,
     )
 
     def _stream() -> Any:

@@ -62,6 +62,7 @@ ehthumbs.db
 # ========================
 # Project Specific
 # ========================
+.tools/
 .pysus_cache/
 api/temp_data/
 api/sus_predict.db

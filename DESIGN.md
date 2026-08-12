@@ -33,6 +33,28 @@ Plataforma analítica de saúde pública para gestores municipais. Mood: painel 
 - Gap entre seções: `28px`
 - Grid KPI: `repeat(4, 1fr)` na Visão Geral; `repeat(4, 1fr)` nas páginas de análise
 
+### Shell mobile
+
+Em telas de até `768px`, o produto deixa de simular o shell desktop e assume uma
+estrutura própria para toque:
+
+- Cabeçalho fixo de `64px`: marca, nome da página, município ativo e acesso a alertas.
+- Navegação inferior de `72px` mais a safe area do aparelho.
+- Destinos primários ao alcance do polegar: Visão, Alertas, Insumos e SusBot.
+- O quinto destino, Mais, abre uma folha inferior com Análises, Documentos,
+  Configurações e Perfil. Nenhuma função é removida no celular.
+- SusBot ocupa a tela inteira quando aberto, como uma tarefa focada, e esconde seu
+  FAB porque o acesso já existe na navegação inferior.
+- O azul do shell continua como canvas. O conteúdo ocupa um grande card claro,
+  com calha curta e cantos generosos, em vez de tocar as bordas da tela.
+- A navegação inferior é um segundo card em `--primary`, destacado do canvas e
+  separado do conteúdo. O conjunto preserva a identidade de superfícies do desktop.
+- O layout usa uma coluna e respeita `env(safe-area-inset-bottom)`.
+- Alvos de toque têm no mínimo `44px`; interações essenciais não dependem de hover.
+
+Entre `769px` e `1024px`, permanece o comportamento híbrido de tablet: conteúdo
+amplo, menu lateral temporário e suporte simultâneo a toque e ponteiro.
+
 ---
 
 ## Color Strategy
@@ -55,30 +77,30 @@ Superfícies claras quentes + sidebar escura teal. Acentos semânticos por tipo 
 --ink-900: #1A1814   /* texto principal */
 --ink-700: #3D3A33   /* texto secundário importante */
 --ink-500: #6B665D   /* labels, auxiliar */
---ink-400: #8A8579   /* placeholders, meta */
---ink-300: #A8A39A   /* bordas sutis */
+--ink-400: #6F6B63   /* placeholders e metadados, WCAG AA em superfícies claras */
+--ink-300: #6F6B63   /* metadados discretos que ainda precisam de contraste textual */
 --ink-200: #C9C4BA   /* divisores */
 --ink-100: #E5E1D6   /* bordas de card */
 --ink-50:  #EFEBE0   /* bg muito sutil */
 ```
 
-**Sidebar (dark teal)**
+**Sidebar (azul)**
 ```css
---sidebar-bg:          #1E3C3C   /* fundo da sidebar */
---sidebar-text:        #C8D8D5   /* texto nav inativo */
+--sidebar-bg:          #6FADD2   /* fundo da sidebar */
+--sidebar-text:        #1B3F5C   /* texto nav inativo */
 --sidebar-text-active: #FFFFFF   /* texto nav ativo */
---sidebar-active-bg:   #2A5050   /* bg item ativo */
---sidebar-active-bar:  #4DB8A0   /* barra 3px esquerda item ativo */
---sidebar-section:     #6A9090   /* eyebrow de seção */
---sidebar-icon:        #7EB8B0   /* ícones inativos */
+--sidebar-active-bg:   #336FA1   /* bg item ativo */
+--sidebar-active-bar:  #336FA1   /* barra 3px esquerda item ativo */
+--sidebar-section:     #336FA1   /* eyebrow de seção */
+--sidebar-icon:        #4E8BB8   /* ícones inativos */
 ```
 
 **Primary (ações, links, focus)**
 ```css
---primary:     #1B5E6E   /* CTAs, nav active */
---primary-700: #134756   /* hover */
---primary-100: #D6E9EE   /* badge bg */
---primary-50:  #EBF4F7   /* tint */
+--primary:     #336FA1   /* CTAs, nav active */
+--primary-700: #2A5980   /* hover (derivado, +escuro) */
+--primary-100: #9ECAE3   /* badge bg */
+--primary-50:  #EAF3FA   /* tint (derivado, +claro) */
 ```
 
 **Semantic — métricas e alertas**
@@ -86,7 +108,7 @@ Superfícies claras quentes + sidebar escura teal. Acentos semânticos por tipo 
 --good:  #2A6B40   /* positivo, crescimento saudável */
 --bad:   #8A2A38   /* crítico, surto, risco alto */
 --warn:  #A6580F   /* alerta, atenção */
---info:  #1B5E6E   /* informativo neutro */
+--info:  #336FA1   /* informativo neutro */
 ```
 
 **Risk levels (gauge + badges)**

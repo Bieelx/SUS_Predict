@@ -62,7 +62,9 @@ def test_stream_do_susbot_emite_tool_token_referencia_e_fim(db):
 
     tokens = "".join(evento["data"]["texto"] for evento in eventos if evento["event"] == "token")
     assert "Soro fisiológico 1L" in tokens
-    assert "dias restantes" in tokens
+    assert "cobertura estimada" in tokens
+    assert "competência" in tokens
+    assert "não comprova a relação caso→insumo" in tokens
 
     fim = next(evento for evento in eventos if evento["event"] == "fim")
     assert fim["data"]["resposta"] == tokens
@@ -92,6 +94,70 @@ def test_stream_do_susbot_usa_llm_quando_nao_ha_ferramenta(db):
     tokens = [evento["data"]["texto"] for evento in eventos if evento["event"] == "token"]
     assert tokens == ["Seu estoque ", "dura 12 dias."]
     assert llm.stream_chamadas
+    contexto = llm.planejar_chamadas[0][1]
+    assert contexto["usuario_autenticado"] is False
+    assert "usuario" not in contexto
+
+
+def test_susbot_usa_historico_sem_expor_identificador_interno(db):
+    from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
+
+    llm = LLMMock()
+    historico = montar_historico_recente([{
+        "pergunta": "Olá, quem sou eu?",
+        "resposta": "Você é o usuário dev-f0f3795a005d7c67.",
+    }])
+    agente = criar_susbot_agente(
+        "351300",
+        usuario="dev-f0f3795a005d7c67",
+        historico=historico,
+        llm=llm,
+    )
+
+    eventos = list(agente.stream_eventos("Qual foi nossa última conversa?"))
+    resposta = next(evento["data"]["resposta"] for evento in eventos if evento["event"] == "fim")
+
+    assert "Olá, quem sou eu?" in resposta
+    assert "dev-f0f3795a005d7c67" not in resposta
+    assert "identificador interno ocultado" in resposta
+    assert not llm.planejar_chamadas
+
+
+def test_consulta_de_insumos_em_falta_forca_ferramenta(db):
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.susbot_seed import seed_susbot_municipio
+
+    class LLMIgnoraFerramenta(LLMMock):
+        def planejar(self, pergunta, contexto, ferramentas):
+            self.planejar_chamadas.append((pergunta, contexto, ferramentas))
+            return {"acao": "resposta", "resposta": "não encontrei", "referencia_rota": None}
+
+    seed_susbot_municipio("351300")
+    llm = LLMIgnoraFerramenta()
+    agente = criar_susbot_agente("351300", llm=llm)
+
+    eventos = list(agente.stream_eventos("Quais insumos estão em falta?"))
+    fim = next(evento for evento in eventos if evento["event"] == "fim")
+
+    assert fim["data"]["plano"]["ferramenta"] == "consultar_estoque"
+    assert fim["data"]["resultado_ferramenta"]["somente_risco"] is True
+    assert "Dipirona 500mg" in fim["data"]["resposta"]
+
+
+def test_internacoes_por_dengue_sao_roteadas_para_sih(db):
+    from api.core.susbot_agent import criar_susbot_agente
+
+    class LLMIgnoraFerramenta(LLMMock):
+        def planejar(self, pergunta, contexto, ferramentas):
+            return {"acao": "resposta", "resposta": "sem dados"}
+
+    agente = criar_susbot_agente("351300", llm=LLMIgnoraFerramenta())
+    eventos = list(agente.stream_eventos("Qual é a situação das internações por dengue?"))
+    fim = next(evento for evento in eventos if evento["event"] == "fim")
+
+    assert fim["data"]["plano"]["ferramenta"] == "consultar_epidemiologia"
+    assert fim["data"]["plano"]["argumentos"]["sistema"] == "SIH"
+    assert "base SIH" in fim["data"]["resposta"]
 
 
 def test_fallback_llm_cai_pro_fallback_quando_primario_falha():

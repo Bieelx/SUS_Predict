@@ -465,7 +465,7 @@ export default function Internacoes({ onNavigate }) {
 
       <GraficoCentral />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gap: 20, marginBottom: 22 }}>
+      <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gap: 20, marginBottom: 22 }}>
         <CardGruposCausa />
         <CardPermanenciaPorGrupo />
         <CardOrigemAih />

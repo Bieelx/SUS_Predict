@@ -72,6 +72,7 @@ from api.core.export import csv_gz_bytes, slug_filename, xlsx_bytes
 from api.core.ibge import buscar_municipios, get_estados
 from api.core.prediction import PROPHET_OK, gerar_predicao
 from api.core.susbot_router import router as susbot_router
+from api.core.channel_router import router as channel_router
 
 if PYSUS_OK:
     from api.core.download import baixar_ano, baixar_sinan, limpar_cache_pysus
@@ -89,6 +90,7 @@ app.add_middleware(
 app.include_router(dengue_router)
 app.include_router(demo_router)
 app.include_router(susbot_router)
+app.include_router(channel_router)
 
 jobs: dict = {}
 TEMP_DIR = Path("./temp_data")
