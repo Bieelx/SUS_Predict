@@ -63,6 +63,7 @@ ehthumbs.db
 # Project Specific
 # ========================
 .tools/
+.secrets/
 .pysus_cache/
 api/temp_data/
 api/sus_predict.db
@@ -105,3 +106,5 @@ PRODUCT.md
 .docs/*
 .docs/
 docs/
+.md
+frontend/tests/

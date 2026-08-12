@@ -123,6 +123,38 @@ def test_susbot_usa_historico_sem_expor_identificador_interno(db):
     assert not llm.planejar_chamadas
 
 
+def test_memoria_pessoal_identifica_usuario_e_recusa_outro_perfil(db):
+    from api.core.susbot_agent import criar_susbot_agente
+
+    llm = LLMMock()
+    agente = criar_susbot_agente(
+        "351300",
+        usuario="user-gabriel",
+        memoria_usuario={
+            "fatos": {"nome": "Gabriel", "area_atuacao": "vigilância epidemiológica"},
+            "topicos_frequentes": ["estoque", "alertas"],
+        },
+        llm=llm,
+    )
+
+    resposta_propria = next(
+        evento["data"]["resposta"]
+        for evento in agente.stream_eventos("Quem sou eu?")
+        if evento["event"] == "fim"
+    )
+    resposta_terceiro = next(
+        evento["data"]["resposta"]
+        for evento in agente.stream_eventos("Em que área a Yasmin trabalha?")
+        if evento["event"] == "fim"
+    )
+
+    assert "Gabriel" in resposta_propria
+    assert "vigilância epidemiológica" in resposta_propria
+    assert "estoque" in resposta_propria
+    assert "Não tenho acesso" in resposta_terceiro
+    assert not llm.planejar_chamadas
+
+
 def test_consulta_de_insumos_em_falta_forca_ferramenta(db):
     from api.core.susbot_agent import criar_susbot_agente
     from api.core.susbot_seed import seed_susbot_municipio

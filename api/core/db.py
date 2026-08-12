@@ -168,6 +168,16 @@ CREATE TABLE IF NOT EXISTS canal_eventos (
     PRIMARY KEY (provedor, external_id)
 );
 
+CREATE TABLE IF NOT EXISTS susbot_memorias (
+    id                 TEXT PRIMARY KEY,
+    owner_ref          TEXT NOT NULL,
+    fact_ref           TEXT NOT NULL,
+    payload_encrypted  TEXT NOT NULL,
+    criado_em          TEXT NOT NULL,
+    atualizado_em      TEXT NOT NULL,
+    UNIQUE (owner_ref, fact_ref)
+);
+
 CREATE INDEX IF NOT EXISTS idx_runs_lookup  ON datasus_runs (sistema, uf, cidade, ano_ini, ano_fim);
 CREATE INDEX IF NOT EXISTS idx_runs_created ON datasus_runs (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alertas_ibge_status ON alertas (ibge6, status);
@@ -177,6 +187,7 @@ CREATE INDEX IF NOT EXISTS idx_mensagens_conversa ON susbot_mensagens (conversa_
 CREATE INDEX IF NOT EXISTS idx_pareamentos_usuario ON canal_pareamentos (usuario, provedor, criado_em DESC);
 CREATE INDEX IF NOT EXISTS idx_pareamentos_token ON canal_pareamentos (token_hash);
 CREATE INDEX IF NOT EXISTS idx_conexoes_usuario ON canal_conexoes (usuario, status);
+CREATE INDEX IF NOT EXISTS idx_memorias_owner ON susbot_memorias (owner_ref, atualizado_em DESC);
 """
 
 
@@ -874,6 +885,50 @@ def registrar_evento_canal(provedor: str, external_id: str) -> bool:
             VALUES (?, ?, ?)
         """, (provedor, external_id, datetime.now(timezone.utc).isoformat()))
     return cursor.rowcount == 1
+
+
+# ── Memória pessoal criptografada do SusBot ──────────────────────────────────────
+
+def upsert_memoria_usuario(owner_ref: str, fact_ref: str, payload_encrypted: str) -> dict:
+    agora = datetime.now(timezone.utc).isoformat()
+    memoria_id = str(uuid.uuid4())
+    with _conn() as con:
+        con.execute("""
+            INSERT INTO susbot_memorias
+                (id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(owner_ref, fact_ref) DO UPDATE SET
+                payload_encrypted = excluded.payload_encrypted,
+                atualizado_em = excluded.atualizado_em
+        """, (memoria_id, owner_ref, fact_ref, payload_encrypted, agora, agora))
+        row = con.execute("""
+            SELECT id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em
+            FROM susbot_memorias WHERE owner_ref = ? AND fact_ref = ?
+        """, (owner_ref, fact_ref)).fetchone()
+    return dict(row)
+
+
+def listar_memorias_usuario(owner_ref: str) -> list[dict]:
+    with _conn() as con:
+        rows = con.execute("""
+            SELECT id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em
+            FROM susbot_memorias
+            WHERE owner_ref = ?
+            ORDER BY atualizado_em DESC, id DESC
+        """, (owner_ref,)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def deletar_memoria_usuario(owner_ref: str, fact_ref: str | None = None) -> int:
+    with _conn() as con:
+        if fact_ref:
+            cursor = con.execute(
+                "DELETE FROM susbot_memorias WHERE owner_ref = ? AND fact_ref = ?",
+                (owner_ref, fact_ref),
+            )
+        else:
+            cursor = con.execute("DELETE FROM susbot_memorias WHERE owner_ref = ?", (owner_ref,))
+    return int(cursor.rowcount)
 
 
 # ── Supabase read-only query (curated tables, e.g. sih_dengue_*, sinan_dengue_*) ──

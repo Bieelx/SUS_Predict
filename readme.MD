@@ -36,6 +36,7 @@ Necessário para rodar o frontend (Vite).
 - `GEMINI_API_KEY`: necessária para o SusBot responder com LLM real.
 - `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`: opcionais, só se quiser sincronizar cache/persistência com Supabase.
 - `SUSBOT_DEV_AUTH_SECRET`: opcional, usado para assinar o login de desenvolvimento quando Supabase não estiver configurado.
+- `SUSBOT_MEMORY_KEY`: chave Fernet opcional para criptografar a memória pessoal do SusBot. Em desenvolvimento, uma chave local com permissão `0600` é criada em `api/.secrets/`; em produção, configure-a pelo gerenciador de segredos da infraestrutura.
 - Telegram: `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` e `CHANNEL_PAIRING_SECRET`. Veja [INTEGRACAO_CANAIS_SUSBOT.md](./INTEGRACAO_CANAIS_SUSBOT.md).
 
 ## Instalação (local)
@@ -242,6 +243,7 @@ O frontend mostra o botão `Exportar XLSX` quando a análise está carregada.
 ## Dicas de desenvolvimento
 
 - Use `bash start_dev.sh` para evitar “esquecer” de ativar venv ou carregar `.env`.
+- A memória pessoal pode ser consultada com `/memoria` e apagada com `/esquecer`. A API autenticada também oferece `GET/DELETE /api/susbot/memoria`; ela nunca recebe um identificador de outro usuário como parâmetro.
 - Com as quatro variáveis do Telegram preenchidas, `start_dev.sh` instala ou reutiliza `cloudflared`, cria um Quick Tunnel HTTPS para a API e registra o webhook automaticamente. Use `ENABLE_TELEGRAM_TUNNEL=false` para desativar.
 - Se o frontend abrir em outra porta, pare os processos antigos e rode `bash start_dev.sh` de novo.
 - Para forçar re-download (ignorando cache), envie `usar_cache=false` no `POST /api/download`.

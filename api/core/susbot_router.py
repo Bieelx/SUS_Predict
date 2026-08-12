@@ -18,6 +18,13 @@ from pydantic import BaseModel
 from api.core.auth import require_user
 from api.core import db
 from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
+from api.core.susbot_memory import (
+    apagar_memorias,
+    aprender_da_mensagem,
+    contexto_para_agente,
+    executar_comando_memoria,
+    resumo_transparente,
+)
 from api.core.susbot_seed import seed_susbot_municipio
 
 log = logging.getLogger("sus_predict.susbot_router")
@@ -122,12 +129,17 @@ def perguntar(req: PerguntaSusBotRequest, user: dict = Depends(require_user)):
         conversa = db.criar_conversa(usuario=usuario, titulo=_titulo_da_pergunta(pergunta_registro))
         conversa_criada = True
 
+    comando_memoria = executar_comando_memoria(usuario, pergunta) if pergunta else None
+    if pergunta and comando_memoria is None:
+        aprender_da_mensagem(usuario, pergunta, origem=req.tela_origem or "web")
+
     historico = _historico_da_conversa(usuario, conversa["id"])
-    agente = criar_susbot_agente(
+    agente = None if comando_memoria else criar_susbot_agente(
         ibge6,
         tela_origem=req.tela_origem,
         usuario=usuario,
         historico=historico,
+        memoria_usuario=contexto_para_agente(usuario),
     )
 
     def _stream() -> Any:
@@ -144,11 +156,18 @@ def perguntar(req: PerguntaSusBotRequest, user: dict = Depends(require_user)):
                 },
             )
 
-            eventos = (
-                agente.stream_eventos_confirmado(req.confirmar.ferramenta, req.confirmar.argumentos)
-                if req.confirmar
-                else agente.stream_eventos(pergunta)
-            )
+            if comando_memoria is not None:
+                eventos = [
+                    {"event": "token", "data": {"texto": comando_memoria}},
+                    {
+                        "event": "fim",
+                        "data": {"resposta": comando_memoria, "referencia_rota": None},
+                    },
+                ]
+            elif req.confirmar:
+                eventos = agente.stream_eventos_confirmado(req.confirmar.ferramenta, req.confirmar.argumentos)
+            else:
+                eventos = agente.stream_eventos(pergunta)
             for evento in eventos:
                 yield _sse(evento["event"], evento["data"])
                 if evento["event"] == "fim":
@@ -179,6 +198,30 @@ def perguntar(req: PerguntaSusBotRequest, user: dict = Depends(require_user)):
         "X-Accel-Buffering": "no",
     }
     return StreamingResponse(_stream(), media_type="text/event-stream", headers=headers)
+
+
+@router.get("/memoria")
+def consultar_memoria(user: dict = Depends(require_user)):
+    usuario = _usuario_referencia(user)
+    if not usuario:
+        raise HTTPException(401, "Usuario autenticado invalido")
+    return resumo_transparente(usuario)
+
+
+@router.delete("/memoria")
+def excluir_memoria(user: dict = Depends(require_user)):
+    usuario = _usuario_referencia(user)
+    if not usuario:
+        raise HTTPException(401, "Usuario autenticado invalido")
+    return {"removidos": apagar_memorias(usuario)}
+
+
+@router.delete("/memoria/{chave}")
+def excluir_fato_da_memoria(chave: str, user: dict = Depends(require_user)):
+    usuario = _usuario_referencia(user)
+    if not usuario:
+        raise HTTPException(401, "Usuario autenticado invalido")
+    return {"removidos": apagar_memorias(usuario, chave)}
 
 
 @router.get("/conversas")

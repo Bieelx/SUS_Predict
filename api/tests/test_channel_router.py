@@ -1,8 +1,10 @@
 import importlib
+import json
 import os
 import tempfile
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi import BackgroundTasks, HTTPException
 
 
@@ -24,6 +26,7 @@ def canais(monkeypatch):
     monkeypatch.setenv("CHANNEL_PAIRING_SECRET", "segredo-de-teste")
     monkeypatch.setenv("TELEGRAM_BOT_USERNAME", "SusPredictTesteBot")
     monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "webhook-secreto")
+    monkeypatch.setenv("SUSBOT_MEMORY_KEY", Fernet.generate_key().decode("ascii"))
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
 
     from api.core import db as db_module
@@ -152,6 +155,19 @@ def test_telegram_entrega_historico_recente_ao_agente(canais, monkeypatch):
     assert historicos[1][0]["pergunta"] == "Primeira pergunta"
 
 
+def test_telegram_aprende_e_exibe_memoria_do_usuario(canais):
+    router_module, _db, mensagens = canais
+    _parear(canais)
+
+    router_module.processar_update_telegram(
+        _update(50, "Meu nome é Gabriel e trabalho com vigilância epidemiológica."),
+    )
+    router_module.processar_update_telegram(_update(51, "/memoria"))
+
+    assert "Gabriel" in mensagens[-1][1]
+    assert "vigilância epidemiológica" in mensagens[-1][1]
+
+
 def test_webhook_exige_segredo_configurado(canais):
     router_module, _db, _mensagens = canais
     with pytest.raises(HTTPException) as exc:
@@ -194,3 +210,84 @@ def test_grupos_nao_podem_parear(canais):
     router_module.processar_update_telegram(_update(20, f"/start {criado['codigo']}", chat_type="group"))
     assert "conversa privada" in mensagens[-1][1]
     assert router_module.consultar_pareamento(criado["id"], user=_user())["status"] == "emitido"
+
+
+def test_formatacao_de_estoque_para_telegram_remove_repeticao(canais):
+    router_module, _db, _mensagens = canais
+    resultado = {
+        "encontrado": True,
+        "somente_risco": False,
+        "dados": [
+            {
+                "item": "Dipirona 500mg",
+                "dias_restantes": 14.0,
+                "status": "alerta",
+                "qualidade": {
+                    "competencia": "2026-07-14T09:00:00Z",
+                    "confianca": "reduzida",
+                    "defasagem_dias": 28,
+                },
+            },
+            {
+                "item": "Soro fisiológico 1L",
+                "dias_restantes": 22.0,
+                "status": "ok",
+                "qualidade": {
+                    "competencia": "2026-07-14T10:00:00Z",
+                    "confianca": "reduzida",
+                    "defasagem_dias": 28,
+                },
+            },
+        ],
+    }
+
+    texto = router_module._formatar_resposta_telegram(  # pylint: disable=protected-access
+        "resposta longa do agente",
+        {"plano": {"ferramenta": "consultar_estoque"}, "resultado_ferramenta": resultado},
+    )
+
+    assert "📦 **Cobertura do estoque**" in texto
+    assert "🟠 **Dipirona 500mg**" in texto
+    assert "14 dias de cobertura · atenção" in texto
+    assert "🟢 **Soro fisiológico 1L**" in texto
+    assert texto.count("Fonte: estoque local") == 1
+    assert texto.count("Atualização: 14/07/2026") == 1
+    assert "2026-07-14T" not in texto
+
+
+def test_envio_telegram_usa_html_seguro_e_parse_mode(monkeypatch):
+    import api.core.channel_router as router_module
+
+    requisicoes = []
+
+    class RespostaFake:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    def urlopen_fake(request, timeout):
+        requisicoes.append((request, timeout))
+        return RespostaFake()
+
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token-de-teste")
+    monkeypatch.setattr(router_module.urllib.request, "urlopen", urlopen_fake)
+
+    assert router_module._telegram_send("123", "**Estoque <local>**\n`seguro`") is True
+    payload = json.loads(requisicoes[0][0].data.decode("utf-8"))
+
+    assert payload["parse_mode"] == "HTML"
+    assert payload["text"] == "<b>Estoque &lt;local&gt;</b>\n<code>seguro</code>"
+    assert payload["link_preview_options"]["is_disabled"] is True
+
+
+def test_divisao_de_mensagem_longa_preserva_blocos(canais):
+    router_module, _db, _mensagens = canais
+    texto = "\n\n".join([f"**Item {indice}**\nDetalhes do item" for indice in range(250)])
+
+    partes = router_module._dividir_texto_telegram(texto)  # pylint: disable=protected-access
+
+    assert len(partes) > 1
+    assert all(len(parte) <= 3500 for parte in partes)
+    assert "".join(partes).replace("\n", "") == texto.replace("\n", "")

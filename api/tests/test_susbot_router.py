@@ -5,6 +5,7 @@ import tempfile
 
 from fastapi import HTTPException
 import pytest
+from cryptography.fernet import Fernet
 
 
 class FakeAgent:
@@ -31,6 +32,7 @@ def router(monkeypatch):
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     monkeypatch.setenv("SQLITE_PATH", path)
+    monkeypatch.setenv("SUSBOT_MEMORY_KEY", Fernet.generate_key().decode("ascii"))
 
     from api.core import db as db_module
     importlib.reload(db_module)
@@ -166,3 +168,25 @@ def test_ownership_bloqueia_conversa_de_outro_usuario(router):
         router_module.listar_mensagens(conversa["id"], user=user)
 
     assert exc.value.status_code == 403
+
+
+def test_endpoints_de_memoria_usam_apenas_usuario_autenticado(router):
+    router_module, _db = router
+    from api.core.susbot_memory import aprender_da_mensagem
+
+    gabriel = {"id": "user-gabriel"}
+    yasmin = {"id": "user-yasmin"}
+    aprender_da_mensagem("user-gabriel", "Meu nome é Gabriel.", "web")
+    aprender_da_mensagem("user-yasmin", "Meu nome é Yasmin.", "web")
+
+    memoria_gabriel = router_module.consultar_memoria(user=gabriel)
+    memoria_yasmin = router_module.consultar_memoria(user=yasmin)
+
+    assert "Gabriel" in str(memoria_gabriel)
+    assert "Yasmin" not in str(memoria_gabriel)
+    assert "Yasmin" in str(memoria_yasmin)
+    assert "Gabriel" not in str(memoria_yasmin)
+
+    router_module.excluir_memoria(user=gabriel)
+    assert router_module.consultar_memoria(user=gabriel)["fatos"] == []
+    assert "Yasmin" in str(router_module.consultar_memoria(user=yasmin))

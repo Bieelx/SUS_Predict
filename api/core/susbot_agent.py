@@ -374,6 +374,9 @@ def _prompt_planejamento(pergunta: str, contexto: dict[str, Any], ferramentas: l
         "resposta. Use acao 'resposta' so quando a pergunta for generica e nao depender "
         "de dado de um municipio (ex: 'o que e dengue', 'como funciona o sistema').\n"
         "Use historico_recente para entender continuacoes e referencias a mensagens anteriores. "
+        "memoria_pessoal pertence exclusivamente ao usuario autenticado desta conversa. Use-a para "
+        "personalizar a resposta, mas nunca afirme conhecer, procurar ou comparar dados pessoais de "
+        "outro usuario. Se pedirem informacoes de outra pessoa, negue o acesso. "
         "Nunca revele, repita ou tente inferir identificadores internos do usuario. Se o nome "
         "da pessoa nao estiver explicitamente disponivel, diga apenas que ela esta autenticada.\n"
         "gerar_etp altera dado (cria um ETP de verdade) — so proponha essa ferramenta "
@@ -405,7 +408,8 @@ def _prompt_resposta(
         "genericas como 'nao possuo acesso a dados atualizados' ou 'consulte outro painel' "
         "— voce ja consultou, so nao achou resultado para esse filtro. "
         "Se houver referencia de rota, mencione no final em uma linha curta."
-        " Use historico_recente para manter continuidade, sem expor identificadores internos."
+        " Use historico_recente e memoria_pessoal para manter continuidade, sem expor "
+        "identificadores internos nem dados de outros usuarios."
     )
     humano = json.dumps(
         {
@@ -590,6 +594,7 @@ class SusBotAgent:
     tela_origem: str | None = None
     usuario: str | None = None
     historico: list[dict[str, str]] = field(default_factory=list)
+    memoria_usuario: dict[str, Any] = field(default_factory=dict)
     llm: Any | None = None
     tools: dict[str, Callable] = field(default_factory=dict)
 
@@ -616,16 +621,55 @@ class SusBotAgent:
             "tela_origem": self.tela_origem,
             "usuario_autenticado": bool(self.usuario),
             "historico_recente": self.historico[-8:],
+            "memoria_pessoal": self.memoria_usuario,
         }
 
     def _resposta_contextual(self, pergunta: str) -> str | None:
         texto = _normalizar_intencao(pergunta)
-        if "quem sou eu" in texto or "qual e meu usuario" in texto or "qual meu usuario" in texto:
-            return (
-                "Você está autenticado no SusPredict e conectado ao SusBot por este canal. "
-                "Por segurança, não exponho identificadores internos. O nome do seu perfil "
-                "não está disponível no contexto desta conversa."
-            )
+        fatos = self.memoria_usuario.get("fatos") or {}
+        topicos = self.memoria_usuario.get("topicos_frequentes") or []
+        nome_atual = _normalizar_intencao(str(fatos.get("nome") or ""))
+
+        consulta_pessoa = re.search(r"\bo que (?:voce )?sabe sobre (.+?)[?!.]*$", texto)
+        if consulta_pessoa:
+            pessoa = consulta_pessoa.group(1).strip()
+            if pessoa not in {"mim", "meu perfil", nome_atual}:
+                return "Não tenho acesso à memória ou ao perfil de outros usuários."
+
+        for padrao_terceiro in (
+            r"\bem que (?:area )?(?:a |o )?([a-z]+) trabalha\b",
+            r"\b(?:qual|que) (?:e )?a area (?:da|do) ([a-z]+)\b",
+            r"\bquem e (?:a |o )?([a-z]+)\b",
+            r"\b(?:fale|conte) sobre (?:a |o )?([a-z]+)\b",
+        ):
+            match_terceiro = re.search(padrao_terceiro, texto)
+            if match_terceiro and match_terceiro.group(1) not in {"mim", nome_atual}:
+                return "Não tenho acesso à memória ou ao perfil de outros usuários."
+
+        if (
+            "quem sou eu" in texto
+            or "qual e meu usuario" in texto
+            or "qual meu usuario" in texto
+            or "o que voce sabe sobre mim" in texto
+            or "minha memoria" in texto
+            or (consulta_pessoa and consulta_pessoa.group(1).strip() in {"mim", _normalizar_intencao(str(fatos.get("nome") or ""))})
+        ):
+            partes = []
+            if fatos.get("nome"):
+                partes.append(f"Seu nome é **{fatos['nome']}**")
+            else:
+                partes.append("Você está autenticado no SusPredict")
+            if fatos.get("cargo"):
+                partes.append(f"sua função é **{fatos['cargo']}**")
+            if fatos.get("area_atuacao"):
+                partes.append(f"você atua em **{fatos['area_atuacao']}**")
+            if fatos.get("preferencia_resposta"):
+                partes.append(f"você prefere respostas **{fatos['preferencia_resposta']}**")
+            resposta = "; ".join(partes) + "."
+            if topicos:
+                resposta += " Seus assuntos mais frequentes são: " + ", ".join(topicos) + "."
+            resposta += " Você pode pedir para eu esquecer uma informação a qualquer momento."
+            return resposta
 
         if "ultima conversa" in texto or "conversamos antes" in texto or "ultima mensagem" in texto:
             if not self.historico:
@@ -837,6 +881,7 @@ def criar_susbot_agente(
     tela_origem: str | None = None,
     usuario: str | None = None,
     historico: list[dict[str, str]] | None = None,
+    memoria_usuario: dict[str, Any] | None = None,
     llm: Any | None = None,
     tools: dict[str, Callable] | None = None,
 ) -> SusBotAgent:
@@ -847,6 +892,7 @@ def criar_susbot_agente(
         tela_origem=tela_origem,
         usuario=usuario,
         historico=historico or [],
+        memoria_usuario=memoria_usuario or {},
         llm=llm,
         tools=tools or {},
     )
