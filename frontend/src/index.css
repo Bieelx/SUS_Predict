@@ -192,6 +192,29 @@
 }
 .topbar-select:hover { border-color: var(--ink-200); }
 
+.auth-primary-button:hover { background: #164f5d !important; }
+.auth-primary-button:focus-visible,
+.login-form-panel input:focus-visible,
+.profile-main-grid input:focus-visible,
+.profile-main-grid button:focus-visible {
+  outline: 2px solid #1b5e6e;
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .login-layout { display: block !important; }
+  .login-brand-panel { display: none !important; }
+  .login-form-panel {
+    min-height: 100dvh;
+    padding: 24px !important;
+  }
+  .profile-main-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 560px) {
+  .profile-form-grid { grid-template-columns: 1fr !important; }
+}
+
 /* ─── Acesso institucional ──────────────────────────────────────────────── */
 .login-page {
   --login-canvas: oklch(0.965 0.008 84);
