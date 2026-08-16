@@ -2,7 +2,7 @@
 Storage layer: SQLite (always) + Supabase (optional sync).
 
 SQLite activates automatically — zero config needed.
-Supabase syncs when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set.
+Supabase syncs when SUPABASE_URL + uma chave secreta de backend are set.
 """
 import json
 import logging
@@ -933,16 +933,23 @@ def deletar_memoria_usuario(owner_ref: str, fact_ref: str | None = None) -> int:
 
 # ── Supabase read-only query (curated tables, e.g. sih_dengue_*, sinan_dengue_*) ──
 
+def _supabase_secret_key() -> str:
+    return (
+        os.getenv("SUPABASE_SECRET_KEY", "").strip()
+        or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    )
+
+
 def supabase_configured() -> bool:
-    return bool(os.getenv("SUPABASE_URL", "").strip() and os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip())
+    return bool(os.getenv("SUPABASE_URL", "").strip() and _supabase_secret_key())
 
 
 def sb_select(table: str, eq: dict | None = None, order: str | None = None, limit: int | None = None) -> list[dict]:
     """Read-only SELECT against a Supabase table via PostgREST. Never writes."""
     sb_url = os.getenv("SUPABASE_URL", "").strip()
-    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    sb_key = _supabase_secret_key()
     if not sb_url or not sb_key:
-        raise RuntimeError("Supabase não configurado (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes)")
+        raise RuntimeError("Supabase não configurado (SUPABASE_URL / chave secreta ausentes)")
 
     filters = [f"{k}=eq.{urllib.parse.quote(str(v))}" for k, v in (eq or {}).items() if v is not None]
     qs = "&".join(["select=*"] + filters)
@@ -959,7 +966,11 @@ def sb_select(table: str, eq: dict | None = None, order: str | None = None, limi
 # ── Supabase helpers (internal) ───────────────────────────────────────────────
 
 def _sb_headers(key: str) -> dict:
-    return {"apikey": key, "Authorization": f"Bearer {key}"}
+    headers = {"apikey": key}
+    # Chaves sb_secret_* não são JWT e não devem ir em Authorization.
+    if not key.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {key}"
+    return headers
 
 
 def _sb_request(method: str, url: str, key: str,
@@ -995,7 +1006,7 @@ def _sb_upsert(base_url: str, key: str, table: str, rows: list[dict]) -> None:
 
 def _try_supabase_sync(job_id, resultado, run_row, serie_rows, sexo_rows, faixa_rows, causa_rows) -> None:
     sb_url = os.getenv("SUPABASE_URL", "").strip()
-    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    sb_key = _supabase_secret_key()
     if not sb_url or not sb_key:
         return
     try:
@@ -1011,7 +1022,7 @@ def _try_supabase_sync(job_id, resultado, run_row, serie_rows, sexo_rows, faixa_
 
 def _supabase_find_cached(req: dict) -> dict | None:
     sb_url = os.getenv("SUPABASE_URL", "").strip()
-    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    sb_key = _supabase_secret_key()
     if not sb_url or not sb_key:
         return None
     sb_cache = os.getenv("SUPABASE_ENABLE_CACHE_READ", "true").strip().lower()

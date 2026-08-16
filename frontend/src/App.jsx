@@ -15,6 +15,13 @@ const GeradorEtp = lazy(() => import('./pages/GeradorEtp.jsx'));
 const SusBotPanel = lazy(() => import('./pages/SusBotPanel.jsx').then(modulo => ({ default: modulo.SusBotPanel })));
 import { DOCUMENTOS_INICIAIS } from './shared/etp.js';
 import { obterIbgeDemo, obterMunicipioDemo } from './shared/demo.js';
+import {
+  AUTH_UNAUTHORIZED_EVENT,
+  apiFetch,
+  getCurrentUser,
+  logout as logoutSession,
+  readAuthLink,
+} from './shared/authClient.js';
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 //
@@ -208,13 +215,20 @@ function SidebarFooterAction({ item, active, onClick }) {
   );
 }
 
-function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled }) {
+function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
   // Abre já expandido quando a página ativa é de Análises — chegar em
   // Epidemiologia por um link de card e não ver o item destacado no menu é
   // desorientador. Reabre também quando a navegação vem de fora da sidebar.
   const emAnalises = NAV_ANALISES.some(i => i.id === current);
   const [analisesOpen, setAnalisesOpen] = useState(emAnalises);
   useEffect(() => { if (emAnalises) setAnalisesOpen(true); }, [emAnalises]);
+  const userName = user?.full_name || user?.email?.split('@')[0] || 'Administrador';
+  const userInitials = userName
+    .split(/[.\s]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(item => item[0]?.toUpperCase())
+    .join('') || 'AD';
 
   // Recolhida, a sidebar continua montada e só translada para fora (o menu não
   // remonta, o estado de ANÁLISES sobrevive). `inert` tira os botões da ordem de
@@ -315,11 +329,11 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled }) {
             }}
           >
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--sb-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'white', flexShrink: 0 }}>
-              MO
+              {userInitials}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--sb-strong)', lineHeight: 1.2, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Márcia Oliveira</p>
-              <p style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION, margin: 0 }}>SMS · ADMIN</p>
+              <p style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--sb-strong)', lineHeight: 1.2, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</p>
+              <p style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION, margin: 0 }}>{user?.job_title || 'ADMIN'}</p>
             </div>
           </button>
         </div>
@@ -652,7 +666,18 @@ async function lerJson(response, fallback) {
 }
 
 export default function App() {
-  const [authed, setAuthed] = useState(() => !!localStorage.getItem('sus_predict_token'));
+  // Capture o fragmento de autenticação uma única vez. Convites e links de
+  // recuperação carregam credenciais de uso único no hash da URL; reler a URL
+  // em outro componente depois que ela foi higienizada pode perder a sessão.
+  const [initialAuthLink, setInitialAuthLink] = useState(() => (
+    typeof window !== 'undefined' ? readAuthLink() : null
+  ));
+  const [authLinkPending, setAuthLinkPending] = useState(Boolean(initialAuthLink));
+  const [auth, setAuth] = useState({
+    status: authLinkPending ? 'unauthenticated' : 'loading',
+    user: null,
+    error: '',
+  });
   const [rota, setRota] = useState(lerRotaAtual);
   const page = rota.page;
   const [themeId, setThemeId] = useState('teal');
@@ -703,6 +728,10 @@ export default function App() {
     loading: false,
     error: null,
   });
+  const finishAuthLink = useCallback(() => {
+    setInitialAuthLink(null);
+    setAuthLinkPending(false);
+  }, []);
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
   const municipioDemo = demoEnabled ? obterMunicipioDemo(demo, MUNICIPIOS[0]) : null;
   const ibgeDemo = demoEnabled ? obterIbgeDemo(demo, MUNICIPIOS[0].ibge6) : null;
@@ -716,6 +745,39 @@ export default function App() {
   const documentosVisiveis = demoEnabled
     ? documentos.filter(doc => doc.demoHistorica && doc.scenarioId === scenarioIdDemo)
     : documentos.filter(doc => !doc.demoHistorica);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setAuth({ status: 'unauthenticated', user: null, error: 'Sua sessão expirou. Entre novamente.' });
+    };
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+
+    if (!authLinkPending) {
+      getCurrentUser()
+        .then(user => {
+          setAuth(user
+            ? { status: 'authenticated', user, error: '' }
+            : { status: 'unauthenticated', user: null, error: '' });
+        })
+        .catch(error => {
+          setAuth({
+            status: (!error?.status || error.status === 429 || error.status >= 500)
+              ? 'unavailable'
+              : 'unauthenticated',
+            user: null,
+            error: error instanceof Error ? error.message : 'Não foi possível validar sua sessão.',
+          });
+        });
+    }
+
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, [authLinkPending]);
+
+  async function handleLogout() {
+    await logoutSession();
+    setAuth({ status: 'unauthenticated', user: null, error: '' });
+    navegar('visao-geral', { replace: true });
+  }
 
   const navegar = useCallback((destino, opcoes = {}) => {
     const parcial = typeof destino === 'string' ? { page: destino } : destino;
@@ -741,10 +803,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (authLinkPending || window.location.pathname.startsWith('/auth/')) return;
     if (window.location.pathname === '/' || !PAGE_PATHS[window.location.pathname.split('/').filter(Boolean)[0]]) {
       window.history.replaceState({ page }, '', urlDaRota(rota));
     }
-  }, []);
+  }, [authLinkPending]);
 
   function salvarDocumento(doc) {
     setDocumentos(prev => {
@@ -768,10 +831,10 @@ export default function App() {
   async function carregarMetaEEstado(cutoffDesejado = null) {
     setDemo(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const metaResp = await fetch(`${API_BASE}/api/demo/crise-historica/meta`);
+      const metaResp = await apiFetch(`${API_BASE}/api/demo/crise-historica/meta`);
       const meta = await lerJson(metaResp, 'Falha ao carregar a meta da demo');
       const cutoff = cutoffDesejado || meta.cortes?.mes_inicial || meta.cortes?.cortes?.[0]?.mes || '2024-01';
-      const estadoResp = await fetch(`${API_BASE}/api/demo/crise-historica/estado?cutoff=${encodeURIComponent(cutoff)}`);
+      const estadoResp = await apiFetch(`${API_BASE}/api/demo/crise-historica/estado?cutoff=${encodeURIComponent(cutoff)}`);
       const payload = await lerJson(estadoResp, 'Falha ao carregar o corte da demo');
 
       setDemo({
@@ -793,7 +856,7 @@ export default function App() {
   async function carregarEstado(cutoff) {
     setDemo(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const resp = await fetch(`${API_BASE}/api/demo/crise-historica/estado?cutoff=${encodeURIComponent(cutoff)}`);
+      const resp = await apiFetch(`${API_BASE}/api/demo/crise-historica/estado?cutoff=${encodeURIComponent(cutoff)}`);
       const payload = await lerJson(resp, 'Falha ao carregar o corte da demo');
       setDemo(prev => ({
         ...prev,
@@ -820,7 +883,7 @@ export default function App() {
     if (!demoEnabled) return iniciarDemo();
     setDemo(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const resp = await fetch(`${API_BASE}/api/demo/crise-historica/reset`, { method: 'POST' });
+      const resp = await apiFetch(`${API_BASE}/api/demo/crise-historica/reset`, { method: 'POST' });
       const payload = await lerJson(resp, 'Falha ao reiniciar a demo');
       setDemo(prev => ({
         ...prev,
@@ -861,7 +924,7 @@ export default function App() {
     if (!demoEnabled) return null;
     const cutoff = demo.cutoff || demo.meta?.cortes?.mes_inicial || '2024-01';
     try {
-      const resp = await fetch(
+      const resp = await apiFetch(
         `${API_BASE}/api/demo/crise-historica/alertas/${encodeURIComponent(alertaId)}/andamento?cutoff=${encodeURIComponent(cutoff)}`,
         { method: 'POST' },
       );
@@ -884,9 +947,9 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!demoEnabled) return;
+    if (!demoEnabled || auth.status !== 'authenticated') return;
     carregarMetaEEstado();
-  }, [demoEnabled]);
+  }, [demoEnabled, auth.status]);
 
   const demoState = {
     enabled: demoEnabled,
@@ -908,10 +971,65 @@ export default function App() {
     ? (demo.payload.alertas || []).filter(a => a.status === 'novo' || a.status === 'andamento').length
     : 3;
 
-  if (!authed) {
+  if (auth.status === 'loading') {
+    return (
+      <div role="status" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: '#F6F5F2', color: '#1B5E6E', fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <LogoIcon size={38} />
+          <span style={{ fontSize: 14, fontWeight: 650 }}>Validando sessão segura…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (auth.status === 'unavailable') {
+    return (
+      <div role="alert" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24, background: '#F6F5F2', color: '#16353C', fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ width: 'min(440px, 100%)', display: 'grid', gap: 16, textAlign: 'center' }}>
+          <LogoIcon size={44} />
+          <h1 style={{ margin: 0, fontSize: 26 }}>Não foi possível validar sua sessão agora</h1>
+          <p style={{ margin: 0, color: '#66736F' }}>{auth.error || 'O serviço de autenticação está temporariamente indisponível.'}</p>
+          <button
+            type="button"
+            className="auth-primary-button"
+            onClick={() => {
+              setAuth({ status: 'loading', user: null, error: '' });
+              getCurrentUser()
+                .then(user => setAuth(user
+                  ? { status: 'authenticated', user, error: '' }
+                  : { status: 'unauthenticated', user: null, error: '' }))
+                .catch(error => setAuth({
+                  status: (!error?.status || error.status === 429 || error.status >= 500)
+                    ? 'unavailable'
+                    : 'unauthenticated',
+                  user: null,
+                  error: error instanceof Error ? error.message : 'Não foi possível validar sua sessão.',
+                }));
+            }}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (auth.status !== 'authenticated') {
     return (
       <Suspense fallback={<CarregandoPagina />}>
-        <LoginScreen onEnter={() => setAuthed(true)} />
+        <LoginScreen
+          authLink={initialAuthLink}
+          forceAuthLink={authLinkPending}
+          onAuthLinkFinished={finishAuthLink}
+          onEnter={user => {
+            finishAuthLink();
+            setAuth({ status: 'authenticated', user, error: '' });
+            if (window.location.pathname.startsWith('/auth/')) {
+              navegar('visao-geral', { replace: true });
+            }
+          }}
+          initialMessage={auth.error}
+        />
       </Suspense>
     );
   }
@@ -931,7 +1049,7 @@ export default function App() {
       case 'internacoes':   return <Internacoes onNavigate={navegar} demoState={demoState} />;
       case 'superlotacao':  return <Superlotacao onNavigate={navegar} demoState={demoState} />;
       case 'configuracoes': return <PageConfiguracoes onNavigate={navegar} demoState={demoState} />;
-      case 'perfil':        return <PagePerfil onNavigate={navegar} onLogout={() => { localStorage.removeItem('sus_predict_token'); setAuthed(false); }} demoState={demoState} />;
+      case 'perfil':        return <PagePerfil user={auth.user} onNavigate={navegar} onLogout={handleLogout} onUserChange={user => setAuth(current => ({ ...current, user }))} demoState={demoState} />;
       default:              return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
     }
   }
@@ -941,7 +1059,7 @@ export default function App() {
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
           (esquerda da sidebar, gap central, respiro do painel do SusBot). */}
       <div style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
-        <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} alertasBadge={alertasBadge} demoEnabled={demoEnabled} />
+        <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} alertasBadge={alertasBadge} demoEnabled={demoEnabled} user={auth.user} />
         {viewportCompacto && sidebarAberta && (
           <button
             type="button"

@@ -12,6 +12,7 @@ import {
   revogarCanalSusbot,
 } from '../shared/susbotClient.js';
 import { getSusbotPageLabel } from '../shared/susbotContract.js';
+import { apiFetch } from '../shared/authClient.js';
 
 // ─── Tela 08 — Painel de Conversa do SusBot ────────────────────────────────────
 //
@@ -58,11 +59,6 @@ const SUSBOT_ROUTE_ALIASES = {
   'visao-geral': 'visao-geral',
   '/visao-geral': 'visao-geral',
 };
-
-function getAuthHeaders() {
-  const token = localStorage.getItem('sus_predict_token') || '';
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 function normalizarRota(rota) {
   return String(rota || '').trim().replace(/^\/+/, '');
@@ -534,7 +530,7 @@ function ContinuidadeCanais({ ibge6 }) {
   async function carregarCanais() {
     setErro('');
     try {
-      const data = await listarCanaisSusbot({ baseUrl: API_BASE, headers: getAuthHeaders() });
+      const data = await listarCanaisSusbot({ baseUrl: API_BASE, fetchImpl: apiFetch });
       setConexoes(Array.isArray(data?.itens) ? data.itens : []);
     } catch (error) {
       setErro(error?.message || 'Não foi possível consultar os canais conectados.');
@@ -552,7 +548,7 @@ function ContinuidadeCanais({ ibge6 }) {
         const atualizado = await consultarPareamentoCanalSusbot({
           pareamentoId: pareamento.id,
           baseUrl: API_BASE,
-          headers: getAuthHeaders(),
+          fetchImpl: apiFetch,
         });
         setPareamento(atual => ({ ...atual, ...atualizado }));
       } catch {
@@ -567,7 +563,7 @@ function ContinuidadeCanais({ ibge6 }) {
     setErro('');
     try {
       const novo = await criarPareamentoCanalSusbot({
-        provedor: 'telegram', ibge6, baseUrl: API_BASE, headers: getAuthHeaders(),
+        provedor: 'telegram', ibge6, baseUrl: API_BASE, fetchImpl: apiFetch,
       });
       setPareamento(novo);
     } catch (error) {
@@ -582,7 +578,7 @@ function ContinuidadeCanais({ ibge6 }) {
     setErro('');
     try {
       const conexao = await confirmarPareamentoCanalSusbot({
-        pareamentoId: pareamento.id, baseUrl: API_BASE, headers: getAuthHeaders(),
+        pareamentoId: pareamento.id, baseUrl: API_BASE, fetchImpl: apiFetch,
       });
       setConexoes(items => [...items.filter(item => item.provedor !== 'telegram'), conexao]);
       setPareamento(null);
@@ -597,7 +593,7 @@ function ContinuidadeCanais({ ibge6 }) {
     setProcessando(true);
     try {
       await cancelarPareamentoCanalSusbot({
-        pareamentoId: pareamento.id, baseUrl: API_BASE, headers: getAuthHeaders(),
+        pareamentoId: pareamento.id, baseUrl: API_BASE, fetchImpl: apiFetch,
       });
       setPareamento(null);
     } catch (error) {
@@ -611,7 +607,7 @@ function ContinuidadeCanais({ ibge6 }) {
     setProcessando(true);
     setErro('');
     try {
-      await revogarCanalSusbot({ provedor: 'telegram', baseUrl: API_BASE, headers: getAuthHeaders() });
+      await revogarCanalSusbot({ provedor: 'telegram', baseUrl: API_BASE, fetchImpl: apiFetch });
       setConexoes(items => items.filter(item => item.provedor !== 'telegram'));
     } catch (error) {
       setErro(error?.message || 'Não foi possível desconectar o Telegram.');
@@ -862,7 +858,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       try {
         const data = await listarConversasSusbot({
           baseUrl: API_BASE,
-          headers: getAuthHeaders(),
+          fetchImpl: apiFetch,
           page: 1,
           pageSize: 100,
         });
@@ -893,7 +889,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       setErroHistorico('');
       const data = await listarConversasSusbot({
         baseUrl: API_BASE,
-        headers: getAuthHeaders(),
+        fetchImpl: apiFetch,
         page: 1,
         pageSize: 100,
       });
@@ -914,7 +910,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       const data = await listarMensagensSusbot({
         conversaId: conversa.id,
         baseUrl: API_BASE,
-        headers: getAuthHeaders(),
+        fetchImpl: apiFetch,
         page: 1,
         pageSize: 100,
       });
@@ -971,7 +967,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
         conversaId: conversaIdAtual || undefined,
         ibge6: ibge6Atual,
         baseUrl: API_BASE,
-        headers: getAuthHeaders(),
+        fetchImpl: apiFetch,
         onStatus: status => {
           const mensagem = typeof status === 'string' ? status : status?.mensagem;
           if (mensagem) setEtapa(mensagem);
@@ -1062,7 +1058,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
         conversaId: current.conversaId || undefined,
         ibge6: ibge6Atual,
         baseUrl: API_BASE,
-        headers: getAuthHeaders(),
+        fetchImpl: apiFetch,
         onStatus: status => {
           const mensagem = typeof status === 'string' ? status : status?.mensagem;
           if (mensagem) setEtapa(mensagem);

@@ -112,3 +112,5 @@ docs/*
 !docs/documentacao/**
 .md
 frontend/tests/
+frontend/test-results/
+frontend/playwright-report/
