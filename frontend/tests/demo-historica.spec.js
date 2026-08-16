@@ -14,7 +14,7 @@ test('replay histórico de dengue segue funcional e coerente', async ({ page }) 
   await page.goto('/?demo=crise-historica');
   await page.getByLabel('E-mail').fill('admin@dev.local');
   await page.getByLabel('Senha', { exact: true }).fill('playwright-local-password');
-  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await page.getByRole('button', { name: 'Entrar com credenciais', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: /visão geral/i })).toBeVisible();
   // O bootstrap anônimo testa /me e recebe 401 antes do login; não é erro da demo.

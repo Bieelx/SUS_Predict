@@ -310,7 +310,7 @@ function ToastEtpGerado({ toast, onClose }) {
           ETP gerado — {toast.nome}
         </span>
       </div>
-      <button onClick={() => baixarEtpPdf(toast)} style={{ ...estiloBotaoPrimario, padding: '7px 13px', fontSize: 11 }}>
+      <button onClick={() => baixarEtpPdf({ ...toast, demo: toast.demoHistorica })} style={{ ...estiloBotaoPrimario, padding: '7px 13px', fontSize: 11 }}>
         <MIcon m="download" size={14} /> Baixar PDF
       </button>
       <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', display: 'flex' }}>
@@ -496,6 +496,7 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGe
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,20,18,0.45)', zIndex: 80 }} />
           <div
             ref={modalRef}
+            className="etp-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="etp-modal-titulo"
@@ -509,11 +510,11 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGe
               animation: 'etpModalIn 0.24s cubic-bezier(0.2, 0.7, 0.3, 1)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 26px', borderBottom: '1px solid var(--ink-100)', flexShrink: 0 }}>
+            <div className="etp-modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 26px', borderBottom: '1px solid var(--ink-100)', flexShrink: 0 }}>
               <h3 id="etp-modal-titulo" style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>
                 Gerar ETP — {origem.item.nome}
               </h3>
-              <button aria-label="Fechar gerador de ETP" onClick={fechar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', display: 'flex' }}>
+              <button aria-label="Fechar gerador de ETP" className="touch-target" onClick={fechar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <MIcon m="close" size={20} />
               </button>
             </div>
@@ -522,7 +523,7 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGe
               <Stepper etapaAtual={etapa} />
             </div>
 
-            <div style={{ padding: '24px 26px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <div className="etp-modal-body" style={{ padding: '24px 26px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {etapa === 1 && <Etapa1DadosSistema item={origem.item} />}
               {etapa === 2 && <Etapa2DadosSecretaria dados={dados} onChange={setDados} />}
               {etapa === 3 && (
@@ -537,7 +538,7 @@ export default function GeradorEtp({ origem, onClose, onSalvarDocumento, onEtpGe
             </div>
 
             {etapa < 4 && (
-              <div style={{
+              <div className="etp-modal-footer" style={{
                 display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 26px',
                 borderTop: '1px solid var(--ink-100)', boxShadow: '0 -4px 10px rgba(0,0,0,0.05)',
                 flexShrink: 0,

@@ -27,7 +27,7 @@ test('visitante e token local forjado não acessam o dashboard', async ({ page }
   await page.goto('/');
 
   await expect(page).toHaveTitle(/sus\s*predict/i);
-  await expect(page.getByRole('heading', { name: /entrar na plataforma/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /entrar no ambiente de trabalho/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /visão geral/i })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /criar conta|entrar como dev/i })).toHaveCount(0);
 });
@@ -43,7 +43,62 @@ test('sessão Admin validada libera o dashboard', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: /visão geral/i })).toBeVisible();
   await expect(page.getByText('Admin Saúde')).toBeVisible();
-  await expect(page.getByRole('heading', { name: /entrar na plataforma/i })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /entrar no ambiente de trabalho/i })).toHaveCount(0);
+});
+
+test('access expirado é renovado antes de liberar o dashboard', async ({ page }) => {
+  let meRequests = 0;
+  let refreshRequests = 0;
+
+  await page.route('**/api/auth/me', async route => {
+    meRequests += 1;
+    await route.fulfill({
+      status: meRequests === 1 ? 401 : 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        meRequests === 1
+          ? { detail: 'Sessão inválida ou expirada' }
+          : { user: ADMIN },
+      ),
+    });
+  });
+  await page.route('**/api/auth/refresh', async route => {
+    refreshRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ user: ADMIN }),
+    });
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', { name: /visão geral/i })).toBeVisible();
+  // O StrictMode pode repetir a validação inicial em desenvolvimento; além
+  // dela, deve existir a tentativa posterior ao refresh bem-sucedido.
+  expect(meRequests).toBeGreaterThanOrEqual(2);
+  expect(refreshRequests).toBe(1);
+});
+
+test('indisponibilidade temporária permite validar a mesma sessão novamente', async ({ page }) => {
+  let unavailable = true;
+  await page.route('**/api/auth/me', route => route.fulfill({
+    status: unavailable ? 503 : 200,
+    contentType: 'application/json',
+    body: JSON.stringify(
+      unavailable
+        ? { detail: 'Serviço de autenticação temporariamente indisponível' }
+        : { user: ADMIN },
+    ),
+  }));
+
+  await page.goto('/');
+
+  await expect(page.getByRole('alert')).toContainText(/não foi possível validar sua sessão/i);
+  unavailable = false;
+  await page.getByRole('button', { name: /tentar novamente/i }).click();
+
+  await expect(page.getByRole('heading', { name: /visão geral/i })).toBeVisible();
 });
 
 test('esqueci minha senha usa resposta genérica', async ({ page }) => {
@@ -103,7 +158,7 @@ test('link de recuperação permite definir senha forte e remove tokens da URL',
   await page.getByLabel('Confirmar nova senha').fill('NovaSenha#2026');
   await page.getByRole('button', { name: /salvar nova senha/i }).click();
 
-  await expect(page.getByRole('heading', { name: /entrar na plataforma/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /entrar no ambiente de trabalho/i })).toBeVisible();
   await expect(page.getByRole('status')).toContainText(/senha alterada com sucesso/i);
   await expect(page).not.toHaveURL(/access_token|refresh_token/);
 });
@@ -158,6 +213,38 @@ test('falha transitória ao validar convite permite tentar novamente sem expor t
     name: /validação temporariamente indisponível/i,
   })).toBeVisible();
   await expect(page.getByRole('alert')).toContainText(/verifique sua conexão/i);
+  await expect(page).not.toHaveURL(/access_token|refresh_token/);
+
+  await page.getByRole('button', { name: /tentar validar novamente/i }).click();
+
+  await expect(page.getByRole('heading', { name: /crie sua senha/i })).toBeVisible();
+  expect(sessionRequests).toBe(2);
+});
+
+test('limite temporário do convite também preserva o retry em memória', async ({ page }) => {
+  let sessionRequests = 0;
+  await page.route('**/api/auth/recovery/session', async route => {
+    sessionRequests += 1;
+    await route.fulfill({
+      status: sessionRequests === 1 ? 429 : 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        sessionRequests === 1
+          ? { detail: 'Muitas tentativas. Aguarde antes de tentar novamente' }
+          : { user: ADMIN },
+      ),
+    });
+  });
+
+  await page.goto(
+    '/auth/update-password'
+    + '#access_token=token-de-convite-limitado'
+    + '&refresh_token=refresh-de-convite-limitado&type=invite',
+  );
+
+  await expect(page.getByRole('heading', {
+    name: /validação temporariamente indisponível/i,
+  })).toBeVisible();
   await expect(page).not.toHaveURL(/access_token|refresh_token/);
 
   await page.getByRole('button', { name: /tentar validar novamente/i }).click();

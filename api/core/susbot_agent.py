@@ -13,11 +13,18 @@ substituído por um mock simples com `planejar()` e `stream_resposta()`.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import re
+import unicodedata
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
 
-from api.core.susbot_tools import criar_susbot_tools
+from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
+
+log = logging.getLogger("sus_predict.susbot_agent")
 
 try:  # pragma: no cover - depende do ambiente final da fase 7
     from langgraph.graph import END, StateGraph
@@ -34,9 +41,106 @@ _REFERENCIAS = {
     "consultar_epidemiologia": {"rota": "/epidemiologia", "label": "ver em Epidemiologia →"},
 }
 
+_FERRAMENTAS_SCHEMA = {
+    "consultar_estoque": {
+        "item": "str opcional, nome do insumo",
+        "somente_risco": "bool opcional, true para itens em falta, criticos ou em alerta",
+    },
+    "consultar_alertas": {"status": "str opcional", "tipo": "str opcional"},
+    "consultar_epidemiologia": {
+        "sistema": "um de SIM, SIH, SINASC, SIA, SINAN",
+        "ano_ini": "int opcional",
+        "ano_fim": "int opcional",
+        "doenca_cod": "str opcional, codigo do agravo",
+    },
+    "gerar_etp": {
+        "item": "str obrigatorio, nome do insumo",
+        "alerta_id": "str opcional, id do alerta de origem",
+    },
+}
+
 
 def _ibge6(valor: str) -> str:
     return str(valor or "").strip()[:6]
+
+
+def _normalizar_intencao(texto: str) -> str:
+    sem_acentos = unicodedata.normalize("NFKD", str(texto or ""))
+    return " ".join("".join(ch for ch in sem_acentos if not unicodedata.combining(ch)).lower().split())
+
+
+def _contem_termo(texto: str, termos: set[str]) -> bool:
+    return any(re.search(rf"\b{re.escape(termo)}\w*\b", texto) for termo in termos)
+
+
+def montar_historico_recente(mensagens: list[dict[str, Any]], limite: int = 8) -> list[dict[str, str]]:
+    """Converte registros do banco (mais novos primeiro) em contexto seguro e cronológico."""
+
+    historico: list[dict[str, str]] = []
+    for mensagem in reversed(mensagens[:limite]):
+        pergunta = str(mensagem.get("pergunta") or "").strip()
+        resposta = str(mensagem.get("resposta") or "").strip()
+        # Conversas antigas podem conter o identificador que o agente expunha antes da correção.
+        resposta = re.sub(r"\bdev-[A-Za-z0-9_-]+\b", "[identificador interno ocultado]", resposta)
+        if pergunta or resposta:
+            historico.append({"pergunta": pergunta, "resposta": resposta})
+    return historico
+
+
+def _plano_deterministico(pergunta: str) -> dict[str, Any] | None:
+    """Garante uso de ferramenta para intenções operacionais inequívocas."""
+
+    texto = _normalizar_intencao(pergunta)
+    if texto.startswith(("o que e ", "o que sao ", "explique ", "como funciona ")):
+        return None
+    termos_estoque = {"estoque", "insumo", "medicamento", "remedio", "abastecimento"}
+    termos_risco = {"falta", "faltando", "critico", "ruptura", "acabando", "baixo"}
+    if _contem_termo(texto, termos_estoque):
+        return {
+            "acao": "ferramenta",
+            "ferramenta": "consultar_estoque",
+            "argumentos": {"somente_risco": _contem_termo(texto, termos_risco)},
+            "resposta": "",
+            "referencia_rota": "/insumos",
+        }
+
+    if _contem_termo(texto, {"alerta", "risco", "ocorrencia"}):
+        return {
+            "acao": "ferramenta",
+            "ferramenta": "consultar_alertas",
+            "argumentos": {},
+            "resposta": "",
+            "referencia_rota": "/alertas",
+        }
+
+    termos_internacao = {"internac", "hospitaliz", "hospitalar", "leito", "uti"}
+    termos_epidemiologia = {
+        "dengue", "caso", "epidemiologia", "notific", "obito", "mortalidade",
+        "nascimento", "ambulatorial",
+    }
+    if _contem_termo(texto, termos_internacao | termos_epidemiologia):
+        if _contem_termo(texto, termos_internacao):
+            sistema = "SIH"
+        elif _contem_termo(texto, {"obito", "mortalidade"}):
+            sistema = "SIM"
+        elif _contem_termo(texto, {"nascimento"}):
+            sistema = "SINASC"
+        elif _contem_termo(texto, {"ambulatorial"}):
+            sistema = "SIA"
+        else:
+            sistema = "SINAN"
+        argumentos = {"sistema": sistema}
+        if _contem_termo(texto, {"uti"}):
+            argumentos["escopo_solicitado"] = "uti"
+        return {
+            "acao": "ferramenta",
+            "ferramenta": "consultar_epidemiologia",
+            "argumentos": argumentos,
+            "resposta": "",
+            "referencia_rota": "/epidemiologia",
+        }
+
+    return None
 
 
 def _jsonable(valor: Any) -> Any:
@@ -51,6 +155,150 @@ def _jsonable(valor: Any) -> Any:
 
 def _sse(evento: str, dados: dict[str, Any]) -> str:
     return f"event: {evento}\ndata: {json.dumps(_jsonable(dados), ensure_ascii=False)}\n\n"
+
+
+# O LLM não é confiável pra narrar fielmente o resultado da tool — modelos rápidos
+# tendem a hedgear ("não possuo acesso a dados atualizados") mesmo com o dado real
+# no contexto. Quando existe resultado de ferramenta, a resposta é montada aqui, sem
+# LLM: o texto que o usuário lê é sempre exatamente o que a tool devolveu.
+def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) -> str | None:
+    if not resultado:
+        return None
+
+    if not resultado.get("encontrado"):
+        motivo = str(resultado.get("motivo") or "Não encontrei esse dado para este município.")
+        acao = str(resultado.get("acao_sugerida") or "").strip()
+        return f"{motivo}\n\n**Próximo passo:** {acao}" if acao else motivo
+
+    if ferramenta == "consultar_estoque":
+        linhas = []
+        for dado in resultado.get("dados", []):
+            qualidade = dado.get("qualidade") or {}
+            dias = dado.get("dias_restantes")
+            if dias is None:
+                linhas.append(f"- **{dado.get('item')}**: cálculo indisponível, falta consumo médio local válido")
+                continue
+            defasagem = qualidade.get("defasagem_dias")
+            competencia = qualidade.get("competencia") or "não informada"
+            linhas.append(
+                f"- **{dado.get('item')}**: cobertura estimada de {dias} dias ({dado.get('status')}); "
+                f"fonte: estoque local; competência: {competencia}; "
+                f"confiança {qualidade.get('confianca', 'não informada')}"
+                + (f"; defasagem de {defasagem} dias" if defasagem is not None else "")
+            )
+        if not linhas:
+            return None
+        titulo = "Insumos com cobertura crítica ou em alerta:\n" if resultado.get("somente_risco") else "Cobertura do estoque atual:\n"
+        return (
+            titulo
+            + "\n".join(linhas)
+            + "\n\n**Limitação:** este cálculo usa quantidade atual ÷ consumo médio. "
+            "Ele não comprova a relação caso→insumo e não deve ser lido como previsão de abastecimento."
+        )
+
+    if ferramenta == "consultar_alertas":
+        linhas = [
+            f"- **{a.get('tipo')}** ({a.get('severidade')}, {a.get('status')}): {a.get('descricao')}"
+            for a in resultado.get("dados", [])
+        ]
+        if not linhas:
+            return None
+        return "Alertas ativos:\n" + "\n".join(linhas)
+
+    if ferramenta == "consultar_epidemiologia":
+        stats = (resultado.get("dados") or {}).get("stats") or {}
+        if not stats:
+            return None
+        linhas = [f"- **{chave.replace('_', ' ')}**: {valor}" for chave, valor in stats.items()]
+        resposta = (
+            f"Dados de {resultado.get('sistema')} ({resultado.get('ano_ini')}–{resultado.get('ano_fim')}):\n"
+            + "\n".join(linhas)
+        )
+        if resultado.get("escopo_solicitado") == "uti":
+            resposta += (
+                "\n\n**Limitação:** o SIH descreve internações hospitalares e não informa "
+                "ocupação ou disponibilidade de leitos de UTI em tempo real."
+            )
+        return resposta
+
+    if ferramenta == "gerar_etp":
+        return (
+            f"ETP gerado para **{resultado.get('item')}** "
+            f"(cobertura estimada de {resultado.get('dias_restantes')} dias).\n\n{resultado.get('justificativa')}"
+        )
+
+    return None
+
+
+# ponytail: um artefato por ferramenta, formato fixo (tabela/resumo/etp) — sem
+# biblioteca de layout genérica; se o número de tipos crescer, revisitar como registro.
+def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not resultado or not resultado.get("encontrado"):
+        return None
+
+    if ferramenta == "consultar_estoque":
+        linhas = [
+            {
+                "item": d.get("item"),
+                "cobertura_dias": d.get("dias_restantes") if d.get("dias_restantes") is not None else "indisponível",
+                "confiança": (d.get("qualidade") or {}).get("confianca"),
+            }
+            for d in resultado.get("dados", [])
+        ]
+        if not linhas:
+            return None
+        qualidades = [(d.get("qualidade") or {}) for d in resultado.get("dados", [])]
+        return {
+            "tipo": "tabela",
+            "titulo": "Cobertura de estoque",
+            "colunas": ["item", "cobertura_dias", "confiança"],
+            "linhas": linhas,
+            "evidencia": {
+                "fonte": "Estoque local informado pelo município",
+                "competencias": [q.get("competencia") for q in qualidades if q.get("competencia")],
+                "limitacao": "Não incorpora protocolo caso→insumo, lead time ou margem de segurança.",
+            },
+        }
+
+    if ferramenta == "consultar_alertas":
+        linhas = [
+            {
+                "tipo": a.get("tipo"),
+                "severidade": a.get("severidade"),
+                "status": a.get("status"),
+                "descricao": a.get("descricao"),
+            }
+            for a in resultado.get("dados", [])
+        ]
+        if not linhas:
+            return None
+        return {
+            "tipo": "tabela",
+            "titulo": "Alertas",
+            "colunas": ["tipo", "severidade", "status", "descricao"],
+            "linhas": linhas,
+        }
+
+    if ferramenta == "consultar_epidemiologia":
+        stats = (resultado.get("dados") or {}).get("stats") or {}
+        if not stats:
+            return None
+        return {
+            "tipo": "resumo",
+            "titulo": f"{resultado.get('sistema')} {resultado.get('ano_ini')}–{resultado.get('ano_fim')}",
+            "campos": stats,
+        }
+
+    if ferramenta == "gerar_etp":
+        return {
+            "tipo": "etp",
+            "titulo": f"ETP — {resultado.get('item')}",
+            "etp_id": resultado.get("etp_id"),
+            "dias_restantes": resultado.get("dias_restantes"),
+            "justificativa": resultado.get("justificativa"),
+        }
+
+    return None
 
 
 def _texto_chunk(chunk: Any) -> str:
@@ -94,6 +342,11 @@ def _texto_chunk(chunk: Any) -> str:
 def _normalizar_plano(plano: Any) -> dict[str, Any]:
     if isinstance(plano, str):
         texto = plano.strip()
+        if texto.startswith("```"):
+            texto = texto.strip("`")
+            if texto.lower().startswith("json"):
+                texto = texto[4:]
+            texto = texto.strip()
         try:
             plano = json.loads(texto)
         except Exception:
@@ -119,15 +372,31 @@ def _normalizar_plano(plano: Any) -> dict[str, Any]:
 
 def _prompt_planejamento(pergunta: str, contexto: dict[str, Any], ferramentas: list[str]) -> list[tuple[str, str]]:
     sistema = (
-        "Voce e o SusBot. Responda em JSON puro com as chaves acao, ferramenta, "
-        "argumentos, resposta e referencia_rota. A acao deve ser 'ferramenta' quando "
-        "a pergunta exigir dados do banco, ou 'resposta' quando puder responder direto."
+        "Voce e o SusBot, agente com acesso real a um banco de dados via ferramentas — "
+        "voce NAO e um chat generico sem acesso a dado atualizado. Responda em JSON puro "
+        "com as chaves acao, ferramenta, argumentos, resposta e referencia_rota.\n"
+        "Regra obrigatoria: se a pergunta menciona estoque/insumo/remedio, alerta, ou "
+        "dado epidemiologico de um municipio/doenca especifica, a acao DEVE ser "
+        "'ferramenta' — nunca responda com frases como 'nao possuo acesso a dados "
+        "atualizados' ou 'consulte o painel'; isso e proibido, voce tem a ferramenta "
+        "certa para isso, use-a e deixe o resultado dela (mesmo vazio) fundamentar a "
+        "resposta. Use acao 'resposta' so quando a pergunta for generica e nao depender "
+        "de dado de um municipio (ex: 'o que e dengue', 'como funciona o sistema').\n"
+        "Use historico_recente para entender continuacoes e referencias a mensagens anteriores. "
+        "memoria_pessoal pertence exclusivamente ao usuario autenticado desta conversa. Use-a para "
+        "personalizar a resposta, mas nunca afirme conhecer, procurar ou comparar dados pessoais de "
+        "outro usuario. Se pedirem informacoes de outra pessoa, negue o acesso. "
+        "Nunca revele, repita ou tente inferir identificadores internos do usuario. Se o nome "
+        "da pessoa nao estiver explicitamente disponivel, diga apenas que ela esta autenticada.\n"
+        "gerar_etp altera dado (cria um ETP de verdade) — so proponha essa ferramenta "
+        "quando o usuario pedir explicitamente para abrir/gerar um ETP; ela sempre passa "
+        "por confirmacao antes de executar, entao pode propor mesmo sem ter certeza."
     )
     humano = json.dumps(
         {
             "pergunta": pergunta,
             "contexto": contexto,
-            "ferramentas": ferramentas,
+            "ferramentas": {nome: _FERRAMENTAS_SCHEMA.get(nome, {}) for nome in ferramentas},
         },
         ensure_ascii=False,
     )
@@ -142,7 +411,14 @@ def _prompt_resposta(
 ) -> list[tuple[str, str]]:
     sistema = (
         "Voce e o SusBot. Escreva uma resposta curta em markdown simples, sem inventar dados. "
+        "resultado_ferramenta e o dado real ja consultado no banco — use os numeros dele. "
+        "Se resultado_ferramenta.encontrado for false, diga isso especificamente usando o "
+        "campo 'motivo' (ex: item nao cadastrado, sem alertas ativos), NUNCA diga frases "
+        "genericas como 'nao possuo acesso a dados atualizados' ou 'consulte outro painel' "
+        "— voce ja consultou, so nao achou resultado para esse filtro. "
         "Se houver referencia de rota, mencione no final em uma linha curta."
+        " Use historico_recente e memoria_pessoal para manter continuidade, sem expor "
+        "identificadores internos nem dados de outros usuarios."
     )
     humano = json.dumps(
         {
@@ -159,7 +435,7 @@ def _prompt_resposta(
 class GeminiSusBotLLM:
     """Adapter opcional para Gemini via langchain-google-genai."""
 
-    def __init__(self, api_key: str | None = None, model: str = "gemini-3.1-flash-lite"):
+    def __init__(self, api_key: str | None = None, model: str = "gemini-flash-latest"):
         chave = (api_key or os.getenv("GEMINI_API_KEY") or "").strip()
         if not chave:
             raise RuntimeError("GEMINI_API_KEY ausente")
@@ -170,9 +446,16 @@ class GeminiSusBotLLM:
             raise RuntimeError("langchain-google-genai indisponível") from exc
 
         self._client = ChatGoogleGenerativeAI(model=model, google_api_key=chave, temperature=0.2)
+        # Cliente separado só pro passo de planejamento: força saída JSON e limita
+        # tokens (é so um objeto pequeno) — corta a maior parte dos 25-35s observados,
+        # que vinham de um round-trip de texto livre + parsing manual de ```json.
+        self._client_planejamento = ChatGoogleGenerativeAI(
+            model=model, google_api_key=chave, temperature=0.1,
+            max_output_tokens=256, response_mime_type="application/json",
+        )
 
     def planejar(self, pergunta: str, contexto: dict[str, Any], ferramentas: list[str]) -> dict[str, Any]:
-        resposta = self._client.invoke(_prompt_planejamento(pergunta, contexto, ferramentas))
+        resposta = self._client_planejamento.invoke(_prompt_planejamento(pergunta, contexto, ferramentas))
         return _normalizar_plano(_texto_chunk(resposta))
 
     def stream_resposta(
@@ -188,11 +471,139 @@ class GeminiSusBotLLM:
                 yield texto
 
 
+class GroqSusBotLLM:
+    """Adapter pra Groq (API compatível com OpenAI) — sem SDK novo, via urllib puro.
+
+    Usado como fallback quando o Gemini falha (quota estourada, erro 429/5xx, etc).
+    ponytail: sem streaming de verdade — Groq já responde rápido o bastante que uma
+    chamada não-streamed inteira ainda cai dentro do orçamento de latência; se o
+    ganho de streaming token-a-token importar depois, trocar por SSE aqui.
+    """
+
+    def __init__(self, api_key: str | None = None, model: str | None = None):
+        self._chave = (api_key or os.getenv("GROQ_API_KEY") or "").strip()
+        if not self._chave:
+            raise RuntimeError("GROQ_API_KEY ausente")
+        self._modelo = model or os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"
+
+    def _chamar(self, mensagens: list[tuple[str, str]], *, json_mode: bool, max_tokens: int) -> str:
+        papel_openai = {"human": "user", "system": "system", "assistant": "assistant"}
+        payload = {
+            "model": self._modelo,
+            "temperature": 0.2,
+            "max_tokens": max_tokens,
+            "messages": [{"role": papel_openai.get(papel, papel), "content": texto} for papel, texto in mensagens],
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        req = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self._chave}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                corpo = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detalhe = exc.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"Groq HTTP {exc.code}: {detalhe}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Groq inacessível: {exc.reason}") from exc
+
+        return corpo["choices"][0]["message"]["content"] or ""
+
+    def planejar(self, pergunta: str, contexto: dict[str, Any], ferramentas: list[str]) -> dict[str, Any]:
+        sistema, humano = _prompt_planejamento(pergunta, contexto, ferramentas)
+        texto = self._chamar([sistema, humano], json_mode=True, max_tokens=256)
+        return _normalizar_plano(texto)
+
+    def stream_resposta(
+        self,
+        pergunta: str,
+        contexto: dict[str, Any],
+        plano: dict[str, Any],
+        resultado_ferramenta: dict[str, Any] | None,
+    ) -> Iterable[str]:
+        mensagens = _prompt_resposta(pergunta, contexto, plano, resultado_ferramenta)
+        texto = self._chamar(mensagens, json_mode=False, max_tokens=512)
+        if texto:
+            yield texto
+
+
+class FallbackSusBotLLM:
+    """Tenta o LLM primário; se falhar (quota, erro de rede, timeout), cai pro fallback.
+
+    Cobre o caso concreto pedido: "gemini acabou? cai no groq". Não protege contra
+    falha NO MEIO do streaming de stream_resposta (poucos tokens já emitidos e o
+    resto falha) — nesse caso o stream simplesmente para; cobrir isso exigiria
+    bufferizar a resposta inteira antes de emitir, o que mataria o streaming real
+    do caminho feliz. Fica como limite conhecido.
+    """
+
+    def __init__(self, primario: Any, fallback: Any | None):
+        self._primario = primario
+        self._fallback = fallback
+
+    def planejar(self, pergunta: str, contexto: dict[str, Any], ferramentas: list[str]) -> dict[str, Any]:
+        try:
+            return self._primario.planejar(pergunta, contexto, ferramentas)
+        except Exception as exc:
+            if self._fallback is None:
+                raise
+            log.warning("LLM primário falhou no planejamento (%s) — caindo pro fallback", exc)
+            return self._fallback.planejar(pergunta, contexto, ferramentas)
+
+    def stream_resposta(
+        self,
+        pergunta: str,
+        contexto: dict[str, Any],
+        plano: dict[str, Any],
+        resultado_ferramenta: dict[str, Any] | None,
+    ) -> Iterable[str]:
+        try:
+            yield from self._primario.stream_resposta(pergunta, contexto, plano, resultado_ferramenta)
+        except Exception as exc:
+            if self._fallback is None:
+                raise
+            log.warning("LLM primário falhou na resposta (%s) — caindo pro fallback", exc)
+            yield from self._fallback.stream_resposta(pergunta, contexto, plano, resultado_ferramenta)
+
+
+def _montar_llm_com_fallback() -> Any:
+    primario = None
+    erro_primario: Exception | None = None
+    try:
+        primario = GeminiSusBotLLM()
+    except Exception as exc:  # pragma: no cover - depende de GEMINI_API_KEY no ambiente
+        erro_primario = exc
+
+    fallback = None
+    try:
+        fallback = GroqSusBotLLM()
+    except Exception:  # pragma: no cover - depende de GROQ_API_KEY no ambiente
+        fallback = None
+
+    if primario is None:
+        if fallback is None:
+            raise erro_primario or RuntimeError("Nenhum LLM configurado (GEMINI_API_KEY ou GROQ_API_KEY)")
+        log.warning("GEMINI_API_KEY ausente/inválida — usando Groq como único LLM")
+        return fallback
+
+    return FallbackSusBotLLM(primario, fallback)
+
+
 @dataclass
 class SusBotAgent:
     ibge6: str
     tela_origem: str | None = None
     usuario: str | None = None
+    historico: list[dict[str, str]] = field(default_factory=list)
+    memoria_usuario: dict[str, Any] = field(default_factory=dict)
     llm: Any | None = None
     tools: dict[str, Callable] = field(default_factory=dict)
 
@@ -201,7 +612,7 @@ class SusBotAgent:
         if not self.tools:
             self.tools = criar_susbot_tools(self.ibge6)
         if self.llm is None:
-            self.llm = GeminiSusBotLLM()
+            self.llm = _montar_llm_com_fallback()
         self._graph = self._montar_grafo() if LANGGRAPH_OK else None
 
     def _montar_grafo(self):  # pragma: no cover - só valida integração quando disponível
@@ -214,7 +625,78 @@ class SusBotAgent:
         return builder.compile()
 
     def _contexto(self) -> dict[str, Any]:
-        return {"ibge6": self.ibge6, "tela_origem": self.tela_origem, "usuario": self.usuario}
+        return {
+            "ibge6": self.ibge6,
+            "tela_origem": self.tela_origem,
+            "usuario_autenticado": bool(self.usuario),
+            "historico_recente": self.historico[-8:],
+            "memoria_pessoal": self.memoria_usuario,
+        }
+
+    def _resposta_contextual(self, pergunta: str) -> str | None:
+        texto = _normalizar_intencao(pergunta)
+        fatos = self.memoria_usuario.get("fatos") or {}
+        topicos = self.memoria_usuario.get("topicos_frequentes") or []
+        nome_atual = _normalizar_intencao(str(fatos.get("nome") or ""))
+
+        consulta_pessoa = re.search(r"\bo que (?:voce )?sabe sobre (.+?)[?!.]*$", texto)
+        if consulta_pessoa:
+            pessoa = consulta_pessoa.group(1).strip()
+            if pessoa not in {"mim", "meu perfil", nome_atual}:
+                return "Não tenho acesso à memória ou ao perfil de outros usuários."
+
+        for padrao_terceiro in (
+            r"\bem que (?:area )?(?:a |o )?([a-z]+) trabalha\b",
+            r"\b(?:qual|que) (?:e )?a area (?:da|do) ([a-z]+)\b",
+            r"\bquem e (?:a |o )?([a-z]+)\b",
+            r"\b(?:fale|conte) sobre (?:a |o )?([a-z]+)\b",
+        ):
+            match_terceiro = re.search(padrao_terceiro, texto)
+            if match_terceiro and match_terceiro.group(1) not in {"mim", nome_atual}:
+                return "Não tenho acesso à memória ou ao perfil de outros usuários."
+
+        if (
+            "quem sou eu" in texto
+            or "qual e meu usuario" in texto
+            or "qual meu usuario" in texto
+            or "o que voce sabe sobre mim" in texto
+            or "minha memoria" in texto
+            or (consulta_pessoa and consulta_pessoa.group(1).strip() in {"mim", _normalizar_intencao(str(fatos.get("nome") or ""))})
+        ):
+            partes = []
+            if fatos.get("nome"):
+                partes.append(f"Seu nome é **{fatos['nome']}**")
+            else:
+                partes.append("Você está autenticado no SusPredict")
+            if fatos.get("cargo"):
+                partes.append(f"sua função é **{fatos['cargo']}**")
+            if fatos.get("area_atuacao"):
+                partes.append(f"você atua em **{fatos['area_atuacao']}**")
+            if fatos.get("preferencia_resposta"):
+                partes.append(f"você prefere respostas **{fatos['preferencia_resposta']}**")
+            resposta = "; ".join(partes) + "."
+            if topicos:
+                resposta += " Seus assuntos mais frequentes são: " + ", ".join(topicos) + "."
+            resposta += " Você pode pedir para eu esquecer uma informação a qualquer momento."
+            return resposta
+
+        if "ultima conversa" in texto or "conversamos antes" in texto or "ultima mensagem" in texto:
+            if not self.historico:
+                return "Esta é a primeira mensagem disponível nesta conversa."
+            anterior = self.historico[-1]
+            pergunta_anterior = str(anterior.get("pergunta") or "").strip()
+            resposta_anterior = str(anterior.get("resposta") or "").strip()
+            if not pergunta_anterior:
+                return "Há histórico nesta conversa, mas a mensagem anterior não está disponível."
+            resumo = f'Na mensagem anterior, você perguntou: “{pergunta_anterior}”.'
+            if resposta_anterior:
+                resposta_curta = resposta_anterior[:280].rstrip()
+                if len(resposta_anterior) > 280:
+                    resposta_curta += "…"
+                resumo += f' Eu respondi: “{resposta_curta}”'
+            return resumo
+
+        return None
 
     def _node_planejar(self, state: dict[str, Any]) -> dict[str, Any]:
         plano = _normalizar_plano(
@@ -245,34 +727,15 @@ class SusBotAgent:
             referencia = _REFERENCIAS.get(ferramenta, {}).get("rota")
         return {"resultado_ferramenta": resultado, "referencia_rota": referencia}
 
-    def _resolver(self, pergunta: str) -> dict[str, Any]:
-        state = {"pergunta": pergunta}
-        if self._graph is not None:
-            try:  # pragma: no cover - depende da versão do langgraph
-                state = self._graph.invoke(state)
-            except Exception:
-                state = {}
-
-        if not state.get("plano"):
-            state.update(self._node_planejar({"pergunta": pergunta}))
-        if "resultado_ferramenta" not in state:
-            state.update(self._node_consultar(state))
-        return state
-
-    def stream_eventos(self, pergunta: str) -> Iterable[dict[str, Any]]:
+    def _emitir_resultado(
+        self,
+        pergunta: str,
+        plano: dict[str, Any],
+        resultado_ferramenta: dict[str, Any] | None,
+        referencia_rota: str | None,
+        ferramenta_executada: str | None = None,
+    ) -> Iterable[dict[str, Any]]:
         contexto = self._contexto()
-        yield {"event": "status", "data": {"mensagem": "Planejando resposta"}}
-
-        state = self._resolver(pergunta)
-        plano = state.get("plano") or {"acao": "resposta"}
-        resultado_ferramenta = state.get("resultado_ferramenta")
-        referencia_rota = state.get("referencia_rota")
-
-        if plano.get("acao") == "ferramenta":
-            yield {
-                "event": "status",
-                "data": {"mensagem": f"Consultando {plano.get('ferramenta')}"},
-            }
 
         if referencia_rota:
             info_referencia = next((item for item in _REFERENCIAS.values() if item["rota"] == referencia_rota), None)
@@ -284,14 +747,23 @@ class SusBotAgent:
                 },
             }
 
-        yield {"event": "status", "data": {"mensagem": "Gerando resposta final"}}
+        artefato = _construir_artefato(ferramenta_executada, resultado_ferramenta) if ferramenta_executada else None
+        if artefato:
+            yield {"event": "artefato", "data": artefato}
+
+        texto_fixo = _resposta_deterministica(ferramenta_executada, resultado_ferramenta) if ferramenta_executada else None
 
         resposta_final = []
-        for token in self.llm.stream_resposta(pergunta, contexto, plano, resultado_ferramenta):
-            if not token:
-                continue
-            resposta_final.append(token)
-            yield {"event": "token", "data": {"texto": token}}
+        if texto_fixo is not None:
+            resposta_final.append(texto_fixo)
+            yield {"event": "token", "data": {"texto": texto_fixo}}
+        else:
+            yield {"event": "status", "data": {"mensagem": "Gerando resposta final"}}
+            for token in self.llm.stream_resposta(pergunta, contexto, plano, resultado_ferramenta):
+                if not token:
+                    continue
+                resposta_final.append(token)
+                yield {"event": "token", "data": {"texto": token}}
 
         texto_final = "".join(resposta_final)
         yield {
@@ -301,8 +773,116 @@ class SusBotAgent:
                 "referencia_rota": referencia_rota,
                 "plano": plano,
                 "resultado_ferramenta": resultado_ferramenta,
+                "artefato": artefato,
             },
         }
+
+    def stream_eventos(self, pergunta: str) -> Iterable[dict[str, Any]]:
+        yield {"event": "status", "data": {"mensagem": "Planejando resposta"}}
+
+        plano_obrigatorio = _plano_deterministico(pergunta)
+        # Perguntas operacionais sobre saúde/estoque precisam chegar à ferramenta
+        # antes das heurísticas de perfil. Expressões como "fale sobre a situação"
+        # e "fale sobre os insumos" não são consultas sobre outra pessoa.
+        if plano_obrigatorio is None:
+            resposta_contextual = self._resposta_contextual(pergunta)
+            if resposta_contextual is not None:
+                yield {"event": "token", "data": {"texto": resposta_contextual}}
+                yield {
+                    "event": "fim",
+                    "data": {
+                        "resposta": resposta_contextual,
+                        "referencia_rota": None,
+                        "plano": {"acao": "resposta", "origem": "contexto_seguro"},
+                        "resultado_ferramenta": None,
+                    },
+                }
+                return
+
+        if plano_obrigatorio is None:
+            plano = _normalizar_plano(self.llm.planejar(pergunta, self._contexto(), list(self.tools.keys())))
+        else:
+            plano = plano_obrigatorio
+            # O modelo ainda pode ajudar a extrair item/período, mas não pode cancelar
+            # o uso da ferramenta determinado para uma consulta operacional inequívoca.
+            try:
+                sugestao = _normalizar_plano(
+                    self.llm.planejar(pergunta, self._contexto(), list(self.tools.keys()))
+                )
+                if sugestao.get("ferramenta") == plano["ferramenta"]:
+                    argumentos_sugeridos = sugestao.get("argumentos") or {}
+                    if plano["ferramenta"] == "consultar_estoque":
+                        argumentos_sugeridos = {
+                            chave: valor for chave, valor in argumentos_sugeridos.items() if chave == "item"
+                        }
+                    elif plano["ferramenta"] == "consultar_epidemiologia":
+                        permitidos = {"ano_ini", "ano_fim"}
+                        if (plano.get("argumentos") or {}).get("sistema") == "SINAN":
+                            permitidos.add("doenca_cod")
+                        argumentos_sugeridos = {
+                            chave: valor for chave, valor in argumentos_sugeridos.items() if chave in permitidos
+                        }
+                    plano["argumentos"] = {
+                        **argumentos_sugeridos,
+                        **(plano.get("argumentos") or {}),
+                    }
+            except Exception as exc:  # pragma: no cover - fallback determinístico
+                log.warning("Planejamento do LLM falhou; usando roteamento determinístico: %s", exc)
+        ferramenta = str(plano.get("ferramenta") or "").strip()
+
+        if plano.get("acao") == "ferramenta" and ferramenta in FERRAMENTAS_ESCRITA:
+            argumentos = plano.get("argumentos") or {}
+            yield {
+                "event": "confirmacao_pendente",
+                "data": {
+                    "ferramenta": ferramenta,
+                    "argumentos": argumentos,
+                    "resumo": plano.get("resposta")
+                    or f"Posso executar {ferramenta} com os dados acima. Confirma?",
+                },
+            }
+            yield {
+                "event": "fim",
+                "data": {
+                    "resposta": "",
+                    "referencia_rota": None,
+                    "plano": plano,
+                    "resultado_ferramenta": None,
+                    "aguardando_confirmacao": True,
+                },
+            }
+            return
+
+        if plano.get("acao") == "ferramenta":
+            yield {"event": "status", "data": {"mensagem": f"Consultando {ferramenta}"}}
+
+        state = self._node_consultar({"plano": plano})
+        resultado_ferramenta = state.get("resultado_ferramenta")
+        referencia_rota = state.get("referencia_rota")
+
+        yield from self._emitir_resultado(
+            pergunta, plano, resultado_ferramenta, referencia_rota,
+            ferramenta_executada=ferramenta if plano.get("acao") == "ferramenta" else None,
+        )
+
+    def stream_eventos_confirmado(self, ferramenta: str, argumentos: dict[str, Any]) -> Iterable[dict[str, Any]]:
+        """Executa uma ferramenta de escrita já confirmada pelo usuário (via botão no chat)."""
+
+        yield {"event": "status", "data": {"mensagem": f"Executando {ferramenta}"}}
+
+        executora = self.tools.get(ferramenta)
+        if executora is None or ferramenta not in FERRAMENTAS_ESCRITA:
+            yield {"event": "erro", "data": {"mensagem": f"Ferramenta de escrita inválida: {ferramenta}"}}
+            return
+
+        resultado = executora(**argumentos)
+        plano = {"acao": "ferramenta", "ferramenta": ferramenta, "argumentos": argumentos, "resposta": ""}
+        referencia = _REFERENCIAS.get(ferramenta, {}).get("rota") if resultado.get("encontrado") else None
+
+        yield from self._emitir_resultado(
+            f"Executar {ferramenta} confirmado pelo usuário", plano, resultado, referencia,
+            ferramenta_executada=ferramenta,
+        )
 
     def stream_sse(self, pergunta: str) -> Iterable[str]:
         for evento in self.stream_eventos(pergunta):
@@ -313,6 +893,8 @@ def criar_susbot_agente(
     ibge6: str,
     tela_origem: str | None = None,
     usuario: str | None = None,
+    historico: list[dict[str, str]] | None = None,
+    memoria_usuario: dict[str, Any] | None = None,
     llm: Any | None = None,
     tools: dict[str, Callable] | None = None,
 ) -> SusBotAgent:
@@ -322,6 +904,8 @@ def criar_susbot_agente(
         ibge6=ibge6,
         tela_origem=tela_origem,
         usuario=usuario,
+        historico=historico or [],
+        memoria_usuario=memoria_usuario or {},
         llm=llm,
         tools=tools or {},
     )

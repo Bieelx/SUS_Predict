@@ -398,6 +398,13 @@ def refresh_session(refresh_token: str) -> dict[str, Any]:
             api_key=_public_key(),
         )
     except SupabaseError as error:
+        if error.status == 429:
+            raise HTTPException(429, "Muitas tentativas. Aguarde antes de renovar a sessão") from error
+        if error.status >= 500:
+            raise HTTPException(
+                503,
+                "Serviço de autenticação temporariamente indisponível",
+            ) from error
         raise HTTPException(401, "Sessão expirada") from error
 
 
@@ -600,6 +607,17 @@ def clear_session_cookies(response: Response) -> None:
     }
     response.delete_cookie(ACCESS_COOKIE, **common)
     response.delete_cookie(REFRESH_COOKIE, **common)
+
+
+def clear_access_cookie(response: Response) -> None:
+    """Remove somente a credencial expirada e preserva a renovação da sessão."""
+    response.delete_cookie(
+        ACCESS_COOKIE,
+        httponly=True,
+        secure=_cookie_secure(),
+        samesite=_cookie_samesite(),
+        path="/",
+    )
 
 
 def logout(access_token: str) -> None:

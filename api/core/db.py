@@ -100,6 +100,16 @@ CREATE TABLE IF NOT EXISTS alertas (
     criado_em        TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS etps (
+    id            TEXT PRIMARY KEY,
+    ibge6         TEXT NOT NULL,
+    item          TEXT NOT NULL,
+    alerta_id     TEXT,
+    justificativa TEXT NOT NULL,
+    origem        TEXT NOT NULL,
+    criado_em     TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS susbot_conversas (
     id        TEXT PRIMARY KEY,
     usuario   TEXT NOT NULL,
@@ -117,11 +127,67 @@ CREATE TABLE IF NOT EXISTS susbot_mensagens (
     criado_em       TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS canal_pareamentos (
+    id                TEXT PRIMARY KEY,
+    usuario           TEXT NOT NULL,
+    provedor          TEXT NOT NULL,
+    token_hash        TEXT NOT NULL UNIQUE,
+    ibge6             TEXT NOT NULL,
+    status            TEXT NOT NULL,
+    external_user_id  TEXT,
+    external_chat_id  TEXT,
+    external_username TEXT,
+    criado_em         TEXT NOT NULL,
+    expira_em         TEXT NOT NULL,
+    reivindicado_em   TEXT,
+    confirmado_em     TEXT,
+    cancelado_em      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS canal_conexoes (
+    id                 TEXT PRIMARY KEY,
+    usuario            TEXT NOT NULL,
+    provedor           TEXT NOT NULL,
+    external_user_id   TEXT NOT NULL,
+    external_chat_id   TEXT NOT NULL,
+    external_username  TEXT,
+    ibge6              TEXT NOT NULL,
+    conversa_atual_id  TEXT REFERENCES susbot_conversas(id) ON DELETE SET NULL,
+    status             TEXT NOT NULL,
+    conectado_em       TEXT NOT NULL,
+    ultimo_uso_em      TEXT,
+    revogado_em        TEXT,
+    UNIQUE (usuario, provedor),
+    UNIQUE (provedor, external_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS canal_eventos (
+    provedor      TEXT NOT NULL,
+    external_id   TEXT NOT NULL,
+    processado_em TEXT NOT NULL,
+    PRIMARY KEY (provedor, external_id)
+);
+
+CREATE TABLE IF NOT EXISTS susbot_memorias (
+    id                 TEXT PRIMARY KEY,
+    owner_ref          TEXT NOT NULL,
+    fact_ref           TEXT NOT NULL,
+    payload_encrypted  TEXT NOT NULL,
+    criado_em          TEXT NOT NULL,
+    atualizado_em      TEXT NOT NULL,
+    UNIQUE (owner_ref, fact_ref)
+);
+
 CREATE INDEX IF NOT EXISTS idx_runs_lookup  ON datasus_runs (sistema, uf, cidade, ano_ini, ano_fim);
 CREATE INDEX IF NOT EXISTS idx_runs_created ON datasus_runs (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alertas_ibge_status ON alertas (ibge6, status);
+CREATE INDEX IF NOT EXISTS idx_etps_ibge ON etps (ibge6, criado_em DESC);
 CREATE INDEX IF NOT EXISTS idx_conversas_usuario ON susbot_conversas (usuario, criada_em DESC);
 CREATE INDEX IF NOT EXISTS idx_mensagens_conversa ON susbot_mensagens (conversa_id, criado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_pareamentos_usuario ON canal_pareamentos (usuario, provedor, criado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_pareamentos_token ON canal_pareamentos (token_hash);
+CREATE INDEX IF NOT EXISTS idx_conexoes_usuario ON canal_conexoes (usuario, status);
+CREATE INDEX IF NOT EXISTS idx_memorias_owner ON susbot_memorias (owner_ref, atualizado_em DESC);
 """
 
 
@@ -491,6 +557,49 @@ def has_alertas(ibge6: str) -> bool:
     return row is not None
 
 
+def atualizar_status_alerta(alerta_id: str, status: str) -> None:
+    with _conn() as con:
+        con.execute("UPDATE alertas SET status = ? WHERE id = ?", (status, alerta_id))
+
+
+def criar_etp(
+    ibge6: str,
+    item: str,
+    justificativa: str,
+    alerta_id: str | None = None,
+    origem: str = "susbot",
+) -> dict:
+    row = {
+        "id": str(uuid.uuid4()),
+        "ibge6": str(ibge6)[:6],
+        "item": item,
+        "alerta_id": alerta_id,
+        "justificativa": justificativa,
+        "origem": origem,
+        "criado_em": datetime.now(timezone.utc).isoformat(),
+    }
+    with _conn() as con:
+        con.execute("""
+            INSERT INTO etps (id, ibge6, item, alerta_id, justificativa, origem, criado_em)
+            VALUES (:id, :ibge6, :item, :alerta_id, :justificativa, :origem, :criado_em)
+        """, row)
+
+    # Gerar ETP sempre move o alerta relacionado para "em_andamento" (docs/telas/03).
+    if alerta_id:
+        atualizar_status_alerta(alerta_id, "em_andamento")
+
+    return row
+
+
+def get_etp(etp_id: str) -> dict | None:
+    with _conn() as con:
+        row = con.execute("""
+            SELECT id, ibge6, item, alerta_id, justificativa, origem, criado_em
+            FROM etps WHERE id = ?
+        """, (etp_id,)).fetchone()
+    return dict(row) if row else None
+
+
 def criar_conversa(usuario: str, titulo: str) -> dict:
     conversa = {
         "id": str(uuid.uuid4()),
@@ -587,6 +696,239 @@ def contar_mensagens(conversa_id: str) -> int:
             (conversa_id,),
         ).fetchone()
     return int(row["total"] if row else 0)
+
+
+# ── Pareamento e continuidade entre canais ──────────────────────────────────
+
+def criar_pareamento_canal(
+    usuario: str,
+    provedor: str,
+    token_hash: str,
+    ibge6: str,
+    expira_em: str,
+) -> dict:
+    agora = datetime.now(timezone.utc).isoformat()
+    pareamento = {
+        "id": str(uuid.uuid4()),
+        "usuario": usuario,
+        "provedor": provedor,
+        "token_hash": token_hash,
+        "ibge6": str(ibge6)[:6],
+        "status": "emitido",
+        "criado_em": agora,
+        "expira_em": expira_em,
+    }
+    with _conn() as con:
+        con.execute("""
+            UPDATE canal_pareamentos
+            SET status = 'cancelado', cancelado_em = ?
+            WHERE usuario = ? AND provedor = ? AND status IN ('emitido', 'reivindicado')
+        """, (agora, usuario, provedor))
+        con.execute("""
+            INSERT INTO canal_pareamentos
+                (id, usuario, provedor, token_hash, ibge6, status, criado_em, expira_em)
+            VALUES
+                (:id, :usuario, :provedor, :token_hash, :ibge6, :status, :criado_em, :expira_em)
+        """, pareamento)
+    return pareamento
+
+
+def get_pareamento_canal(pareamento_id: str) -> dict | None:
+    with _conn() as con:
+        row = con.execute("""
+            SELECT id, usuario, provedor, ibge6, status, external_user_id,
+                   external_chat_id, external_username, criado_em, expira_em,
+                   reivindicado_em, confirmado_em, cancelado_em
+            FROM canal_pareamentos WHERE id = ?
+        """, (pareamento_id,)).fetchone()
+    return _row_dict(row)
+
+
+def reivindicar_pareamento_canal(
+    token_hash: str,
+    provedor: str,
+    external_user_id: str,
+    external_chat_id: str,
+    external_username: str | None = None,
+) -> dict | None:
+    agora = datetime.now(timezone.utc).isoformat()
+    with _conn() as con:
+        row = con.execute("""
+            SELECT id FROM canal_pareamentos
+            WHERE token_hash = ? AND provedor = ? AND status = 'emitido' AND expira_em > ?
+        """, (token_hash, provedor, agora)).fetchone()
+        if not row:
+            return None
+        atualizado = con.execute("""
+            UPDATE canal_pareamentos
+            SET status = 'reivindicado', external_user_id = ?, external_chat_id = ?,
+                external_username = ?, reivindicado_em = ?
+            WHERE id = ? AND status = 'emitido'
+        """, (external_user_id, external_chat_id, external_username, agora, row["id"]))
+        if atualizado.rowcount != 1:
+            return None
+        resultado = con.execute("""
+            SELECT id, usuario, provedor, ibge6, status, external_user_id,
+                   external_chat_id, external_username, criado_em, expira_em,
+                   reivindicado_em, confirmado_em, cancelado_em
+            FROM canal_pareamentos WHERE id = ?
+        """, (row["id"],)).fetchone()
+    return _row_dict(resultado)
+
+
+def confirmar_pareamento_canal(pareamento_id: str, usuario: str) -> dict | None:
+    agora = datetime.now(timezone.utc).isoformat()
+    with _conn() as con:
+        pareamento = con.execute("""
+            SELECT * FROM canal_pareamentos
+            WHERE id = ? AND usuario = ? AND status = 'reivindicado' AND expira_em > ?
+        """, (pareamento_id, usuario, agora)).fetchone()
+        if not pareamento:
+            return None
+
+        conflito = con.execute("""
+            SELECT id, status FROM canal_conexoes
+            WHERE provedor = ? AND external_user_id = ? AND usuario <> ?
+        """, (pareamento["provedor"], pareamento["external_user_id"], usuario)).fetchone()
+        if conflito and conflito["status"] == "ativo":
+            raise ValueError("Esta conta externa ja esta conectada a outro usuario")
+        if conflito:
+            con.execute("DELETE FROM canal_conexoes WHERE id = ?", (conflito["id"],))
+
+        conexao_id = str(uuid.uuid4())
+        con.execute("""
+            INSERT INTO canal_conexoes
+                (id, usuario, provedor, external_user_id, external_chat_id,
+                 external_username, ibge6, status, conectado_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'ativo', ?)
+            ON CONFLICT(usuario, provedor) DO UPDATE SET
+                external_user_id = excluded.external_user_id,
+                external_chat_id = excluded.external_chat_id,
+                external_username = excluded.external_username,
+                ibge6 = excluded.ibge6,
+                conversa_atual_id = NULL,
+                status = 'ativo',
+                conectado_em = excluded.conectado_em,
+                ultimo_uso_em = NULL,
+                revogado_em = NULL
+        """, (
+            conexao_id, usuario, pareamento["provedor"], pareamento["external_user_id"],
+            pareamento["external_chat_id"], pareamento["external_username"],
+            pareamento["ibge6"], agora,
+        ))
+        con.execute("""
+            UPDATE canal_pareamentos SET status = 'confirmado', confirmado_em = ?
+            WHERE id = ?
+        """, (agora, pareamento_id))
+        conexao = con.execute("""
+            SELECT * FROM canal_conexoes WHERE usuario = ? AND provedor = ?
+        """, (usuario, pareamento["provedor"])).fetchone()
+    return _row_dict(conexao)
+
+
+def cancelar_pareamento_canal(pareamento_id: str, usuario: str) -> bool:
+    agora = datetime.now(timezone.utc).isoformat()
+    with _conn() as con:
+        cursor = con.execute("""
+            UPDATE canal_pareamentos SET status = 'cancelado', cancelado_em = ?
+            WHERE id = ? AND usuario = ? AND status IN ('emitido', 'reivindicado')
+        """, (agora, pareamento_id, usuario))
+    return cursor.rowcount == 1
+
+
+def listar_conexoes_canal(usuario: str) -> list[dict]:
+    with _conn() as con:
+        rows = con.execute("""
+            SELECT id, usuario, provedor, external_user_id, external_chat_id,
+                   external_username, ibge6, conversa_atual_id, status,
+                   conectado_em, ultimo_uso_em, revogado_em
+            FROM canal_conexoes
+            WHERE usuario = ? AND status = 'ativo'
+            ORDER BY conectado_em DESC
+        """, (usuario,)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_conexao_canal_por_externo(provedor: str, external_user_id: str) -> dict | None:
+    with _conn() as con:
+        row = con.execute("""
+            SELECT * FROM canal_conexoes
+            WHERE provedor = ? AND external_user_id = ? AND status = 'ativo'
+        """, (provedor, external_user_id)).fetchone()
+    return _row_dict(row)
+
+
+def revogar_conexao_canal(usuario: str, provedor: str) -> bool:
+    agora = datetime.now(timezone.utc).isoformat()
+    with _conn() as con:
+        cursor = con.execute("""
+            UPDATE canal_conexoes
+            SET status = 'revogado', revogado_em = ?, conversa_atual_id = NULL
+            WHERE usuario = ? AND provedor = ? AND status = 'ativo'
+        """, (agora, usuario, provedor))
+    return cursor.rowcount == 1
+
+
+def atualizar_conversa_canal(conexao_id: str, conversa_id: str | None) -> None:
+    agora = datetime.now(timezone.utc).isoformat()
+    with _conn() as con:
+        con.execute("""
+            UPDATE canal_conexoes
+            SET conversa_atual_id = ?, ultimo_uso_em = ? WHERE id = ? AND status = 'ativo'
+        """, (conversa_id, agora, conexao_id))
+
+
+def registrar_evento_canal(provedor: str, external_id: str) -> bool:
+    with _conn() as con:
+        cursor = con.execute("""
+            INSERT OR IGNORE INTO canal_eventos (provedor, external_id, processado_em)
+            VALUES (?, ?, ?)
+        """, (provedor, external_id, datetime.now(timezone.utc).isoformat()))
+    return cursor.rowcount == 1
+
+
+# ── Memória pessoal criptografada do SusBot ──────────────────────────────────────
+
+def upsert_memoria_usuario(owner_ref: str, fact_ref: str, payload_encrypted: str) -> dict:
+    agora = datetime.now(timezone.utc).isoformat()
+    memoria_id = str(uuid.uuid4())
+    with _conn() as con:
+        con.execute("""
+            INSERT INTO susbot_memorias
+                (id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(owner_ref, fact_ref) DO UPDATE SET
+                payload_encrypted = excluded.payload_encrypted,
+                atualizado_em = excluded.atualizado_em
+        """, (memoria_id, owner_ref, fact_ref, payload_encrypted, agora, agora))
+        row = con.execute("""
+            SELECT id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em
+            FROM susbot_memorias WHERE owner_ref = ? AND fact_ref = ?
+        """, (owner_ref, fact_ref)).fetchone()
+    return dict(row)
+
+
+def listar_memorias_usuario(owner_ref: str) -> list[dict]:
+    with _conn() as con:
+        rows = con.execute("""
+            SELECT id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em
+            FROM susbot_memorias
+            WHERE owner_ref = ?
+            ORDER BY atualizado_em DESC, id DESC
+        """, (owner_ref,)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def deletar_memoria_usuario(owner_ref: str, fact_ref: str | None = None) -> int:
+    with _conn() as con:
+        if fact_ref:
+            cursor = con.execute(
+                "DELETE FROM susbot_memorias WHERE owner_ref = ? AND fact_ref = ?",
+                (owner_ref, fact_ref),
+            )
+        else:
+            cursor = con.execute("DELETE FROM susbot_memorias WHERE owner_ref = ?", (owner_ref,))
+    return int(cursor.rowcount)
 
 
 # ── Supabase read-only query (curated tables, e.g. sih_dengue_*, sinan_dengue_*) ──

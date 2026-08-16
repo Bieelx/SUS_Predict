@@ -34,8 +34,10 @@ let refreshInFlight = null;
 async function refreshSession() {
   if (!refreshInFlight) {
     refreshInFlight = fetchWithCookies('/api/auth/refresh', { method: 'POST' })
-      .then(response => response.ok)
-      .catch(() => false)
+      .catch(() => new Response(
+        JSON.stringify({ detail: 'Serviço de autenticação temporariamente indisponível' }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } },
+      ))
       .finally(() => {
         refreshInFlight = null;
       });
@@ -52,9 +54,12 @@ function notifyUnauthorized() {
 export async function apiFetch(path, options = {}, retry = true) {
   let response = await fetchWithCookies(path, options);
   if (response.status === 401 && retry) {
-    const refreshed = await refreshSession();
-    if (refreshed) {
+    const refreshResponse = await refreshSession();
+    if (refreshResponse.ok) {
       response = await fetchWithCookies(path, options);
+    } else if (![401, 403].includes(refreshResponse.status)) {
+      // Uma indisponibilidade ou rate limit não encerra uma sessão ainda válida.
+      return refreshResponse.clone();
     }
   }
   if (response.status === 401) notifyUnauthorized();
@@ -63,6 +68,12 @@ export async function apiFetch(path, options = {}, retry = true) {
 
 async function jsonRequest(path, options, fallback) {
   const response = await fetchWithCookies(path, options);
+  if (!response.ok) throw await errorFromResponse(response, fallback);
+  return response.json().catch(() => ({}));
+}
+
+async function authenticatedJsonRequest(path, options, fallback) {
+  const response = await apiFetch(path, options);
   if (!response.ok) throw await errorFromResponse(response, fallback);
   return response.json().catch(() => ({}));
 }
@@ -150,7 +161,7 @@ export async function acceptAuthLink({ accessToken, refreshToken }) {
 }
 
 export async function updatePassword(password) {
-  return jsonRequest(
+  return authenticatedJsonRequest(
     '/api/auth/password',
     {
       method: 'POST',
@@ -161,7 +172,7 @@ export async function updatePassword(password) {
 }
 
 export async function inviteUser({ email, fullName, jobTitle }) {
-  return jsonRequest(
+  return authenticatedJsonRequest(
     '/api/admin/users/invite',
     {
       method: 'POST',

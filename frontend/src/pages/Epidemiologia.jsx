@@ -604,7 +604,7 @@ export default function Epidemiologia({ onNavigate }) {
 
         <GraficoSazonalidade dados={dados.sazonalidade} nota={dados.notaSazonalidade} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           <PorCidade dados={dados.porCidade} />
           <FaixaEtaria dados={dados.faixaEtaria} />
           <Genero dados={dados.genero} />

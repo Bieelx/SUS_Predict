@@ -114,20 +114,27 @@ export function dataHojeBr() {
   return new Date().toLocaleDateString('pt-BR');
 }
 
-export function baixarEtpPdf({ nome, origem, data, texto }) {
+// `demo` marca o PDF exportado durante o modo demonstração (auditoria P1-1):
+// o documento não pode circular sem indicar que veio de um cenário histórico
+// simulado, então o aviso vai no corpo visível do PDF, repetido, não só como
+// metadado que ninguém vê ao abrir o arquivo.
+export function baixarEtpPdf({ nome, origem, data, texto, demo = false }) {
+  const avisoDemo = 'DOCUMENTO GERADO EM MODO DEMONSTRACAO - NAO E UM DOCUMENTO OFICIAL';
   const blob = blobPdfSimples([
     'ESTUDO TECNICO PRELIMINAR',
+    ...(demo ? [avisoDemo, ''] : []),
     `Item: ${nome}`,
     `Origem: ${origem || 'Sistema'}`,
     `Gerado em: ${data || dataHojeBr()}`,
     `Base legal: ${REFERENCIA_LEGAL}`,
     '',
     ...(texto ? String(texto).split('\n') : ['Documento gerado no historico do SusPredict.']),
+    ...(demo ? ['', avisoDemo] : []),
   ]);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ETP-${normalizarAscii(nome).replace(/\s+/g, '-')}.pdf`;
+  a.download = `${demo ? 'DEMO-' : ''}ETP-${normalizarAscii(nome).replace(/\s+/g, '-')}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

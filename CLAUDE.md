@@ -117,6 +117,11 @@ URLs:
 Para usar o SusBot com Gemini, exporte também `GEMINI_API_KEY` antes de subir a API.
 Sem essa variável, o backend continua subindo, mas o agente fica sem o LLM real.
 
+Opcionalmente, exporte `GROQ_API_KEY` (e `GROQ_MODEL`, padrão `llama-3.3-70b-versatile`)
+para fallback automático: se o Gemini falhar (quota, erro de rede), o SusBot cai pro Groq
+sem trocar de código (`api/core/susbot_agent.py::FallbackSusBotLLM`). Se só `GROQ_API_KEY`
+estiver setada (sem Gemini), o SusBot roda 100% no Groq.
+
 ---
 
 ## Restrição crítica de Python

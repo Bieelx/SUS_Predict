@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE, THEMES, ThemeContext, MIcon, LogoIcon } from './shared/ui.jsx';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { API_BASE, THEMES, ThemeContext, MIcon, LogoIcon, DataStateBar, dataStateFromDemo } from './shared/ui.jsx';
 
-import LoginScreen from './pages/Login.jsx';
-import VisaoGeral from './pages/VisaoGeral.jsx';
-import Alertas from './pages/Alertas.jsx';
-import Insumos from './pages/Insumos.jsx';
-import Documentos from './pages/Documentos.jsx';
-import Epidemiologia from './pages/Epidemiologia.jsx';
-import Internacoes from './pages/Internacoes.jsx';
-import Superlotacao from './pages/Superlotacao.jsx';
-import PageConfiguracoes from './pages/Configuracoes.jsx';
-import PagePerfil from './pages/Perfil.jsx';
-import GeradorEtp from './pages/GeradorEtp.jsx';
-import { SusBotPanel } from './pages/SusBotPanel.jsx';
+const LoginScreen = lazy(() => import('./pages/Login.jsx'));
+const VisaoGeral = lazy(() => import('./pages/VisaoGeral.jsx'));
+const Alertas = lazy(() => import('./pages/Alertas.jsx'));
+const Insumos = lazy(() => import('./pages/Insumos.jsx'));
+const Documentos = lazy(() => import('./pages/Documentos.jsx'));
+const Epidemiologia = lazy(() => import('./pages/Epidemiologia.jsx'));
+const Internacoes = lazy(() => import('./pages/Internacoes.jsx'));
+const Superlotacao = lazy(() => import('./pages/Superlotacao.jsx'));
+const PageConfiguracoes = lazy(() => import('./pages/Configuracoes.jsx'));
+const PagePerfil = lazy(() => import('./pages/Perfil.jsx'));
+const GeradorEtp = lazy(() => import('./pages/GeradorEtp.jsx'));
+const SusBotPanel = lazy(() => import('./pages/SusBotPanel.jsx').then(modulo => ({ default: modulo.SusBotPanel })));
 import { DOCUMENTOS_INICIAIS } from './shared/etp.js';
 import { obterIbgeDemo, obterMunicipioDemo } from './shared/demo.js';
 import {
@@ -54,6 +54,68 @@ const NAV_ANALISES = [
   { id: 'internacoes',   label: 'Internações',   icon: 'bed' },
   { id: 'superlotacao',  label: 'Superlotação',  icon: 'emergency' },
 ];
+
+const NAV_MOBILE_PRINCIPAL = [
+  { id: 'visao-geral', label: 'Visão', icon: 'grid_view' },
+  { id: 'alertas', label: 'Alertas', icon: 'notifications' },
+  { id: 'insumos', label: 'Insumos', icon: 'medication' },
+];
+
+const NAV_MOBILE_SECUNDARIA = [
+  ...NAV_ANALISES,
+  { id: 'documentos', label: 'Documentos', icon: 'description' },
+  { id: 'configuracoes', label: 'Configurações', icon: 'settings' },
+  { id: 'perfil', label: 'Perfil', icon: 'person' },
+];
+
+const PAGE_PATHS = {
+  'visao-geral': '/visao-geral',
+  alertas: '/alertas',
+  insumos: '/insumos',
+  documentos: '/documentos',
+  epidemiologia: '/epidemiologia',
+  internacoes: '/internacoes',
+  superlotacao: '/superlotacao',
+  configuracoes: '/configuracoes',
+  perfil: '/perfil',
+};
+
+function lerRotaAtual() {
+  if (typeof window === 'undefined') return { page: 'visao-geral', alertaId: null, alertaTipo: 'todos' };
+  const partes = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  const candidata = partes[0] || 'visao-geral';
+  const page = PAGE_PATHS[candidata] ? candidata : 'visao-geral';
+  const params = new URLSearchParams(window.location.search);
+  return {
+    page,
+    alertaId: page === 'alertas' && partes[1] ? partes[1] : null,
+    alertaTipo: page === 'alertas' ? (params.get('tipo') || 'todos') : 'todos',
+  };
+}
+
+function urlDaRota(rota) {
+  const page = PAGE_PATHS[rota.page] ? rota.page : 'visao-geral';
+  const url = new URL(window.location.href);
+  url.pathname = page === 'alertas' && rota.alertaId
+    ? `/alertas/${encodeURIComponent(rota.alertaId)}`
+    : PAGE_PATHS[page];
+  url.searchParams.delete('tipo');
+  if (page === 'alertas' && rota.alertaTipo && rota.alertaTipo !== 'todos') {
+    url.searchParams.set('tipo', rota.alertaTipo);
+  }
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function CarregandoPagina() {
+  return (
+    <div role="status" aria-live="polite" aria-label="Carregando página" style={{ padding: '8px 0' }}>
+      <div className="skeleton" style={{ width: 220, height: 30, borderRadius: 8, marginBottom: 18 }} />
+      <div className="skeleton" style={{ width: '100%', height: 160, borderRadius: 14, marginBottom: 14 }} />
+      <div className="skeleton" style={{ width: '72%', height: 110, borderRadius: 14 }} />
+      <span className="sr-only">Carregando página…</span>
+    </div>
+  );
+}
 
 // Item nível 1 — mesmo tratamento visual para todos (Insumos idêntico aos demais,
 // decisão já tomada — ver brief da tela 00).
@@ -177,6 +239,9 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
   return (
     <aside
       ref={ref}
+      id="app-sidebar"
+      className="app-sidebar"
+      aria-label="Menu principal"
       style={{
         position: 'fixed', left: 0, top: 0, width: 'var(--sb-w)', height: '100dvh',
         background: SB, display: 'flex', flexDirection: 'column', zIndex: 30,
@@ -195,7 +260,7 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
+      <nav aria-label="Navegação principal" style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
         {/* OPERACIONAL — nível 1 */}
         <div style={{ marginBottom: 18 }}>
           <p className="eyebrow" style={{ padding: '0 10px', marginBottom: 4, color: SB_SECTION }}>
@@ -284,25 +349,29 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
 // (item ativo) e o <h1> da página já diziam, e nenhum nível dele era clicável.
 // A busca e o botão de "aplicativos" saíram: eram controles sem handler.
 
-function Topbar({ municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar, demoEnabled }) {
+function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar, demoEnabled }) {
+  const tituloPagina = [...NAV_OPERACIONAL, ...NAV_ANALISES, ...NAV_MOBILE_SECUNDARIA]
+    .find(item => item.id === page)?.label || 'Visão Geral';
+
   return (
-    <header style={{
+    <header className="app-topbar" style={{
       position: 'fixed', top: 0, right: 0, height: 'var(--topbar-h)',
       left: sidebarAberta ? 'var(--sb-w)' : 0,
       transition: 'left .3s cubic-bezier(0.2,0.7,0.3,1)',
       background: SB, borderBottom: '1px solid var(--sb-border)', display: 'flex',
       alignItems: 'center', justifyContent: 'space-between', padding: '0 20px 0 24px', zIndex: 20,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div className="app-topbar-context" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         {/* Controle da sidebar. Fica na topbar, não flutuando na calha: assim
             ocupa o mesmo ponto nos dois estados (recolher e trazer de volta são
             o mesmo botão), não cobre conteúdo e não exige abrir espaço extra de
             um lado só — a calha do card segue simétrica. */}
         <button
           onClick={onToggleSidebar}
-          className="topbar-btn"
+          className="topbar-btn app-topbar-menu-button"
           aria-label={sidebarAberta ? 'Recolher o menu' : 'Mostrar o menu'}
           aria-expanded={sidebarAberta}
+          aria-controls="app-sidebar"
           title={sidebarAberta ? 'Recolher o menu' : 'Mostrar o menu'}
           style={{
             width: 32, height: 32, borderRadius: 8, border: '1px solid var(--sb-border)',
@@ -313,10 +382,18 @@ function Topbar({ municipio, municipios, onTrocarMunicipio, onNavigate, sidebarA
           <MIcon m={sidebarAberta ? 'left_panel_close' : 'left_panel_open'} size={18} />
         </button>
 
+        <div className="mobile-topbar-title" aria-label={`Página atual: ${tituloPagina}`}>
+          <LogoIcon size={30} />
+          <div>
+            <p>{tituloPagina}</p>
+            <span>{municipio.nome} · {municipio.uf}</span>
+          </div>
+        </div>
+
         {/* Com o menu recolhido a marca perde a casa dela, então volta aqui —
             o app nunca fica sem identificação no canto superior esquerdo. */}
         {!sidebarAberta && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <div className="app-topbar-brand" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <LogoIcon size={28} />
             <p style={{ fontFamily: 'var(--ff-tight)', fontWeight: 800, fontSize: 'var(--fs-sm)', color: 'var(--sb-strong)', lineHeight: 1, margin: 0 }}>
               SusPredict
@@ -325,8 +402,8 @@ function Topbar({ municipio, municipios, onTrocarMunicipio, onNavigate, sidebarA
           </div>
         )}
 
-        <span className="eyebrow" style={{ color: SB_SECTION }}>Município</span>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <span className="eyebrow app-topbar-eyebrow" style={{ color: SB_SECTION }}>Município</span>
+        <div className="app-municipio-picker" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <select
             className="topbar-select"
             aria-label="Município em análise"
@@ -359,6 +436,126 @@ function Topbar({ municipio, municipios, onTrocarMunicipio, onNavigate, sidebarA
         <MIcon m="notifications" size={18} />
       </button>
     </header>
+  );
+}
+
+function MobileBottomNav({ current, alertasBadge, maisAberto, onNav, onOpenSusBot, onToggleMais }) {
+  const paginaSecundaria = NAV_MOBILE_SECUNDARIA.some(item => item.id === current);
+
+  return (
+    <nav className="mobile-bottom-nav" aria-label="Navegação principal no celular">
+      <div className="mobile-bottom-nav__inner">
+        {NAV_MOBILE_PRINCIPAL.map(item => {
+          const ativo = current === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className="mobile-bottom-nav__item"
+              aria-current={ativo ? 'page' : undefined}
+              onClick={() => onNav(item.id)}
+            >
+              <span className="mobile-bottom-nav__icon">
+                <MIcon m={item.icon} size={21} />
+                {item.id === 'alertas' && alertasBadge > 0 && (
+                  <span className="mobile-bottom-nav__badge" aria-label={`${alertasBadge} alertas ativos`}>
+                    {alertasBadge > 9 ? '9+' : alertasBadge}
+                  </span>
+                )}
+              </span>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+
+        <button
+          type="button"
+          className="mobile-bottom-nav__item mobile-bottom-nav__susbot"
+          aria-label="Abrir SusBot"
+          onClick={onOpenSusBot}
+        >
+          <span className="mobile-bottom-nav__icon mobile-bottom-nav__susbot-mark">SB</span>
+          <span>SusBot</span>
+        </button>
+
+        <button
+          type="button"
+          className="mobile-bottom-nav__item"
+          aria-expanded={maisAberto}
+          aria-controls="mobile-more-sheet"
+          aria-current={paginaSecundaria ? 'page' : undefined}
+          onClick={onToggleMais}
+        >
+          <span className="mobile-bottom-nav__icon"><MIcon m="menu" size={22} /></span>
+          <span>Mais</span>
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+function MobileMoreSheet({ current, aberta, demoEnabled, onClose, onNav }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.inert = !aberta;
+  }, [aberta]);
+
+  useEffect(() => {
+    if (!aberta) return;
+    const fechar = event => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', fechar);
+    return () => window.removeEventListener('keydown', fechar);
+  }, [aberta, onClose]);
+
+  return (
+    <>
+      {aberta && <button className="mobile-more-backdrop" aria-label="Fechar mais opções" onClick={onClose} />}
+      <section
+        ref={ref}
+        id="mobile-more-sheet"
+        className="mobile-more-sheet"
+        aria-label="Mais áreas do SusPredict"
+        aria-hidden={!aberta}
+        style={{ transform: aberta ? 'translateY(0)' : 'translateY(calc(100% + 20px))' }}
+      >
+        <div className="mobile-more-sheet__handle" aria-hidden="true" />
+        <div className="mobile-more-sheet__header">
+          <div>
+            <p className="eyebrow">Mais áreas</p>
+            <h2>Análises e conta</h2>
+          </div>
+          <button type="button" className="touch-target" aria-label="Fechar mais opções" onClick={onClose}>
+            <MIcon m="close" size={20} />
+          </button>
+        </div>
+
+        <div className="mobile-more-sheet__list">
+          {NAV_MOBILE_SECUNDARIA.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={current === item.id ? 'page' : undefined}
+              onClick={() => { onNav(item.id); onClose(); }}
+            >
+              <span><MIcon m={item.icon} size={20} /></span>
+              <span>
+                <strong>{item.label}</strong>
+                <small>{NAV_ANALISES.some(nav => nav.id === item.id) ? 'Análise sob demanda' : item.id === 'documentos' ? 'ETPs e rascunhos' : item.id === 'perfil' ? 'Identidade e acesso' : 'Preferências do sistema'}</small>
+              </span>
+              <MIcon m="chevron_right" size={20} />
+            </button>
+          ))}
+        </div>
+
+        <p className="mobile-more-sheet__status">
+          <span aria-hidden="true" />
+          {demoEnabled ? 'Replay histórico ativo' : 'Dados em sincronia · há 8 min'}
+        </p>
+      </section>
+    </>
   );
 }
 
@@ -430,7 +627,7 @@ const SEMANTIC_TOKENS = {
   '--canvas': '#F6F5F2', '--content': '#F1F4F3', '--elev': '#FFFFFF',
   '--subtle': '#F0EDE6', '--tint': '#E9E5DC',
   '--ink-900': '#1A1814', '--ink-700': '#3D3A33', '--ink-500': '#6B665D',
-  '--ink-400': '#8A8579', '--ink-300': '#A8A39A', '--ink-200': '#C9C4BA',
+  '--ink-400': '#6F6B63', '--ink-300': '#6F6B63', '--ink-200': '#C9C4BA',
   '--ink-100': '#E5E1D6', '--ink-50': '#EFEBE0',
   '--good': '#2A6B40', '--bad': '#8A2A38', '--warn': '#A6580F', '--info': '#1B5E6E',
   '--risk-alto': '#D94F4F', '--risk-medio': '#E8903A', '--risk-baixo': '#4A9B6F',
@@ -481,18 +678,46 @@ export default function App() {
     user: null,
     error: '',
   });
-  const [page, setPage] = useState('visao-geral');
+  const [rota, setRota] = useState(lerRotaAtual);
+  const page = rota.page;
   const [themeId, setThemeId] = useState('teal');
   const [etpOrigem, setEtpOrigem] = useState(null);
+  const [etpAtivado, setEtpAtivado] = useState(false);
+  const [susBotOpenRequest, setSusBotOpenRequest] = useState(null);
   const [chatAberto, setChatAberto] = useState(false);
+  const [mobileMaisAberto, setMobileMaisAberto] = useState(false);
+  const [viewportCompacto, setViewportCompacto] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1024px)').matches,
+  );
   // Preferência de tela cheia é do posto, não da sessão: quem trabalha com o
   // menu recolhido não quer recolher de novo a cada login.
   const [sidebarAberta, setSidebarAberta] = useState(
-    () => localStorage.getItem('sus_predict_sidebar') !== 'oculta',
+    () => localStorage.getItem('sus_predict_sidebar') !== 'oculta'
+      && !(typeof window !== 'undefined' && window.matchMedia('(max-width: 1024px)').matches),
   );
   useEffect(() => {
-    localStorage.setItem('sus_predict_sidebar', sidebarAberta ? 'visivel' : 'oculta');
-  }, [sidebarAberta]);
+    const media = window.matchMedia('(max-width: 1024px)');
+    const sincronizar = event => {
+      setViewportCompacto(event.matches);
+      if (event.matches) setSidebarAberta(false);
+      else setSidebarAberta(localStorage.getItem('sus_predict_sidebar') !== 'oculta');
+    };
+    setViewportCompacto(media.matches);
+    media.addEventListener('change', sincronizar);
+    return () => media.removeEventListener('change', sincronizar);
+  }, []);
+  function alternarSidebar() {
+    setSidebarAberta(aberta => {
+      const proxima = !aberta;
+      if (!viewportCompacto) {
+        localStorage.setItem('sus_predict_sidebar', proxima ? 'visivel' : 'oculta');
+      }
+      return proxima;
+    });
+  }
+  useEffect(() => {
+    if (etpOrigem) setEtpAtivado(true);
+  }, [etpOrigem]);
   const [municipio, setMunicipio] = useState(MUNICIPIOS[0]);
   const [documentos, setDocumentos] = useState(DOCUMENTOS_INICIAIS);
   const [demoEnabled, setDemoEnabled] = useState(demoAtivaNaUrl);
@@ -536,7 +761,9 @@ export default function App() {
         })
         .catch(error => {
           setAuth({
-            status: 'unauthenticated',
+            status: (!error?.status || error.status === 429 || error.status >= 500)
+              ? 'unavailable'
+              : 'unauthenticated',
             user: null,
             error: error instanceof Error ? error.message : 'Não foi possível validar sua sessão.',
           });
@@ -549,8 +776,38 @@ export default function App() {
   async function handleLogout() {
     await logoutSession();
     setAuth({ status: 'unauthenticated', user: null, error: '' });
-    setPage('visao-geral');
+    navegar('visao-geral', { replace: true });
   }
+
+  const navegar = useCallback((destino, opcoes = {}) => {
+    const parcial = typeof destino === 'string' ? { page: destino } : destino;
+    const proxima = {
+      page: PAGE_PATHS[parcial?.page] ? parcial.page : 'visao-geral',
+      alertaId: parcial?.page === 'alertas' ? (parcial.alertaId || null) : null,
+      alertaTipo: parcial?.page === 'alertas' ? (parcial.alertaTipo || 'todos') : 'todos',
+    };
+    const href = urlDaRota(proxima);
+    if (opcoes.replace) window.history.replaceState({ page: proxima.page }, '', href);
+    else window.history.pushState({ page: proxima.page }, '', href);
+    setRota(proxima);
+    setMobileMaisAberto(false);
+    if (viewportCompacto) setSidebarAberta(false);
+  }, [viewportCompacto]);
+
+  useEffect(() => {
+    function sincronizarComNavegador() {
+      setRota(lerRotaAtual());
+    }
+    window.addEventListener('popstate', sincronizarComNavegador);
+    return () => window.removeEventListener('popstate', sincronizarComNavegador);
+  }, []);
+
+  useEffect(() => {
+    if (authLinkPending || window.location.pathname.startsWith('/auth/')) return;
+    if (window.location.pathname === '/' || !PAGE_PATHS[window.location.pathname.split('/').filter(Boolean)[0]]) {
+      window.history.replaceState({ page }, '', urlDaRota(rota));
+    }
+  }, [authLinkPending]);
 
   function salvarDocumento(doc) {
     setDocumentos(prev => {
@@ -708,6 +965,8 @@ export default function App() {
     marcarAlertaEmAndamento,
   };
 
+  const dataState = dataStateFromDemo(demoState);
+
   const alertasBadge = demoEnabled && demo.payload
     ? (demo.payload.alertas || []).filter(a => a.status === 'novo' || a.status === 'andamento').length
     : 3;
@@ -723,38 +982,75 @@ export default function App() {
     );
   }
 
+  if (auth.status === 'unavailable') {
+    return (
+      <div role="alert" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24, background: '#F6F5F2', color: '#16353C', fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ width: 'min(440px, 100%)', display: 'grid', gap: 16, textAlign: 'center' }}>
+          <LogoIcon size={44} />
+          <h1 style={{ margin: 0, fontSize: 26 }}>Não foi possível validar sua sessão agora</h1>
+          <p style={{ margin: 0, color: '#66736F' }}>{auth.error || 'O serviço de autenticação está temporariamente indisponível.'}</p>
+          <button
+            type="button"
+            className="auth-primary-button"
+            onClick={() => {
+              setAuth({ status: 'loading', user: null, error: '' });
+              getCurrentUser()
+                .then(user => setAuth(user
+                  ? { status: 'authenticated', user, error: '' }
+                  : { status: 'unauthenticated', user: null, error: '' }))
+                .catch(error => setAuth({
+                  status: (!error?.status || error.status === 429 || error.status >= 500)
+                    ? 'unavailable'
+                    : 'unauthenticated',
+                  user: null,
+                  error: error instanceof Error ? error.message : 'Não foi possível validar sua sessão.',
+                }));
+            }}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (auth.status !== 'authenticated') {
     return (
-      <LoginScreen
-        authLink={initialAuthLink}
-        forceAuthLink={authLinkPending}
-        onAuthLinkFinished={finishAuthLink}
-        onEnter={user => {
-          finishAuthLink();
-          setAuth({ status: 'authenticated', user, error: '' });
-        }}
-        initialMessage={auth.error}
-      />
+      <Suspense fallback={<CarregandoPagina />}>
+        <LoginScreen
+          authLink={initialAuthLink}
+          forceAuthLink={authLinkPending}
+          onAuthLinkFinished={finishAuthLink}
+          onEnter={user => {
+            finishAuthLink();
+            setAuth({ status: 'authenticated', user, error: '' });
+            if (window.location.pathname.startsWith('/auth/')) {
+              navegar('visao-geral', { replace: true });
+            }
+          }}
+          initialMessage={auth.error}
+        />
+      </Suspense>
     );
   }
 
   function render() {
     const foraDoEscopoDemo = demoEnabled && ['epidemiologia', 'internacoes', 'superlotacao', 'configuracoes', 'perfil'].includes(page);
     if (foraDoEscopoDemo) {
-      return <DemoForaDoEscopo page={page} onNavigate={setPage} />;
+      return <DemoForaDoEscopo page={page} onNavigate={navegar} />;
     }
 
     switch (page) {
-      case 'visao-geral':   return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
-      case 'alertas':       return <Alertas onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
-      case 'insumos':       return <Insumos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
-      case 'documentos':    return <Documentos onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} documentos={documentosVisiveis} demoState={demoState} />;
-      case 'epidemiologia': return <Epidemiologia onNavigate={setPage} demoState={demoState} />;
-      case 'internacoes':   return <Internacoes onNavigate={setPage} demoState={demoState} />;
-      case 'superlotacao':  return <Superlotacao onNavigate={setPage} demoState={demoState} />;
-      case 'configuracoes': return <PageConfiguracoes onNavigate={setPage} demoState={demoState} />;
-      case 'perfil':        return <PagePerfil user={auth.user} onNavigate={setPage} onLogout={handleLogout} onUserChange={user => setAuth(current => ({ ...current, user }))} demoState={demoState} />;
-      default:              return <VisaoGeral onNavigate={setPage} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
+      case 'visao-geral':   return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
+      case 'alertas':       return <Alertas onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} deepLinkAlertaId={rota.alertaId} filtroInicial={rota.alertaTipo} onFiltroChange={alertaTipo => navegar({ page: 'alertas', alertaId: rota.alertaId, alertaTipo }, { replace: true })} onDeepLinkClose={() => navegar({ page: 'alertas', alertaTipo: rota.alertaTipo }, { replace: true })} />;
+      case 'insumos':       return <Insumos onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
+      case 'documentos':    return <Documentos onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} documentos={documentosVisiveis} demoState={demoState} />;
+      case 'epidemiologia': return <Epidemiologia onNavigate={navegar} demoState={demoState} />;
+      case 'internacoes':   return <Internacoes onNavigate={navegar} demoState={demoState} />;
+      case 'superlotacao':  return <Superlotacao onNavigate={navegar} demoState={demoState} />;
+      case 'configuracoes': return <PageConfiguracoes onNavigate={navegar} demoState={demoState} />;
+      case 'perfil':        return <PagePerfil user={auth.user} onNavigate={navegar} onLogout={handleLogout} onUserChange={user => setAuth(current => ({ ...current, user }))} demoState={demoState} />;
+      default:              return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
     }
   }
 
@@ -763,26 +1059,40 @@ export default function App() {
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
           (esquerda da sidebar, gap central, respiro do painel do SusBot). */}
       <div style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
-        <Sidebar current={page} onNav={setPage} aberta={sidebarAberta} alertasBadge={alertasBadge} demoEnabled={demoEnabled} user={auth.user} />
+        <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} alertasBadge={alertasBadge} demoEnabled={demoEnabled} user={auth.user} />
+        {viewportCompacto && sidebarAberta && (
+          <button
+            type="button"
+            className="app-sidebar-backdrop"
+            aria-label="Fechar menu"
+            onClick={() => setSidebarAberta(false)}
+          />
+        )}
         <Topbar
+          page={page}
           municipio={municipioAtual}
           municipios={municipiosTopbar}
           onTrocarMunicipio={setMunicipio}
-          onNavigate={setPage}
+          onNavigate={navegar}
           sidebarAberta={sidebarAberta}
-          onToggleSidebar={() => setSidebarAberta(v => !v)}
+          onToggleSidebar={alternarSidebar}
           demoEnabled={demoEnabled}
         />
         {/* Uma linguagem visual só: o conteúdo é sempre um card destacado do
             canvas, com o mesmo respiro do painel do SusBot. Abrir o chat mexe
             em uma propriedade só (`right`) — o card não muda de identidade, e o
             FAB flutua sobre a calha, não sobre texto rolável. */}
-        <main style={{
+        <main className={`app-main${chatAberto ? ' app-main--chat-open' : ''}`} style={{
           position: 'fixed', top: 'var(--topbar-h)', bottom: 0, background: SB,
           left: sidebarAberta ? 'var(--sb-w)' : 0,
           right: chatAberto ? 'var(--chat-inset)' : 0,
           transition: 'left .3s cubic-bezier(0.2,0.7,0.3,1), right .3s cubic-bezier(0.2,0.7,0.3,1)',
+          display: 'flex', flexDirection: 'column',
         }}>
+          {/* Faixa persistente de estado do dado (auditoria P1-1) — fica acima
+              do card de conteúdo, então sobrevive à troca de página e não
+              some ao rolar. REAL não renderiza nada (ver DataStateBar). */}
+          <DataStateBar state={dataState} />
           {/* Duas camadas de propósito: a de fora arredonda e recorta, a de
               dentro rola. Com `border-radius` e `overflow-y: auto` no MESMO
               elemento, o Firefox pinta a barra de rolagem no scrollport, que
@@ -790,8 +1100,8 @@ export default function App() {
               Chrome recorta a ::-webkit-scrollbar, por isso lá não aparece).
               Com o recorte em um pai `overflow: hidden`, a barra fica dentro da
               área já arredondada e os quatro cantos valem em qualquer motor. */}
-          <div style={{
-            height: 'calc(100% - var(--gap) * 2)',
+          <div className="app-content-frame" style={{
+            flex: 1, minHeight: 0,
             margin: 'var(--gap)',
             background: 'var(--content)',
             borderRadius: 18,
@@ -799,18 +1109,37 @@ export default function App() {
             boxShadow: '0 8px 28px rgba(26,24,20,0.12)',
             overflow: 'hidden',
           }}>
-            <div style={{ height: '100%', overflowY: 'auto' }}>
+            <div className="app-content-scroll" style={{ height: '100%', overflowY: 'auto' }}>
               {/* Folga extra embaixo: o FAB do SusBot flutua sobre o canto
                   inferior direito do card, e sem isso o último bloco de conteúdo
                   fica embaixo dele quando a página chega ao fim da rolagem. */}
-              <div style={{ padding: '28px 36px 84px', maxWidth: 1600, margin: '0 auto' }}>
-                {render()}
+              <div className="app-page-content" style={{ padding: '28px 36px 84px', maxWidth: 1600, margin: '0 auto' }}>
+                <Suspense fallback={<CarregandoPagina />}>
+                  {render()}
+                </Suspense>
               </div>
             </div>
           </div>
         </main>
-        <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} onEtpGerado={handleEtpGerado} demoState={demoState} />
-        <SusBotPanel page={page} onNavigate={setPage} ibge6={municipioAtual.ibge6} onOpenChange={setChatAberto} />
+        <MobileMoreSheet
+          current={page}
+          aberta={mobileMaisAberto}
+          demoEnabled={demoEnabled}
+          onClose={() => setMobileMaisAberto(false)}
+          onNav={navegar}
+        />
+        <MobileBottomNav
+          current={page}
+          alertasBadge={alertasBadge}
+          maisAberto={mobileMaisAberto}
+          onNav={navegar}
+          onOpenSusBot={() => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt: '' }))}
+          onToggleMais={() => setMobileMaisAberto(aberto => !aberto)}
+        />
+        <Suspense fallback={null}>
+          {etpAtivado && <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} onEtpGerado={handleEtpGerado} demoState={demoState} />}
+          <SusBotPanel page={page} onNavigate={navegar} ibge6={municipioAtual.ibge6} onOpenChange={setChatAberto} openRequest={susBotOpenRequest} />
+        </Suspense>
       </div>
     </ThemeContext.Provider>
   );

@@ -58,10 +58,13 @@ ao host que os criou.
 
 ## 2. Provisionar o banco e as políticas de acesso
 
-Por decisão de segurança do projeto, os scripts de criação e as consultas SQL
-não são distribuídos neste repositório. O provisionamento do esquema, das roles,
-da auditoria e das políticas RLS deve ser realizado diretamente no projeto
-Supabase por uma pessoa autorizada da equipe.
+O schema de persistência DATASUS existente permanece versionado para preservar o
+funcionamento atual. Em um projeto novo, abra o **SQL Editor** e execute
+`supabase/schema.sql`. Ele cria as tabelas agregadas `datasus_runs`,
+`datasus_serie`, `datasus_sexo`, `datasus_faixa_etaria`, `datasus_top_causas` e
+`datasus_raw_objects`. O provisionamento das estruturas de autenticação, roles,
+auditoria e políticas RLS deve ser realizado diretamente no projeto Supabase por
+uma pessoa autorizada da equipe.
 
 Não edite `auth.users` diretamente. O schema `auth` é administrado pelo Supabase;
 dados adicionais devem ficar em estruturas públicas relacionadas por UUID. Esse

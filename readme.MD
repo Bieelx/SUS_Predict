@@ -36,6 +36,11 @@ Necessário para rodar o frontend (Vite).
 - `GEMINI_API_KEY`: necessária para o SusBot responder com LLM real.
 - `SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY` (ou a chave legada `SUPABASE_ANON_KEY`): obrigatórias para login.
 - `SUPABASE_SECRET_KEY` (ou a chave legada `SUPABASE_SERVICE_ROLE_KEY`): obrigatória no backend para roles, convites e persistência.
+- `VITE_API_BASE`: URL pública da API injetada no build do frontend; em produção, use HTTPS e não deixe o fallback `localhost`.
+- `SUSBOT_DEV_AUTH_SECRET`: usado somente no login local quando o modo de desenvolvimento é habilitado explicitamente; nunca substitui o Supabase em produção.
+- `SUSBOT_MEMORY_KEY`: chave Fernet opcional para criptografar a memória pessoal do SusBot. Em desenvolvimento, uma chave local com permissão `0600` é criada em `api/.secrets/`; em produção, configure-a pelo gerenciador de segredos da infraestrutura.
+- `GROQ_API_KEY` e `GROQ_MODEL`: configuram o fallback opcional do SusBot quando o Gemini não estiver disponível.
+- Telegram: `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` e `CHANNEL_PAIRING_SECRET`. Veja [API_TELEGRAM.md](docs/documentacao/API_TELEGRAM.md).
 
 ## Instalação (local)
 
@@ -115,7 +120,9 @@ npm run dev
 
 O dashboard exige uma sessão Supabase válida com a role de negócio `admin`. A
 existência de uma string no navegador não libera nenhuma tela, e todas as rotas
-`/api/*` (exceto o fluxo público de autenticação) são validadas no backend.
+`/api/*` são validadas no backend. As únicas entradas sem sessão Admin são o
+fluxo público de autenticação e o webhook do Telegram, que exige seu próprio
+`TELEGRAM_WEBHOOK_SECRET`.
 
 - Não existe cadastro público.
 - Novos usuários são convidados por um Admin na aba **Perfil do Usuário**.
@@ -137,10 +144,13 @@ O Supabase é usado para evitar re-download e manter os dados tratados organizad
 
 ### Provisionamento do banco
 
-Por decisão de segurança do projeto, os scripts de criação e as consultas SQL
-não são versionados neste repositório. O esquema, as roles e as políticas RLS
-devem ser provisionados diretamente no projeto Supabase pela equipe responsável
-antes de iniciar a aplicação.
+O schema de persistência DATASUS existente permanece em `supabase/schema.sql`
+para compatibilidade com o funcionamento atual. No **SQL Editor** do Supabase,
+execute esse arquivo ao provisionar um projeto novo. Ele cria `datasus_runs`,
+`datasus_serie`, `datasus_sexo`, `datasus_faixa_etaria`, `datasus_top_causas` e
+`datasus_raw_objects`. O provisionamento de autenticação, roles e políticas RLS
+é realizado diretamente no projeto Supabase pela equipe responsável antes de
+iniciar a aplicação.
 
 ### Criar bucket no Storage
 
@@ -250,6 +260,8 @@ Todos os endpoints abaixo exigem sessão Admin:
 ## Dicas de desenvolvimento
 
 - Use `bash start_dev.sh` para evitar “esquecer” de ativar venv ou carregar `.env`.
+- A memória pessoal pode ser consultada com `/memoria` e apagada com `/esquecer`. A API autenticada também oferece `GET/DELETE /api/susbot/memoria`; ela nunca recebe um identificador de outro usuário como parâmetro.
+- Com as quatro variáveis do Telegram preenchidas, `start_dev.sh` instala ou reutiliza `cloudflared`, cria um Quick Tunnel HTTPS para a API e registra o webhook automaticamente. Use `ENABLE_TELEGRAM_TUNNEL=false` para desativar.
 - Se o frontend abrir em outra porta, pare os processos antigos e rode `bash start_dev.sh` de novo.
 - Para forçar re-download (ignorando cache), envie `usar_cache=false` no `POST /api/download`.
 - Para manter o projeto seguro, nunca exponha `SUPABASE_SECRET_KEY`/`SUPABASE_SERVICE_ROLE_KEY`.

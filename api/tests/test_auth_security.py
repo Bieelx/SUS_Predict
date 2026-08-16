@@ -116,6 +116,29 @@ def test_recuperacao_nao_revela_se_email_existe(monkeypatch):
     assert auth.request_password_recovery("pessoa@example.com") is None
 
 
+@pytest.mark.parametrize(
+    "supabase_status,expected_status",
+    [
+        (429, 429),
+        (500, 503),
+        (503, 503),
+    ],
+)
+def test_refresh_preserva_falhas_transitorias(monkeypatch, supabase_status, expected_status):
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test")
+
+    def fake_request(*_args, **_kwargs):
+        raise auth.SupabaseError(supabase_status, "Falha transitória")
+
+    monkeypatch.setattr(auth, "_request_json", fake_request)
+
+    with pytest.raises(HTTPException) as exc:
+        auth.refresh_session("refresh-token-valido")
+
+    assert exc.value.status_code == expected_status
+
+
 def test_validacao_de_token_repete_falha_transitoria_sem_expor_credencial(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
     monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test")
@@ -282,10 +305,12 @@ def test_sessao_de_recuperacao_rejeita_token_estruturalmente_invalido_sem_ecoa_l
     assert refresh_token not in exc.value.detail or not refresh_token
 
 
-def _request(path, method="GET", origin=""):
+def _request(path, method="GET", origin="", cookie=""):
     headers = []
     if origin:
         headers.append((b"origin", origin.encode("ascii")))
+    if cookie:
+        headers.append((b"cookie", cookie.encode("latin-1")))
     return Request(
         {
             "type": "http",
@@ -326,6 +351,82 @@ def test_middleware_bloqueia_api_sem_sessao(monkeypatch):
     assert response.status_code == 401
     assert response.headers["access-control-allow-origin"] == main.ALLOWED_ORIGINS[0]
     assert response.headers["access-control-allow-credentials"] == "true"
+    cookies = [
+        value.decode("latin-1")
+        for name, value in response.raw_headers
+        if name.lower() == b"set-cookie"
+    ]
+    assert any(cookie.startswith(f"{auth.ACCESS_COOKIE}=") for cookie in cookies)
+    assert not any(cookie.startswith(f"{auth.REFRESH_COOKIE}=") for cookie in cookies)
+
+
+def test_refresh_invalido_limpa_toda_a_sessao(monkeypatch):
+    from api import main
+
+    def reject(_refresh_token):
+        raise HTTPException(401, "Sessão expirada")
+
+    monkeypatch.setattr(main.auth_core, "refresh_session", reject)
+
+    response = main.auth_refresh(_request("/api/auth/refresh"), Response())
+
+    assert response.status_code == 401
+    cookies = [
+        value.decode("latin-1")
+        for name, value in response.raw_headers
+        if name.lower() == b"set-cookie"
+    ]
+    assert any(cookie.startswith(f"{auth.ACCESS_COOKIE}=") for cookie in cookies)
+    assert any(cookie.startswith(f"{auth.REFRESH_COOKIE}=") for cookie in cookies)
+
+
+def test_refresh_indisponivel_preserva_token_para_nova_tentativa(monkeypatch):
+    from api import main
+
+    def unavailable(_refresh_token):
+        raise HTTPException(503, "Autenticação temporariamente indisponível")
+
+    monkeypatch.setattr(main.auth_core, "refresh_session", unavailable)
+
+    response = main.auth_refresh(_request("/api/auth/refresh"), Response())
+
+    assert response.status_code == 503
+    assert not any(name.lower() == b"set-cookie" for name, _value in response.raw_headers)
+
+
+def test_refresh_valido_rotaciona_os_dois_cookies(monkeypatch):
+    from api import main
+
+    received = []
+
+    def renew(refresh_token):
+        received.append(refresh_token)
+        return {
+            "access_token": "access-token-novo",
+            "refresh_token": "refresh-token-novo",
+            "expires_in": 3600,
+            "user": _admin_autorizado(),
+        }
+
+    monkeypatch.setattr(main.auth_core, "refresh_session", renew)
+    response = Response()
+    request = _request(
+        "/api/auth/refresh",
+        method="POST",
+        cookie=f"{auth.REFRESH_COOKIE}=refresh-token-antigo",
+    )
+
+    payload = main.auth_refresh(request, response)
+
+    assert received == ["refresh-token-antigo"]
+    assert payload["user"]["role"] == "admin"
+    cookies = [
+        value.decode("latin-1")
+        for name, value in response.raw_headers
+        if name.lower() == b"set-cookie"
+    ]
+    assert any(cookie.startswith(f"{auth.ACCESS_COOKIE}=access-token-novo") for cookie in cookies)
+    assert any(cookie.startswith(f"{auth.REFRESH_COOKIE}=refresh-token-novo") for cookie in cookies)
 
 
 def test_middleware_rejeita_origem_nao_permitida():
@@ -341,3 +442,24 @@ def test_middleware_rejeita_origem_nao_permitida():
         )
     )
     assert response.status_code == 403
+
+
+def test_middleware_deixa_webhook_validar_o_proprio_segredo(monkeypatch):
+    from api import main
+
+    def should_not_authenticate(_request):
+        raise AssertionError("O middleware Admin não deve interceptar o webhook")
+
+    async def next_handler(_request):
+        return JSONResponse({"ok": True})
+
+    monkeypatch.setattr(main.auth_core, "authenticate_request", should_not_authenticate)
+
+    response = asyncio.run(
+        main.proteger_api(
+            _request("/api/susbot/telegram/webhook", method="POST"),
+            next_handler,
+        )
+    )
+
+    assert response.status_code == 200

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LogoIcon } from '../shared/ui.jsx';
+import { LogoIcon, MIcon, THEMES } from '../shared/ui.jsx';
 import {
   acceptAuthLink,
   clearAuthLinkFromUrl,
@@ -11,40 +11,22 @@ import {
   updatePassword,
 } from '../shared/authClient.js';
 
-const INPUT_STYLE = {
-  width: '100%',
-  padding: '12px 14px',
-  background: '#FFFFFF',
-  border: '1.5px solid #E5E1D6',
-  borderRadius: 11,
-  fontSize: 14,
-  color: '#1A1814',
-  boxSizing: 'border-box',
-  outline: 'none',
-};
+const DEV_ACCOUNT_EMAIL = 'marcia.oliveira@dev.local';
 
 function Feedback({ type = 'error', children }) {
   const error = type === 'error';
   return (
     <div
+      className="login-feedback"
       role={error ? 'alert' : 'status'}
-      className="rise"
-      style={{
-        marginTop: 16,
-        padding: '12px 14px',
-        background: error ? '#FBEAEA' : '#EAF4ED',
-        border: `1px solid ${error ? '#E9C2C2' : '#C8E0CF'}`,
-        color: error ? '#8A2A38' : '#245C38',
-        borderRadius: 11,
-        display: 'flex',
-        gap: 9,
-        fontSize: 13,
-        lineHeight: 1.45,
+      aria-live={error ? 'assertive' : 'polite'}
+      style={error ? undefined : {
+        borderColor: '#B8D8C1',
+        background: '#EAF4ED',
+        color: '#245C38',
       }}
     >
-      <span className="material-symbols-rounded" aria-hidden="true" style={{ fontSize: 19 }}>
-        {error ? 'error' : 'check_circle'}
-      </span>
+      <MIcon m={error ? 'error' : 'check_circle'} size={19} />
       <span>{children}</span>
     </div>
   );
@@ -53,7 +35,10 @@ function Feedback({ type = 'error', children }) {
 function PasswordChecklist({ password }) {
   const requirements = useMemo(() => passwordRequirements(password), [password]);
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 10px', marginTop: 8 }}>
+    <div
+      aria-label="Requisitos da senha"
+      style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 10px', marginTop: 8 }}
+    >
       {requirements.map(item => (
         <span
           key={item.label}
@@ -61,17 +46,30 @@ function PasswordChecklist({ password }) {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 3,
-            color: item.ok ? '#2A6B40' : '#8A8579',
+            color: item.ok ? '#2A6B40' : 'var(--login-muted)',
             fontSize: 11,
           }}
         >
-          <span className="material-symbols-rounded" aria-hidden="true" style={{ fontSize: 14 }}>
-            {item.ok ? 'check_circle' : 'radio_button_unchecked'}
-          </span>
+          <MIcon m={item.ok ? 'check_circle' : 'radio_button_unchecked'} size={14} />
           {item.label}
         </span>
       ))}
     </div>
+  );
+}
+
+function BackToLoginButton({ disabled, onClick }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      className="login-demo__button touch-target"
+      onClick={onClick}
+      style={{ marginTop: 10 }}
+    >
+      <MIcon m="arrow_back" size={17} />
+      Voltar ao login
+    </button>
   );
 }
 
@@ -83,6 +81,7 @@ export default function LoginScreen({
   initialMessage = '',
 }) {
   const linkStartedRef = useRef(false);
+  const passwordInputRef = useRef(null);
   const [mode, setMode] = useState(forceAuthLink ? 'link' : 'login');
   const [linkType, setLinkType] = useState('');
   const [email, setEmail] = useState('');
@@ -91,15 +90,17 @@ export default function LoginScreen({
   const [loading, setLoading] = useState(forceAuthLink);
   const [error, setError] = useState(initialMessage);
   const [message, setMessage] = useState('');
+  const ambienteDesenvolvimento = import.meta.env.DEV;
+  const temaLogin = THEMES.teal.vars;
 
   const validateAuthLink = useCallback(async () => {
     if (!authLink || authLink.error) return;
 
-    // Retire credenciais da barra do navegador assim que forem capturadas.
-    // Em falhas transitórias, a cópia permanece somente na memória deste
-    // componente para permitir nova tentativa sem reutilizar o link do e-mail.
+    // Credenciais de uso único saem da barra assim que são capturadas. Em uma
+    // falha transitória, a cópia fica somente na memória para permitir retry.
     clearAuthLinkFromUrl();
     setError('');
+    setMessage('');
     setLoading(true);
     setMode('link');
     setLinkType(authLink.type);
@@ -108,7 +109,7 @@ export default function LoginScreen({
       await acceptAuthLink(authLink);
       setMode('password');
     } catch (err) {
-      if ([502, 503, 504].includes(err?.status)) {
+      if (!err?.status || err.status === 429 || err.status >= 500) {
         setError(
           'Não foi possível alcançar o serviço de autenticação. '
           + 'Verifique sua conexão e tente validar novamente.',
@@ -154,13 +155,28 @@ export default function LoginScreen({
     setMessage('');
   }
 
+  function returnToLogin() {
+    resetFeedback();
+    setPassword('');
+    setPasswordConfirm('');
+    setMode('login');
+  }
+
   async function submitLogin(event) {
     event.preventDefault();
     resetFeedback();
+
+    if (!email.trim() || !password) {
+      setError('Informe o e-mail institucional e a senha para continuar.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const user = await login(email, password);
-      if (!user || user.role !== 'admin') throw new Error('Usuário sem permissão de Administrador.');
+      const user = await login(email.trim(), password);
+      if (!user || user.role !== 'admin') {
+        throw new Error('Usuário sem permissão de Administrador.');
+      }
       onAuthLinkFinished();
       onEnter(user);
     } catch (err) {
@@ -175,7 +191,7 @@ export default function LoginScreen({
     resetFeedback();
     setLoading(true);
     try {
-      const result = await requestPasswordRecovery(email);
+      const result = await requestPasswordRecovery(email.trim());
       setMessage(
         result.message
         || 'Se houver uma conta para este e-mail, enviaremos as instruções de acesso.',
@@ -220,240 +236,194 @@ export default function LoginScreen({
     }
   }
 
+  function prepareDemoLogin() {
+    resetFeedback();
+    setMode('login');
+    setEmail(DEV_ACCOUNT_EMAIL);
+    setPassword('');
+    window.requestAnimationFrame(() => passwordInputRef.current?.focus());
+  }
+
   const heading = mode === 'forgot'
     ? 'Recuperar acesso'
     : mode === 'password'
       ? (linkType === 'invite' ? 'Crie sua senha' : 'Defina uma nova senha')
       : mode === 'link'
         ? (loading ? 'Validando link seguro' : 'Validação temporariamente indisponível')
-        : 'Entrar na plataforma';
+        : 'Entrar no ambiente de trabalho';
+
+  const description = mode === 'forgot'
+    ? 'Informe o e-mail cadastrado. Enviaremos um link de uso único.'
+    : mode === 'password'
+      ? 'Use uma senha exclusiva. Ela será protegida pelo Supabase Auth.'
+      : mode === 'link'
+        ? (loading
+          ? 'Aguarde enquanto confirmamos a validade deste acesso.'
+          : 'O link foi preservado com segurança nesta página para uma nova tentativa.')
+        : 'Use as credenciais fornecidas pela sua organização.';
 
   return (
-    <div className="login-layout" style={{
-      minHeight: '100dvh',
-      display: 'flex',
-      background: '#F6F5F2',
-      fontFamily: 'Inter, sans-serif',
-    }}>
-      <section className="login-brand-panel" style={{
-        flex: '1 1 52%',
-        position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        padding: '48px 56px',
-        background: 'linear-gradient(150deg, #1E3C3C 0%, #1B5E6E 100%)',
-        color: '#C8D8D5',
-        overflow: 'hidden',
-        '--sb-text': '#DCEBE8',
-      }}>
-        <div aria-hidden="true" style={{
-          position: 'absolute',
-          inset: 0,
-          opacity: 0.06,
-          backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-        }} />
-        <div aria-hidden="true" style={{
-          position: 'absolute',
-          top: '-20%',
-          right: '-10%',
-          width: 520,
-          height: 520,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(77,184,160,0.28) 0%, transparent 70%)',
-        }} />
-
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <LogoIcon size={44} />
-          <p style={{ fontFamily: 'Inter Tight, sans-serif', fontWeight: 800, fontSize: 20, color: '#FFF', margin: 0 }}>
-            SUS Predict
-          </p>
-        </div>
-
-        <div style={{ position: 'relative', maxWidth: 470 }}>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 7,
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: '#8FCFC0',
-            background: 'rgba(77,184,160,0.12)',
-            border: '1px solid rgba(77,184,160,0.3)',
-            padding: '5px 11px',
-            borderRadius: 999,
-            marginBottom: 22,
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4DB8A0' }} />
-            Inteligência epidemiológica
-          </span>
-          <h1 style={{
-            fontFamily: 'Inter Tight, sans-serif',
-            fontWeight: 800,
-            fontSize: 38,
-            lineHeight: 1.08,
-            color: '#FFF',
-            margin: '0 0 16px',
-            letterSpacing: '-0.02em',
-          }}>
-            Antecipe a demanda do SUS <span style={{ color: '#7FD4C0' }}>antes que ela chegue.</span>
-          </h1>
-          <p style={{ fontSize: 15, lineHeight: 1.6, color: '#A9CFC9', margin: 0 }}>
-            Análise preditiva de dados públicos do DATASUS para apoiar decisões municipais de saúde.
-          </p>
-          <div style={{ display: 'flex', gap: 32, marginTop: 34 }}>
-            {[['São Paulo', 'escopo atual'], ['6', 'bases SUS'], ['Admin', 'acesso restrito']].map(([value, label]) => (
-              <div key={label}>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 17, fontWeight: 700, color: '#FFF' }}>{value}</div>
-                <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7FA8A2', marginTop: 5 }}>{label}</div>
-              </div>
-            ))}
+    <div className="login-page" style={temaLogin}>
+      <header className="login-masthead">
+        <div className="login-masthead__brand">
+          <LogoIcon size={38} />
+          <div>
+            <p className="login-masthead__name">SusPredict</p>
+            <p className="login-masthead__descriptor">Inteligência municipal em saúde</p>
           </div>
         </div>
+        <div className="login-masthead__meta">
+          <span>Dados públicos</span>
+          <span aria-hidden="true">·</span>
+          <span>Decisão auditável</span>
+        </div>
+      </header>
 
-        <p style={{ position: 'relative', fontSize: 11, color: '#6B928C', margin: 0, fontFamily: 'JetBrains Mono, monospace' }}>
-          TCC 2025/2026 · FIAP · Dados públicos DATASUS
-        </p>
-      </section>
+      <main className="login-main">
+        <section className="login-context" aria-labelledby="login-context-title">
+          <p className="login-eyebrow">Plataforma de trabalho municipal</p>
+          <h1 id="login-context-title">Inteligência operacional para a saúde pública</h1>
+          <p className="login-context__intro">
+            Acompanhe alertas, evidências e necessidades de insumos em um ambiente orientado à decisão. Cada recomendação identifica fonte, competência e limitações.
+          </p>
 
-      <main className="login-form-panel" style={{
-        flex: '1 1 48%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 32,
-      }}>
-        <div style={{ width: '100%', maxWidth: 390 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#6B665D', margin: '0 0 6px' }}>
-            Acesso administrativo
-          </p>
-          <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 27, fontWeight: 800, color: '#1A1814', margin: '0 0 8px' }}>
-            {heading}
-          </h2>
-          <p style={{ fontSize: 13, lineHeight: 1.55, color: '#8A8579', margin: '0 0 24px' }}>
-            {mode === 'forgot'
-              ? 'Informe o e-mail cadastrado. Enviaremos um link de uso único.'
-              : mode === 'password'
-                ? 'Use uma senha exclusiva. Ela será protegida pelo Supabase Auth.'
-                : mode === 'link'
-                  ? (loading
-                    ? 'Aguarde enquanto confirmamos a validade deste acesso.'
-                    : 'O link foi preservado com segurança nesta página para uma nova tentativa.')
-                  : 'Use seu e-mail institucional e sua senha.'}
-          </p>
+          <dl className="login-institution">
+            <div>
+              <dt>Organização</dt>
+              <dd>Secretaria Municipal de Saúde</dd>
+            </div>
+            <div>
+              <dt>Escopo operacional</dt>
+              <dd>Vigilância epidemiológica, estoque e planejamento</dd>
+            </div>
+            <div>
+              <dt>Rastreabilidade</dt>
+              <dd>Fontes, cálculos e competências visíveis na análise</dd>
+            </div>
+          </dl>
+
+          <div className="login-assurance">
+            <MIcon m="verified_user" size={19} />
+            <p>
+              O sistema diferencia dados observados, simulações e informações indisponíveis antes de apoiar uma decisão.
+            </p>
+          </div>
+        </section>
+
+        <section className="login-access" aria-labelledby="login-access-title">
+          <div className="login-access__heading">
+            <p className="login-eyebrow">Acesso institucional</p>
+            <h2 id="login-access-title">{heading}</h2>
+            <p>{description}</p>
+          </div>
 
           {mode === 'login' && (
-            <form onSubmit={submitLogin}>
-              <label htmlFor="login-email" style={{ display: 'block', fontSize: 12, fontWeight: 650, color: '#3D3A33', marginBottom: 6 }}>E-mail</label>
-              <input
-                id="login-email"
-                type="email"
-                required
-                autoComplete="username"
-                placeholder="nome@instituicao.gov.br"
-                value={email}
-                onChange={event => setEmail(event.target.value)}
-                style={{ ...INPUT_STYLE, marginBottom: 14 }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                <label htmlFor="login-password" style={{ fontSize: 12, fontWeight: 650, color: '#3D3A33' }}>Senha</label>
-                <button
-                  type="button"
-                  onClick={() => { resetFeedback(); setMode('forgot'); }}
-                  style={{ border: 0, background: 'none', color: '#1B5E6E', fontSize: 12, fontWeight: 650, cursor: 'pointer', padding: 0 }}
-                >
-                  Esqueci minha senha
-                </button>
+            <form onSubmit={submitLogin} className="login-form" noValidate>
+              <div className="login-field">
+                <label htmlFor="login-email">E-mail institucional</label>
+                <input
+                  id="login-email"
+                  type="email"
+                  required
+                  autoComplete="username"
+                  value={email}
+                  onChange={event => setEmail(event.target.value)}
+                  placeholder="nome@saude.municipio.gov.br"
+                  disabled={loading}
+                />
               </div>
-              <input
-                id="login-password"
-                type="password"
-                required
-                autoComplete="current-password"
-                placeholder="Sua senha"
-                value={password}
-                onChange={event => setPassword(event.target.value)}
-                style={{ ...INPUT_STYLE, marginBottom: 16 }}
-              />
-              <button type="submit" disabled={loading} className="auth-primary-button" style={{
-                width: '100%',
-                padding: '13px 16px',
-                background: '#1B5E6E',
-                color: '#FFF',
-                border: 0,
-                borderRadius: 11,
-                fontSize: 14,
-                fontWeight: 750,
-                cursor: loading ? 'wait' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-              }}>
-                {loading ? 'Validando…' : 'Entrar'}
+
+              <div className="login-field">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+                  <label htmlFor="login-password">Senha</label>
+                  <button
+                    type="button"
+                    onClick={() => { resetFeedback(); setMode('forgot'); }}
+                    disabled={loading}
+                    style={{
+                      border: 0,
+                      padding: 0,
+                      background: 'none',
+                      color: 'var(--login-accent)',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: loading ? 'wait' : 'pointer',
+                    }}
+                  >
+                    Esqueci minha senha
+                  </button>
+                </div>
+                <input
+                  ref={passwordInputRef}
+                  id="login-password"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={event => setPassword(event.target.value)}
+                  disabled={loading}
+                />
+              </div>
+
+              <button type="submit" disabled={loading} className="login-submit touch-target">
+                {loading ? 'Verificando credenciais…' : 'Entrar com credenciais'}
               </button>
             </form>
           )}
 
           {mode === 'forgot' && (
-            <form onSubmit={submitRecovery}>
-              <label htmlFor="recovery-email" style={{ display: 'block', fontSize: 12, fontWeight: 650, color: '#3D3A33', marginBottom: 6 }}>E-mail cadastrado</label>
-              <input
-                id="recovery-email"
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={event => setEmail(event.target.value)}
-                style={{ ...INPUT_STYLE, marginBottom: 16 }}
-              />
-              <button type="submit" disabled={loading} style={{
-                width: '100%', padding: '13px 16px', background: '#1B5E6E', color: '#FFF',
-                border: 0, borderRadius: 11, fontSize: 14, fontWeight: 750,
-                cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1,
-              }}>
+            <form onSubmit={submitRecovery} className="login-form" noValidate>
+              <div className="login-field">
+                <label htmlFor="recovery-email">E-mail cadastrado</label>
+                <input
+                  id="recovery-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={event => setEmail(event.target.value)}
+                  disabled={loading}
+                />
+              </div>
+              <button type="submit" disabled={loading} className="login-submit touch-target">
                 {loading ? 'Enviando…' : 'Enviar link de recuperação'}
               </button>
-              <button
-                type="button"
-                onClick={() => { resetFeedback(); setMode('login'); }}
-                style={{ width: '100%', marginTop: 10, padding: 10, border: 0, background: 'none', color: '#1B5E6E', fontSize: 13, fontWeight: 650, cursor: 'pointer' }}
-              >
-                Voltar ao login
-              </button>
+              <BackToLoginButton disabled={loading} onClick={returnToLogin} />
             </form>
           )}
 
           {mode === 'password' && (
-            <form onSubmit={submitPassword}>
-              <label htmlFor="new-password" style={{ display: 'block', fontSize: 12, fontWeight: 650, color: '#3D3A33', marginBottom: 6 }}>Nova senha</label>
-              <input
-                id="new-password"
-                type="password"
-                required
-                minLength={12}
-                maxLength={128}
-                autoComplete="new-password"
-                value={password}
-                onChange={event => setPassword(event.target.value)}
-                style={INPUT_STYLE}
-              />
-              <PasswordChecklist password={password} />
-              <label htmlFor="new-password-confirm" style={{ display: 'block', fontSize: 12, fontWeight: 650, color: '#3D3A33', margin: '15px 0 6px' }}>Confirmar nova senha</label>
-              <input
-                id="new-password-confirm"
-                type="password"
-                required
-                autoComplete="new-password"
-                value={passwordConfirm}
-                onChange={event => setPasswordConfirm(event.target.value)}
-                style={{ ...INPUT_STYLE, marginBottom: 16 }}
-              />
-              <button type="submit" disabled={loading} style={{
-                width: '100%', padding: '13px 16px', background: '#1B5E6E', color: '#FFF',
-                border: 0, borderRadius: 11, fontSize: 14, fontWeight: 750,
-                cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1,
-              }}>
+            <form onSubmit={submitPassword} className="login-form" noValidate>
+              <div className="login-field">
+                <label htmlFor="new-password">Nova senha</label>
+                <input
+                  id="new-password"
+                  type="password"
+                  required
+                  minLength={12}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={event => setPassword(event.target.value)}
+                  disabled={loading}
+                />
+                <PasswordChecklist password={password} />
+              </div>
+              <div className="login-field">
+                <label htmlFor="new-password-confirm">Confirmar nova senha</label>
+                <input
+                  id="new-password-confirm"
+                  type="password"
+                  required
+                  minLength={12}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  value={passwordConfirm}
+                  onChange={event => setPasswordConfirm(event.target.value)}
+                  disabled={loading}
+                />
+              </div>
+              <button type="submit" disabled={loading} className="login-submit touch-target">
                 {loading ? 'Salvando…' : 'Salvar nova senha'}
               </button>
             </form>
@@ -461,25 +431,30 @@ export default function LoginScreen({
 
           {mode === 'link' && (
             loading ? (
-              <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 16, borderRadius: 11, background: '#EBF4F7', color: '#1B5E6E', fontSize: 13 }}>
-                <span className="material-symbols-rounded" aria-hidden="true">progress_activity</span>
+              <div
+                role="status"
+                aria-live="polite"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  marginTop: 25,
+                  padding: 14,
+                  border: '1px solid var(--primary-soft-border)',
+                  borderRadius: 8,
+                  background: 'var(--primary-soft)',
+                  color: 'var(--login-accent)',
+                  fontSize: 12,
+                }}
+              >
+                <MIcon m="progress_activity" size={19} />
                 Validando o link com o Supabase…
               </div>
             ) : (
               <button
                 type="button"
                 onClick={validateAuthLink}
-                style={{
-                  width: '100%',
-                  padding: '13px 16px',
-                  background: '#1B5E6E',
-                  color: '#FFF',
-                  border: 0,
-                  borderRadius: 11,
-                  fontSize: 14,
-                  fontWeight: 750,
-                  cursor: 'pointer',
-                }}
+                className="login-submit touch-target"
               >
                 Tentar validar novamente
               </button>
@@ -489,12 +464,40 @@ export default function LoginScreen({
           {error && <Feedback>{error}</Feedback>}
           {message && <Feedback type="success">{message}</Feedback>}
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 26, color: '#8A8579', fontSize: 11 }}>
-            <span className="material-symbols-rounded" aria-hidden="true" style={{ fontSize: 15 }}>lock</span>
-            Cadastro público desativado · sessão protegida
-          </div>
-        </div>
+          {ambienteDesenvolvimento && mode === 'login' && (
+            <div className="login-demo">
+              <div className="login-demo__copy">
+                <div>
+                  <span className="login-demo__badge">Ambiente de demonstração</span>
+                  <h3>Usar a conta local de demonstração</h3>
+                </div>
+                <p>
+                  O e-mail será preenchido. Informe no campo Senha o valor local de
+                  {' '}<code>SUS_PREDICT_DEV_PASSWORD</code>; ele não é incluído no frontend.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={prepareDemoLogin}
+                disabled={loading}
+                className="login-demo__button touch-target"
+              >
+                Preparar acesso de demonstração
+                <MIcon m="arrow_forward" size={17} />
+              </button>
+            </div>
+          )}
+
+          <p className="login-access__footer">
+            Acesso restrito. Cadastro público desativado. As ações realizadas no ambiente institucional devem seguir os fluxos de revisão e aprovação do município.
+          </p>
+        </section>
       </main>
+
+      <footer className="login-footer">
+        <span>Projeto acadêmico FIAP 2026</span>
+        <span>Fontes públicas DATASUS</span>
+      </footer>
     </div>
   );
 }

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ComposedChart, LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { Card, Badge, MIcon } from '../shared/ui.jsx';
+import { Card, Badge, MIcon, EvidenceChain } from '../shared/ui.jsx';
 import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
 
 // ─── Dados mock (topo do arquivo — sem fetch/axios) ────────────────────────────
@@ -380,6 +380,7 @@ function LinhaAlerta({ alerta, onAbrir, onAcao }) {
 
   return (
     <div
+      className="alertas-row"
       onClick={() => onAbrir(alerta)}
       role="button"
       tabIndex={0}
@@ -508,6 +509,41 @@ function GraficoDrawer({ detalhe }) {
   return null;
 }
 
+// Monta a cadeia de evidência (auditoria P1-3) a partir do que já existe no alerta —
+// não inventa fonte, competência ou premissa que o mock/demo não forneça: quando falta
+// um campo, mostramos "não disponível" em vez de simular rigor.
+function evidenciaDoAlerta(alerta) {
+  if (!alerta) return null;
+  const competenciaDemo = alerta.cutoff ? formatarCutoffDemo(alerta.cutoff) : null;
+
+  if (alerta.tipo === 'surto') {
+    return {
+      fontes: alerta.scenarioId ? ['SINAN — notificações de dengue (demo histórica)'] : ['SINAN — notificações de dengue'],
+      competencia: competenciaDemo || 'não disponível (alerta de exemplo, sem corte associado)',
+      atualizadoEm: alerta.tempo || 'não disponível',
+      calculo: `Modelo Holt (suavização exponencial dupla, log1p) sobre a série de casos notificados — probabilidade de continuidade da tendência estimada em ${alerta.detalhe?.probabilidade ?? '—'}%.`,
+      premissas: 'Extrapola a tendência recente da série local; não ajusta por sazonalidade fora do histórico observado nem por intervenções em curso.',
+      intervaloConfianca: alerta.detalhe?.serie?.some(p => p.min != null || p.max != null)
+        ? 'Banda de 80% exibida no gráfico acima (mínimo–máximo por período)'
+        : null,
+      limitacoes: 'Não incorpora sazonalidade além da série histórica nem ações de contingência já em curso.',
+      versaoModelo: 'Cascade Holt → OLS (docs/03-arquitetura.md)',
+    };
+  }
+
+  // ruptura de insumo
+  return {
+    fontes: [alerta.origem || 'Estoque cadastrado — Insumos'],
+    competencia: competenciaDemo || 'não disponível (alerta de exemplo, sem data de atualização de estoque)',
+    atualizadoEm: alerta.tempo || 'não disponível',
+    calculo: 'Estoque atual ÷ consumo médio semanal = dias restantes de cobertura.',
+    premissas: 'Não incorpora severidade clínica, pedidos em trânsito, lead time ou margem de segurança.',
+    intervaloConfianca: null,
+    limitacoes: 'Cálculo determinístico, sensível a erro de cadastro de estoque e consumo; protocolo caso→insumo ainda não validado.',
+    versaoModelo: 'Cálculo determinístico (sem modelo preditivo)',
+  };
+}
+
 function Timeline({ passos }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -529,9 +565,20 @@ function Timeline({ passos }) {
 
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
+export default function Alertas({
+  onNavigate,
+  onGerarEtp,
+  onOpenSusBot,
+  demoState,
+  deepLinkAlertaId = null,
+  filtroInicial = 'todos',
+  onFiltroChange,
+  onDeepLinkClose,
+}) {
   const [alertas, setAlertas] = useState(ALERTAS_INICIAIS);
-  const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [filtroTipo, setFiltroTipo] = useState(
+    FILTROS_TIPO.some(item => item.id === filtroInicial) ? filtroInicial : 'todos',
+  );
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const [drawer, setDrawer] = useState(null); // { kind: 'ativo'|'historico', data }
 
@@ -551,6 +598,24 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
     ...ativosFiltrados.filter(a => a.status === 'andamento'),
   ];
   const historicoFiltrado = historicoResolvido.filter(h => filtroTipo === 'todos' || h.tipo === filtroTipo);
+
+  useEffect(() => {
+    const proximo = FILTROS_TIPO.some(item => item.id === filtroInicial) ? filtroInicial : 'todos';
+    setFiltroTipo(proximo);
+  }, [filtroInicial]);
+
+  useEffect(() => {
+    if (!deepLinkAlertaId) return;
+    const alerta = alertasVisiveis.find(item => String(item.id) === String(deepLinkAlertaId));
+    if (alerta && drawer?.data?.id !== alerta.id) {
+      setDrawer({ kind: 'ativo', data: alerta });
+    }
+  }, [deepLinkAlertaId, alertasVisiveis.map(item => item.id).join(',')]);
+
+  function aplicarFiltro(tipo) {
+    setFiltroTipo(tipo);
+    onFiltroChange?.(tipo);
+  }
 
   function moverParaAndamento(alerta) {
     if (demoAtiva) return;
@@ -597,22 +662,76 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
       moverParaAndamento(alerta);
     } else {
       // 'drawer' (Ver detalhes) e 'ver' (Ver ETP / Ver plano) não mudam estado — só abrem o drawer
-      setDrawer({ kind: 'ativo', data: alerta });
+      abrirDrawerAtivo(alerta);
     }
   }
 
   function abrirDrawerAtivo(alerta) {
     setDrawer({ kind: 'ativo', data: alerta });
+    onNavigate?.({ page: 'alertas', alertaId: alerta.id, alertaTipo: filtroTipo });
   }
   function abrirDrawerHistorico(item) {
     setDrawer({ kind: 'historico', data: item });
   }
   function fecharDrawer() {
     setDrawer(null);
+    if (deepLinkAlertaId) onDeepLinkClose?.();
+  }
+
+  function analisarComSusBot(alerta) {
+    const prompt = [
+      `Analise o alerta "${alerta.titulo}" de ${municipio.nome}/${municipio.uf}.`,
+      `Evidência exibida: ${alerta.evidencia}.`,
+      'Explique a cadeia de evidências, as limitações e a próxima ação recomendada.',
+      alerta.tipo === 'insumo'
+        ? 'Se um ETP for pertinente, prepare a justificativa, mas só gere o rascunho depois da minha confirmação explícita.'
+        : 'Não execute nenhuma ação operacional sem minha confirmação explícita.',
+    ].join(' ');
+    fecharDrawer();
+    onOpenSusBot?.(prompt);
   }
 
   const alertaAtivoDrawer = drawer?.kind === 'ativo' ? alertasVisiveis.find(a => a.id === drawer.data.id) : null;
   const itemHistoricoDrawer = drawer?.kind === 'historico' ? drawer.data : null;
+
+  // Semântica de diálogo do drawer (auditoria P1-4): abrir move o foco para
+  // dentro dele, Escape fecha, Tab fica preso entre os controles do próprio
+  // drawer, e fechar devolve o foco para quem abriu — sem isso o teclado e o
+  // leitor de tela seguem "vendo" a lista por trás do overlay.
+  const drawerRef = useRef(null);
+  const gatilhoRef = useRef(null);
+  useEffect(() => {
+    if (!drawer) return;
+    gatilhoRef.current = document.activeElement;
+    const node = drawerRef.current;
+    const foco = node?.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    foco?.focus();
+
+    function onKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        fecharDrawer();
+        return;
+      }
+      if (e.key !== 'Tab' || !drawerRef.current) return;
+      const focaveis = drawerRef.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!focaveis.length) return;
+      const primeiro = focaveis[0];
+      const ultimo = focaveis[focaveis.length - 1];
+      if (e.shiftKey && document.activeElement === primeiro) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primeiro.focus();
+      }
+    }
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      gatilhoRef.current?.focus?.();
+    };
+  }, [drawer]);
 
   return (
     <div className="rise">
@@ -631,7 +750,7 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
           </h1>
           <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>Triagem de surtos, rupturas de insumo e ocupação acima do threshold.</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
+        <div className="alertas-summary" style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
           <span>
             <strong style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink-900)' }}>{nNovos.toLocaleString('pt-BR')}</strong>{' '}
             <span style={{ fontSize: 13, color: 'var(--ink-500)' }}>novos</span>
@@ -667,9 +786,9 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
       )}
 
       {/* Camada 1 — filtro por tipo */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+      <div className="alertas-filters" style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
         {FILTROS_TIPO.map(f => (
-          <ChipFiltro key={f.id} ativo={filtroTipo === f.id} onClick={() => setFiltroTipo(f.id)}>
+          <ChipFiltro key={f.id} ativo={filtroTipo === f.id} onClick={() => aplicarFiltro(f.id)}>
             {f.label}
           </ChipFiltro>
         ))}
@@ -728,6 +847,11 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
             }}
           />
           <div
+            ref={drawerRef}
+            className="alertas-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label={alertaAtivoDrawer ? `Detalhes do alerta: ${alertaAtivoDrawer.titulo}` : (itemHistoricoDrawer ? `Histórico do alerta: ${itemHistoricoDrawer.titulo}` : 'Detalhes do alerta')}
             style={{
               position: 'fixed', top: 0, right: 0, bottom: 0, width: 440, maxWidth: '92vw',
               background: 'var(--elev)', borderLeft: '1px solid var(--ink-100)', zIndex: 61,
@@ -748,7 +872,7 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
                       {alertaAtivoDrawer.origem} · {alertaAtivoDrawer.tempo}
                     </p>
                   </div>
-                  <button aria-label="Fechar detalhes do alerta" onClick={fecharDrawer} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', flexShrink: 0 }}>
+                  <button aria-label="Fechar detalhes do alerta" onClick={fecharDrawer} className="touch-target" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <MIcon m="close" size={20} />
                   </button>
                 </div>
@@ -761,13 +885,28 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
                   <GraficoDrawer detalhe={alertaAtivoDrawer.detalhe} />
                 </div>
 
-                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-700)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
+                <EvidenceChain {...evidenciaDoAlerta(alertaAtivoDrawer)} />
+
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-700)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '20px 0 10px' }}>
                   Linha do tempo do alerta
                 </p>
                 <Timeline passos={alertaAtivoDrawer.timeline} />
 
-                <div style={{ marginTop: 8 }}>
+                <div className="alerta-drawer-actions" style={{ marginTop: 8 }}>
                   <BotaoAcao alerta={alertaAtivoDrawer} onAcao={handleAcao} />
+                  <button
+                    type="button"
+                    onClick={() => analisarComSusBot(alertaAtivoDrawer)}
+                    style={{
+                      minHeight: 44, padding: '8px 13px', borderRadius: 8,
+                      border: '1px solid var(--primary-soft-border)', background: 'var(--primary-soft)',
+                      color: 'var(--primary)', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}
+                  >
+                    <MIcon m="smart_toy" size={16} />
+                    Analisar com SusBot
+                  </button>
                 </div>
               </>
             )}
@@ -791,7 +930,7 @@ export default function Alertas({ onNavigate, onGerarEtp, demoState }) {
                       {TIPO_LABEL[itemHistoricoDrawer.tipo]}
                     </p>
                   </div>
-                  <button aria-label="Fechar histórico do alerta" onClick={fecharDrawer} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', flexShrink: 0 }}>
+                  <button aria-label="Fechar histórico do alerta" onClick={fecharDrawer} className="touch-target" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <MIcon m="close" size={20} />
                   </button>
                 </div>

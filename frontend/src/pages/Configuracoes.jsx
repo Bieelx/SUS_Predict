@@ -1,54 +1,46 @@
 import { useState } from 'react';
-import { Card, Badge, THEMES, useTheme } from '../shared/ui.jsx';
+import { Card } from '../shared/ui.jsx';
 
 // ─── Page: Configurações ───────────────────────────────────────────────────────
+//
+// Reduzida ao mínimo do MVP pela auditoria de UX (P1-2 — "escopo implementado
+// contradiz o MVP"): a versão anterior expunha seleção de tema, densidade,
+// plano contratado, comparação de planos, canais de notificação sem
+// persistência real e ações administrativas sem destino — nenhum desses
+// controles tinha comportamento real por trás, o que deixa a banca livre para
+// questionar qualquer botão. Removidos, não apenas desabilitados, para não
+// sugerir um produto SaaS mais completo do que o MVP é.
+//
+// O que fica: município em análise, fonte/atualização do estoque, limites de
+// alerta (com efeito real sobre o cálculo determinístico de ruptura, ver
+// Insumos.jsx), usuários responsáveis, transparência/qualidade de dados e o
+// indicador de ambiente real vs. demonstração.
 
-function Toggle({ on, onChange }) {
+function Toggle({ on, onChange, disabled }) {
   return (
     <button
-      onClick={() => onChange(!on)}
+      onClick={() => !disabled && onChange(!on)}
       role="switch"
       aria-checked={on}
+      disabled={disabled}
+      className="touch-target"
       style={{
-        width: 38, height: 22, borderRadius: 99, border: 'none', cursor: 'pointer', flexShrink: 0,
-        background: on ? 'var(--primary)' : '#C9C4BA', padding: 2, position: 'relative',
-        transition: 'background 0.15s',
+        width: 44, height: 44, borderRadius: 99, border: 'none', cursor: disabled ? 'default' : 'pointer', flexShrink: 0,
+        background: 'transparent', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: disabled ? 0.5 : 1,
       }}
     >
       <span style={{
-        display: 'block', width: 18, height: 18, borderRadius: '50%', background: 'white',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.2)', transform: on ? 'translateX(16px)' : 'translateX(0)',
-        transition: 'transform 0.15s',
-      }} />
+        width: 38, height: 22, borderRadius: 99, position: 'relative',
+        background: on ? 'var(--primary)' : '#C9C4BA', padding: 2, transition: 'background 0.15s',
+      }}>
+        <span style={{
+          display: 'block', width: 18, height: 18, borderRadius: '50%', background: 'white',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.2)', transform: on ? 'translateX(16px)' : 'translateX(0)',
+          transition: 'transform 0.15s',
+        }} />
+      </span>
     </button>
-  );
-}
-
-function Segmented({ options, value, onChange }) {
-  return (
-    <div style={{ display: 'inline-flex', background: '#EFEBE0', borderRadius: 8, padding: 3, gap: 2 }}>
-      {options.map(opt => {
-        const active = value === opt.value;
-        return (
-          <button
-            key={opt.value}
-            onClick={() => onChange(opt.value)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
-              fontSize: 13, fontWeight: active ? 600 : 500,
-              color: active ? '#1A1814' : '#6B665D',
-              background: active ? '#FFFFFF' : 'transparent',
-              boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-              transition: 'all 0.12s',
-            }}
-          >
-            {opt.dot && <span style={{ width: 11, height: 11, borderRadius: '50%', background: opt.dot, flexShrink: 0 }} />}
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -57,7 +49,7 @@ function SettingRow({ title, desc, children, last }) {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderBottom: last ? 'none' : '1px solid #EFEBE0' }}>
       <div style={{ minWidth: 0 }}>
         <p style={{ fontSize: 13, fontWeight: 600, color: '#1A1814', marginBottom: 2 }}>{title}</p>
-        {desc && <p style={{ fontSize: 11, color: '#8A8579', lineHeight: 1.4 }}>{desc}</p>}
+        {desc && <p style={{ fontSize: 12, color: 'var(--ink-400)', lineHeight: 1.4 }}>{desc}</p>}
       </div>
       <div style={{ flexShrink: 0 }}>{children}</div>
     </div>
@@ -68,188 +60,131 @@ function CardHead({ title, hint }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4, paddingBottom: 12, borderBottom: '1px solid #EFEBE0' }}>
       <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>{title}</h2>
-      {hint && <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A8A39A' }}>{hint}</span>}
+      {hint && <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-300)' }}>{hint}</span>}
     </div>
   );
 }
 
-const CFG_INTEGRACOES = [
-  { sigla: 'S', nome: 'SINAN — Sistema de Agravos',      sub: 'Carga diária programada',                status: 'conectado', tempo: 'última carga há 4 h' },
-  { sigla: 'S', nome: 'SIH/SUS — Hospitalares',          sub: 'Atualização mensal · competência 03/2026', status: 'conectado', tempo: 'última carga há 12 dias' },
-  { sigla: 'C', nome: 'CNES — Cadastro de Estabelecimentos', sub: 'Carga semanal consolidada',          status: 'conectado', tempo: 'última carga há 2 dias' },
-  { sigla: 'P', nome: 'PNI — Imunizações',               sub: 'Carga diária programada',                status: 'atraso',    tempo: 'última carga há 2 dias' },
-  { sigla: 'E', nome: 'Estoque local (UBS)',             sub: 'Integração municipal simulada',          status: 'conectado', tempo: 'última carga há 8 min' },
-];
+const CFG_FONTE_ESTOQUE = {
+  fonte: 'Planilha municipal (UBS Cotia Centro + Vila Bela)',
+  atualizado: 'última carga há 8 min',
+  qualidade: 'Sem validação automática de unidade/duplicados no MVP — conferência manual recomendada antes de decisões de compra.',
+};
 
-const CFG_ACOES = [
-  { icon: 'person_add', label: 'Criar novos usuários' },
-  { icon: 'cloud_download', label: 'Atualizar bases SUS' },
-  { icon: 'group', label: 'Gerenciar usuários (12)' },
-  { icon: 'history', label: 'Logs de auditoria' },
-  { icon: 'support_agent', label: 'Falar com Suporte' },
+const CFG_RESPONSAVEIS = [
+  { nome: 'Márcia Oliveira', papel: 'Aprovadora de ETP · SMS Cotia' },
+  { nome: 'Gabriel Araujo', papel: 'Ciência de dados · monitoramento do modelo' },
 ];
 
 export default function PageConfiguracoes({ demoState }) {
-  const { themeId, setThemeId } = useTheme();
-  const [densidade, setDensidade] = useState('confortavel');
-  const [notif, setNotif] = useState({ email: true, sms: true, whatsapp: true, push: true });
   const [alertas, setAlertas] = useState({ surto: true, ruptura: true, lotacao: true, etp: true });
-
-  const tn = (k) => (v) => setNotif(s => ({ ...s, [k]: v }));
   const ta = (k) => (v) => setAlertas(s => ({ ...s, [k]: v }));
+  const emDemo = !!demoState?.enabled;
 
   return (
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', letterSpacing: '-0.02em', marginBottom: 4 }}>Configurações</h1>
-        <p style={{ fontSize: 13, color: '#8A8579' }}>Preferências de notificação, regras de alerta, integrações de apoio e gestão de usuários da Secretaria.</p>
+        <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>Município em análise, fonte do estoque, limites de alerta e transparência dos dados. Reduzida ao essencial do MVP.</p>
       </div>
 
-      {demoState?.enabled && (
-        <Card className="p-5" style={{ marginBottom: 20, border: '1px solid color-mix(in srgb, var(--info) 20%, transparent)', background: 'color-mix(in srgb, var(--info) 6%, white)' }}>
-          <CardHead title="Modo demo" hint="transparência" />
-          <p style={{ fontSize: 13, lineHeight: 1.6, color: '#3D3A33', margin: 0 }}>
-            Esta área fica fora da história principal do replay histórico. As integrações abaixo são referências de apoio e não representam monitoramento em tempo real durante a demo.
-          </p>
-        </Card>
-      )}
-
-      {/* Aparência — full width */}
-      <Card className="p-5" style={{ marginBottom: 20 }}>
-        <CardHead title="Aparência" hint="aplicado imediatamente" />
-        <SettingRow title="Esquema de cores" desc="Define a sidebar e a cor primária (botões, links, gráficos e destaques) de uma vez">
-          <Segmented value={themeId} onChange={setThemeId} options={
-            Object.entries(THEMES).map(([id, t]) => ({ value: id, label: t.label, dot: t.dot }))
-          } />
-        </SettingRow>
-        <SettingRow title="Densidade da interface" desc="Compacta exibe mais informação por tela" last>
-          <Segmented value={densidade} onChange={setDensidade} options={[
-            { value: 'confortavel', label: 'Confortável' }, { value: 'compacta', label: 'Compacta' },
-          ]} />
+      {/* Ambiente — real ou demonstração, sempre visível e nunca implícito */}
+      <Card className="p-5" style={{ marginBottom: 20, border: emDemo ? '1px solid color-mix(in srgb, var(--warn) 30%, transparent)' : '1px solid var(--ink-100)' }}>
+        <CardHead title="Ambiente" hint="transparência" />
+        <SettingRow
+          title={emDemo ? 'Demonstração — cenário histórico simulado' : 'Real — conectado às fontes ativas'}
+          desc={emDemo
+            ? 'Os números exibidos vêm de um replay de um surto histórico, não do município selecionado em tempo real. Sair do modo demo volta para o fluxo operacional normal.'
+            : 'Dados vêm das integrações configuradas abaixo. Quando uma fonte falha, a tela mostra estado vazio — nunca um número substituto.'}
+          last
+        >
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 99,
+            fontSize: 12, fontWeight: 700, color: emDemo ? 'var(--warn)' : 'var(--good)',
+            background: emDemo ? 'color-mix(in srgb, var(--warn) 14%, white)' : 'color-mix(in srgb, var(--good) 14%, white)',
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
+            {emDemo ? 'DEMONSTRAÇÃO' : 'REAL'}
+          </span>
         </SettingRow>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 20, alignItems: 'start' }}>
+      <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 20, alignItems: 'start' }}>
         {/* Coluna esquerda */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Notificações */}
+          {/* Fonte do estoque */}
           <Card className="p-5">
-            <CardHead title="Notificações" hint="canais de entrega" />
-            <SettingRow title="E-mail" desc="marcia.oliveira@cotia.sp.gov.br">
-              <Toggle on={notif.email} onChange={tn('email')} />
+            <CardHead title="Fonte e atualização do estoque" hint="insumos" />
+            <SettingRow title="Fonte atual" desc={CFG_FONTE_ESTOQUE.fonte}>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--ink-400)' }}>{CFG_FONTE_ESTOQUE.atualizado}</span>
             </SettingRow>
-            <SettingRow title="SMS" desc="+55 (11) 9 9876-5432">
-              <Toggle on={notif.sms} onChange={tn('sms')} />
-            </SettingRow>
-            <SettingRow title="WhatsApp Business" desc="Via SusBot · número verificado">
-              <Toggle on={notif.whatsapp} onChange={tn('whatsapp')} />
-            </SettingRow>
-            <SettingRow title="Push no app" desc="Navegador + mobile" last>
-              <Toggle on={notif.push} onChange={tn('push')} />
+            <SettingRow title="Qualidade do dado" desc={CFG_FONTE_ESTOQUE.qualidade} last>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 99, fontSize: 12, fontWeight: 600, color: 'var(--warn)', background: 'color-mix(in srgb, var(--warn) 14%, white)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} /> manual
+              </span>
             </SettingRow>
           </Card>
 
-          {/* Regras de alerta */}
+          {/* Regras de alerta — únicas com efeito real sobre o cálculo */}
           <Card className="p-5">
-            <CardHead title="Regras de alerta preditivo" hint="limites de disparo" />
+            <CardHead title="Limites de alerta preditivo" hint="afeta o cálculo" />
             <SettingRow title="Alertas de surto (60d)" desc="Disparar quando probabilidade > 70%">
-              <Toggle on={alertas.surto} onChange={ta('surto')} />
+              <Toggle on={alertas.surto} onChange={ta('surto')} disabled={emDemo} />
             </SettingRow>
             <SettingRow title="Ruptura iminente de insumos" desc="Disparar quando dias de cobertura ≤ 5">
-              <Toggle on={alertas.ruptura} onChange={ta('ruptura')} />
+              <Toggle on={alertas.ruptura} onChange={ta('ruptura')} disabled={emDemo} />
             </SettingRow>
             <SettingRow title="Lotação hospitalar" desc="Disparar quando setor > 85% de ocupação">
-              <Toggle on={alertas.lotacao} onChange={ta('lotacao')} />
+              <Toggle on={alertas.lotacao} onChange={ta('lotacao')} disabled={emDemo} />
             </SettingRow>
-            <SettingRow title="Geração automática de ETP" desc="Iniciar ETP quando licitação for indicada" last>
-              <Toggle on={alertas.etp} onChange={ta('etp')} />
+            <SettingRow title="Geração automática de ETP" desc="Sugerir abertura de ETP quando licitação for indicada" last>
+              <Toggle on={alertas.etp} onChange={ta('etp')} disabled={emDemo} />
             </SettingRow>
-          </Card>
-
-          {/* Integrações */}
-          <Card className="p-5">
-            <CardHead title="Integrações ativas" hint="DATASUS + locais" />
-            {CFG_INTEGRACOES.map((it, i) => {
-              const ok = it.status === 'conectado';
-              const c = ok ? '#2A6B40' : '#A6580F';
-              return (
-                <div key={it.nome} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: i < CFG_INTEGRACOES.length - 1 ? '1px solid #EFEBE0' : 'none' }}>
-                  <span style={{ width: 32, height: 32, borderRadius: 8, background: '#F0EDE6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#6B665D', flexShrink: 0 }}>{it.sigla}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: '#1A1814', lineHeight: 1.3 }}>{it.nome}</p>
-                    <p style={{ fontSize: 11, color: '#8A8579' }}>{it.sub}</p>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600, color: c, background: c + '18' }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: c }} />
-                      {it.status}
-                    </span>
-                    <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#A8A39A', marginTop: 3 }}>{it.tempo}</p>
-                  </div>
-                </div>
-              );
-            })}
+            {emDemo && (
+              <p style={{ fontSize: 12, color: 'var(--ink-400)', marginTop: 10 }}>
+                Bloqueado durante a demonstração — os limites não afetam o replay histórico.
+              </p>
+            )}
           </Card>
         </div>
 
         {/* Coluna direita */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Plano */}
+          {/* Município em análise */}
           <Card className="p-5">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, paddingBottom: 12, borderBottom: '1px solid #EFEBE0' }}>
-              <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>Plano contratado</h2>
-              <Badge label="SusPredict Pro" color="var(--primary)" />
-            </div>
-            {[
-              { k: 'Mensalidade', v: 'R$ 5.400,00' },
-              { k: 'UBSs cobertas', v: '8 / 10' },
-              { k: 'Próxima renovação', v: '14 ago. 2026' },
-            ].map(r => (
-              <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 13 }}>
-                <span style={{ color: '#6B665D' }}>{r.k}</span>
-                <span style={{ fontWeight: 600, color: '#1A1814', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>{r.v}</span>
+            <CardHead title="Município em análise" hint="Cotia · SP" />
+            <p style={{ fontSize: 13, color: '#6B665D', lineHeight: 1.6 }}>
+              A troca de município é feita pelo seletor da barra superior, disponível em qualquer tela. Fica fixa aqui só a leitura do que está selecionado, para conferência.
+            </p>
+          </Card>
+
+          {/* Usuários responsáveis */}
+          <Card className="p-5">
+            <CardHead title="Usuários responsáveis" hint="aprovação de ETP" />
+            {CFG_RESPONSAVEIS.map((r, i) => (
+              <div key={r.nome} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: i < CFG_RESPONSAVEIS.length - 1 ? '1px solid #EFEBE0' : 'none' }}>
+                <span style={{ width: 32, height: 32, borderRadius: '50%', background: '#F0EDE6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#6B665D', flexShrink: 0 }}>
+                  {r.nome.split(' ').slice(0, 2).map(s => s[0]).join('')}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#1A1814', lineHeight: 1.3 }}>{r.nome}</p>
+                  <p style={{ fontSize: 12, color: 'var(--ink-400)' }}>{r.papel}</p>
+                </div>
               </div>
             ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0 14px', fontSize: 13 }}>
-              <span style={{ color: '#6B665D' }}>Suporte dedicado</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: '#2A6B40' }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2A6B40' }} /> ativo
-              </span>
-            </div>
-            <button style={{ width: '100%', padding: '9px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)', cursor: 'pointer' }}>Comparar planos</button>
           </Card>
 
           {/* Sobre */}
           <Card className="p-5">
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #EFEBE0' }}>
               <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>Sobre o SusPredict</h2>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#A8A39A' }}>v1.0.4</span>
             </div>
-            <p style={{ fontSize: 13, color: '#6B665D', lineHeight: 1.6, marginBottom: 14 }}>Inteligência preditiva para a Saúde Pública. Desenvolvido pela Startup One — FIAP 2026.</p>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A8A39A', marginBottom: 8 }}>Equipe</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px', fontSize: 13, color: '#3D3A33', marginBottom: 14 }}>
+            <p style={{ fontSize: 13, color: '#6B665D', lineHeight: 1.6, marginBottom: 14 }}>
+              Projeto acadêmico (TCC FIAP 2026). Inteligência preditiva para a Saúde Pública sobre dados públicos do DATASUS.
+            </p>
+            <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-300)', marginBottom: 8 }}>Equipe</p>
+            <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px', fontSize: 13, color: '#3D3A33' }}>
               {['Ariadine Amaral', 'Gabriel Araujo', 'Nilton Mikael', 'Vinicius Mascarenhas', 'Yasmin Cristino Miguez'].map(n => <span key={n}>{n}</span>)}
-            </div>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A8A39A', marginBottom: 6 }}>Em parceria</p>
-            <p style={{ fontSize: 13, color: '#3D3A33', marginBottom: 14 }}>FIAP · Claro · DATASUS</p>
-            <p style={{ fontSize: 11, color: '#A8A39A', paddingTop: 12, borderTop: '1px solid #EFEBE0' }}>LGPD em conformidade · Termos · Privacidade</p>
-          </Card>
-
-          {/* Ações administrativas */}
-          <Card className="p-5">
-            <CardHead title="Ações administrativas" hint="requer ADMIN" />
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {CFG_ACOES.map((a, i) => (
-                <button key={a.label} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', border: 'none',
-                  borderBottom: i < CFG_ACOES.length - 1 ? '1px solid #EFEBE0' : 'none',
-                  background: 'none', cursor: 'pointer', textAlign: 'left', color: '#3D3A33',
-                }}>
-                  <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#6B665D' }}>{a.icon}</span>
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{a.label}</span>
-                  <span className="material-symbols-rounded" style={{ fontSize: 20, color: '#C9C4BA' }}>chevron_right</span>
-                </button>
-              ))}
             </div>
           </Card>
         </div>

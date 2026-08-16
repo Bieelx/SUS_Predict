@@ -7,6 +7,7 @@ Cada factory fixa o `ibge6` por closure e devolve funções que retornam sempre 
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 import sqlite3
 
 from api.core import db
@@ -19,7 +20,12 @@ def _normalizar_ibge6(ibge6: str) -> str:
     return str(ibge6 or "").strip()[:6]
 
 
-def _status_estoque(dias_restantes: float) -> str:
+LIMIAR_DADO_DESATUALIZADO_DIAS = 15
+
+
+def _status_estoque(dias_restantes: float | None) -> str:
+    if dias_restantes is None:
+        return "indisponivel"
     if dias_restantes <= 7:
         return "critico"
     if dias_restantes <= 15:
@@ -27,18 +33,63 @@ def _status_estoque(dias_restantes: float) -> str:
     return "ok"
 
 
-def _calcular_dias_restantes(row: dict) -> float:
+def _calcular_dias_restantes(row: dict) -> float | None:
     consumo = float(row.get("consumo_medio_dia") or 0)
     quantidade = float(row.get("quantidade_atual") or 0)
-    if consumo <= 0:
-        return 0.0
+    if consumo <= 0 or quantidade < 0:
+        return None
     return round(quantidade / consumo, 1)
+
+
+def _defasagem_dias(valor: str | None) -> int | None:
+    if not valor:
+        return None
+    try:
+        data = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+        if data.tzinfo is None:
+            data = data.replace(tzinfo=timezone.utc)
+        return max(0, (datetime.now(timezone.utc) - data).days)
+    except (TypeError, ValueError):
+        return None
+
+
+def _qualidade_cobertura(row: dict, dias_restantes: float | None) -> dict:
+    defasagem = _defasagem_dias(row.get("atualizado_em"))
+    faltantes = []
+    if float(row.get("quantidade_atual") or 0) < 0:
+        faltantes.append("estoque atual válido")
+    if float(row.get("consumo_medio_dia") or 0) <= 0:
+        faltantes.append("consumo médio local")
+
+    desatualizado = defasagem is None or defasagem > LIMIAR_DADO_DESATUALIZADO_DIAS
+    confianca = "indisponível" if dias_restantes is None else ("reduzida" if desatualizado else "moderada")
+    return {
+        "tipo_calculo": "cobertura_estoque",
+        "rotulo_calculo": "Cobertura de estoque",
+        "formula": "quantidade_atual / consumo_medio_dia",
+        "fonte": "Estoque local informado pelo município",
+        "competencia": row.get("atualizado_em"),
+        "defasagem_dias": defasagem,
+        "confianca": confianca,
+        "calculo_disponivel": dias_restantes is not None,
+        "entradas_faltantes": faltantes,
+        "premissas": [
+            "consumo médio diário permanece constante",
+            "não considera pedidos em trânsito",
+        ],
+        "limitacoes": [
+            "não é previsão de abastecimento",
+            "protocolo caso→insumo ainda não validado pela equipe de dados/domínio",
+            "não incorpora severidade clínica, lead time ou margem de segurança",
+        ],
+    }
 
 
 def _enriquecer_estoque(rows: list[dict]) -> list[dict]:
     itens: list[dict] = []
     for row in rows:
         dias_restantes = _calcular_dias_restantes(row)
+        qualidade = _qualidade_cobertura(row, dias_restantes)
         itens.append(
             {
                 "ibge6": row.get("ibge6"),
@@ -48,6 +99,7 @@ def _enriquecer_estoque(rows: list[dict]) -> list[dict]:
                 "atualizado_em": row.get("atualizado_em"),
                 "dias_restantes": dias_restantes,
                 "status": _status_estoque(dias_restantes),
+                "qualidade": qualidade,
             }
         )
     return itens
@@ -64,8 +116,18 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
 
     ibge = _normalizar_ibge6(ibge6)
 
-    def consultar_estoque(item: str | None = None, **_kwargs) -> dict:
-        rows = db.get_estoque(ibge, item=item)
+    def _buscar_estoque_por_item(item: str | None) -> list[dict]:
+        # Busca por substring (case-insensitive), não exata: o modelo tende a mandar
+        # "dipirona" quando o item cadastrado é "Dipirona 500mg" — match exato
+        # devolvia vazio sempre que faltava a dosagem/forma.
+        rows = db.get_estoque(ibge)
+        if not item:
+            return rows
+        alvo = str(item).strip().casefold()
+        return [row for row in rows if alvo in str(row.get("item") or "").casefold()]
+
+    def consultar_estoque(item: str | None = None, somente_risco: bool = False, **_kwargs) -> dict:
+        rows = _buscar_estoque_por_item(item)
         if not rows:
             return _resposta_vazia(
                 "Nenhum item de estoque encontrado para este município.",
@@ -75,10 +137,23 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
             )
 
         dados = _enriquecer_estoque(rows)
+        if somente_risco:
+            dados = [dado for dado in dados if dado["status"] in {"critico", "alerta"}]
+            if not dados:
+                return _resposta_vazia(
+                    "O estoque foi consultado e não há itens críticos ou em alerta neste momento.",
+                    ibge6=ibge,
+                    item=item,
+                    somente_risco=True,
+                    base_disponivel=True,
+                    dados=[],
+                )
         return {
             "encontrado": True,
             "ibge6": ibge,
             "item": item,
+            "somente_risco": somente_risco,
+            "base_disponivel": True,
             "total_itens": len(dados),
             "dados": dados,
         }
@@ -104,10 +179,11 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
         }
 
     def consultar_epidemiologia(
-        sistema: str,
+        sistema: str | None = None,
         ano_ini: int | None = None,
         ano_fim: int | None = None,
         doenca_cod: str | None = None,
+        escopo_solicitado: str | None = None,
         **_kwargs,
     ) -> dict:
         sistema_norm = str(sistema or "").strip().upper()
@@ -133,12 +209,16 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
 
         if not candidatos:
             return _resposta_vazia(
-                "Nenhum resultado epidemiológico encontrado para este município e filtros.",
+                f"A base {sistema_norm} ainda não foi carregada para este município. "
+                "Isso não significa que o total seja zero; significa que não há uma consulta "
+                "DATASUS disponível no cache do SusPredict para responder com segurança.",
                 ibge6=ibge,
                 sistema=sistema_norm,
                 ano_ini=ano_ini,
                 ano_fim=ano_fim,
                 doenca_cod=doenca_cod,
+                base_disponivel=False,
+                acao_sugerida="Carregue os dados na tela de Epidemiologia e tente novamente.",
             )
 
         run = candidatos[0]
@@ -197,6 +277,7 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
             "ano_ini": meta.get("ano_ini"),
             "ano_fim": meta.get("ano_fim"),
             "doenca_cod": meta.get("doenca_cod"),
+            "escopo_solicitado": escopo_solicitado,
             "dados": {
                 "meta": meta,
                 "stats": resultado.get("stats") or {},
@@ -206,6 +287,45 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
                 "distribuicao_faixa_etaria": resultado.get("distribuicao_faixa_etaria") or [],
                 "top_causas": resultado.get("top_causas") or [],
             },
+        }
+
+    def gerar_etp(item: str, alerta_id: str | None = None, **_kwargs) -> dict:
+        rows = _buscar_estoque_por_item(item)
+        if not rows:
+            return _resposta_vazia(
+                f"Nenhum estoque cadastrado para '{item}' neste município — não é possível "
+                "fundamentar o ETP sem dado de consumo/cobertura.",
+                ibge6=ibge,
+                item=item,
+            )
+
+        estoque = _enriquecer_estoque(rows)[0]
+        if estoque["dias_restantes"] is None:
+            return _resposta_vazia(
+                "Cálculo indisponível: informe um consumo médio local maior que zero antes de preparar o ETP.",
+                ibge6=ibge,
+                item=item,
+                qualidade=estoque["qualidade"],
+            )
+        justificativa = (
+            f"Estoque de {estoque['item']} com cobertura estimada de {estoque['dias_restantes']} "
+            f"dias, com base no consumo médio diário de {estoque['consumo_medio_dia']} unidades "
+            f"(atualizado em {estoque['atualizado_em']}; confiança "
+            f"{estoque['qualidade']['confianca']}). Recomenda-se revisão humana antes de iniciar "
+            "o processo. Este cálculo de cobertura não incorpora protocolo caso→insumo, "
+            "pedidos em trânsito, lead time ou margem de segurança."
+        )
+        registro = db.criar_etp(ibge, item, justificativa, alerta_id=alerta_id, origem="susbot")
+        return {
+            "encontrado": True,
+            "ibge6": ibge,
+            "etp_id": registro["id"],
+            "item": item,
+            "alerta_id": alerta_id,
+            "dias_restantes": estoque["dias_restantes"],
+            "justificativa": justificativa,
+            "qualidade": estoque["qualidade"],
+            "criado_em": registro["criado_em"],
         }
 
     def executar_sql_fallback(query: str, **_kwargs) -> dict:
@@ -235,5 +355,12 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
         "consultar_estoque": consultar_estoque,
         "consultar_alertas": consultar_alertas,
         "consultar_epidemiologia": consultar_epidemiologia,
+        "gerar_etp": gerar_etp,
         "executar_sql_fallback": executar_sql_fallback,
     }
+
+
+# Ferramentas que alteram estado — exigem confirmação humana explícita antes de
+# executar (docs/06-agente-susbot.md, requisito inegociável do briefing de
+# reposicionamento). Todo o resto é leitura e roda direto.
+FERRAMENTAS_ESCRITA = {"gerar_etp"}

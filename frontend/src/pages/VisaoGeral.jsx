@@ -2,13 +2,13 @@
 //
 // Briefing de risco do município, não um dashboard de BI descritivo: a tela responde
 // "eu preciso agir hoje, e em quê" em camadas verticais, da mais crítica para a mais
-// acessória (status → SusBot → alertas acionáveis → previsão + ranking regional).
+// acessória (situação e evidência → acesso contextual ao SusBot → fila de ações → impacto). Zero gráfico e
+// zero ranking aqui por decisão de produto (07/08/2026) — a série de dengue e o
+// comparativo regional já existem em Epidemiologia (nível 2), esta tela é só a fila.
 // Todos os dados abaixo são mock estático — nenhum fetch/axios nesta tela.
 
-import {
-  ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Area, Line,
-} from 'recharts';
-import { Card, SectionTitle, Badge, MIcon } from '../shared/ui.jsx';
+import { useEffect, useState } from 'react';
+import { Card, SectionTitle, Badge, MIcon, EvidenceChain } from '../shared/ui.jsx';
 import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
 
 // ─── Mock: fatos canônicos do município (Cotia — SP, Dra. Márcia) ─────────────
@@ -23,14 +23,9 @@ const STATUS = {
   indice: 74,
 };
 
-const SUSBOT_TEXTO =
-  'O município está em tendência de alta de dengue (+18% vs. mês anterior). Com o surto ' +
-  'previsto para março, o estoque atual de Dipirona 500mg se esgota em 22 dias. ' +
-  'Recomendamos iniciar processo licitatório esta semana.';
-
 const ALERTAS = [
   {
-    id: 'AL-1',
+    id: 'alt-01',
     severidade: 'critico',
     titulo: 'Ruptura em 22 dias — Dipirona 500mg',
     evidencia: 'consumo acelerado +12%',
@@ -39,7 +34,7 @@ const ALERTAS = [
     payload: { tipo: 'alerta', item: { nome: 'Dipirona 500mg', diasRestantes: 22, consumoSemanal: 120 } },
   },
   {
-    id: 'AL-2',
+    id: 'alt-02',
     severidade: 'alerta',
     titulo: 'Surto previsto — dengue, 60 dias',
     evidencia: 'probabilidade 78% · modelo Holt',
@@ -47,7 +42,7 @@ const ALERTAS = [
     tipo: 'navegar',
   },
   {
-    id: 'AL-3',
+    id: 'alt-03',
     severidade: 'alerta',
     titulo: 'Ocupação UTI Adulto — projeção 87% em 30 dias',
     evidencia: 'Hospital Regional Oeste',
@@ -55,67 +50,6 @@ const ALERTAS = [
     tipo: 'navegar',
   },
 ];
-
-// Série mensal de dengue: 12 meses reais (ago/25–jul/26) + 8 meses previstos (ago/26–mar/27).
-// jul/26 aparece em `real` e `previsto` (valor igual) só para a linha tracejada nascer sem
-// gap visual a partir do último ponto real — não é um dado duplicado, é continuidade visual.
-const DENGUE_SERIE = [
-  { mes: 'ago/25', real: 65 },
-  { mes: 'set/25', real: 48 },
-  { mes: 'out/25', real: 42 },
-  { mes: 'nov/25', real: 40 },
-  { mes: 'dez/25', real: 58 },
-  { mes: 'jan/26', real: 180 },
-  { mes: 'fev/26', real: 340 },
-  { mes: 'mar/26', real: 480 },
-  { mes: 'abr/26', real: 290 },
-  { mes: 'mai/26', real: 120 },
-  { mes: 'jun/26', real: 70 },
-  { mes: 'jul/26', real: 55, previsto: 55 },
-  { mes: 'ago/26', previsto: 60,  icBaixo: 48,  icRange: 24 },
-  { mes: 'set/26', previsto: 50,  icBaixo: 38,  icRange: 25 },
-  { mes: 'out/26', previsto: 48,  icBaixo: 35,  icRange: 27 },
-  { mes: 'nov/26', previsto: 55,  icBaixo: 40,  icRange: 32 },
-  { mes: 'dez/26', previsto: 98,  icBaixo: 75,  icRange: 50 },
-  { mes: 'jan/27', previsto: 225, icBaixo: 175, icRange: 105 },
-  { mes: 'fev/27', previsto: 410, icBaixo: 320, icRange: 180 },
-  { mes: 'mar/27', previsto: 520, icBaixo: 400, icRange: 240 },
-];
-
-const RANKING_REGIONAL_PADRAO = [
-  { nome: 'Cotia',                valor: 74, voce: true },
-  { nome: 'Itapevi',              valor: 61 },
-  { nome: 'Osasco',               valor: 58 },
-  { nome: 'Carapicuíba',          valor: 52 },
-  { nome: 'Embu das Artes',       valor: 47 },
-  { nome: 'Barueri',              valor: 34 },
-  { nome: 'Vargem Grande Pta.',   valor: 28 },
-];
-
-function construirRankingRegional(municipio, status, demoAtiva) {
-  if (!demoAtiva || municipio.nome === 'Cotia') return RANKING_REGIONAL_PADRAO;
-
-  const base = Math.max(0, Math.min(100, status?.indice || 74));
-  const vizinhos = [
-    { nome: 'Paulínia',         valor: Math.max(0, base - 13) },
-    { nome: 'Valinhos',         valor: Math.max(0, base - 16) },
-    { nome: 'Sumaré',           valor: Math.max(0, base - 19) },
-    { nome: 'Hortolândia',      valor: Math.max(0, base - 22) },
-    { nome: 'Indaiatuba',       valor: Math.max(0, base - 30) },
-    { nome: 'Vinhedo',          valor: Math.max(0, base - 34) },
-  ];
-
-  return [
-    { nome: municipio.nome, valor: base, voce: true },
-    ...vizinhos,
-  ];
-}
-
-function corFaixaRisco(valor) {
-  if (valor >= 70) return 'var(--risk-alto)';
-  if (valor >= 40) return 'var(--risk-medio)';
-  return 'var(--risk-baixo)';
-}
 
 function construirStatusDemo(payload) {
   const status = payload?.status;
@@ -156,36 +90,6 @@ function construirStatusDemo(payload) {
           ? `Casos de dengue recuaram ${Math.abs(crescimentoValor).toFixed(1)}%, mas a pressão sobre insumos segue crítica.`
           : 'Casos estáveis no corte atual, com atenção operacional mantida.',
   };
-}
-
-function construirSerieDemo(payload) {
-  const serieVisivel = Array.isArray(payload?.serie_visivel) ? payload.serie_visivel : [];
-  const previsao = Array.isArray(payload?.previsao) ? payload.previsao : [];
-
-  if (!serieVisivel.length && !previsao.length) return DENGUE_SERIE;
-
-  const serie = serieVisivel.map(row => ({
-    mes: row.mes,
-    real: row.casos,
-  }));
-
-  if (serie.length && previsao.length) {
-    serie[serie.length - 1] = {
-      ...serie[serie.length - 1],
-      previsto: serie[serie.length - 1].real,
-    };
-  }
-
-  previsao.forEach(row => {
-    serie.push({
-      mes: row.mes,
-      previsto: row.casos_previstos,
-      icBaixo: row.lower != null ? row.lower : undefined,
-      icRange: row.lower != null && row.upper != null ? Math.max(0, row.upper - row.lower) : undefined,
-    });
-  });
-
-  return serie;
 }
 
 function construirAlertasDemo(payload) {
@@ -237,46 +141,59 @@ function construirAlertasDemo(payload) {
 
 // ─── Sub-componentes da tela ────────────────────────────────────────────────
 
-function BannerStatus({ onNavigate, status = STATUS, acao = 'alertas', rotuloAcao = 'Ver plano' }) {
+function BannerStatus({ onNavigate, status = STATUS, acao = 'alertas', rotuloAcao = 'Ver plano', demoState }) {
+  const demoAtiva = demoState?.enabled && demoState.payload;
+  const cutoff = demoAtiva ? formatarCutoffDemo(demoState.payload?.cutoff || demoState.cutoff) : null;
+
   return (
     <div
       style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20,
-        padding: '20px 26px', borderRadius: 14, marginBottom: 26,
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 16,
+        padding: '20px 24px', borderRadius: 14, height: '100%', boxSizing: 'border-box',
         background: `color-mix(in srgb, ${status.cor} 9%, var(--elev))`,
         border: `1px solid color-mix(in srgb, ${status.cor} 28%, transparent)`,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-        <span
-          style={{
-            width: 14, height: 14, borderRadius: '50%', background: status.cor,
-            marginTop: 5, flexShrink: 0, animation: 'dot-pulse 2.4s ease-in-out infinite',
-          }}
-        />
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <p style={{
-              fontFamily: 'Inter Tight, sans-serif', fontWeight: 800, fontSize: 15,
-              letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--ink-900)', margin: 0,
-            }}>
-              {status.titulo}
-            </p>
-            <span style={{
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
-              color: 'var(--ink-500)', background: 'var(--elev)', border: '1px solid var(--ink-100)',
-              borderRadius: 99, padding: '2px 8px',
-            }}>
-              índice {status.indice}/100
-            </span>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+          <span
+            style={{
+              width: 14, height: 14, borderRadius: '50%', background: status.cor,
+              marginTop: 5, flexShrink: 0, animation: 'dot-pulse 2.4s ease-in-out infinite',
+            }}
+          />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
+              <p style={{
+                fontFamily: 'Inter Tight, sans-serif', fontWeight: 800, fontSize: 15,
+                letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--ink-900)', margin: 0,
+              }}>
+                {status.titulo}
+              </p>
+              <span style={{
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
+                color: 'var(--ink-500)', background: 'var(--elev)', border: '1px solid var(--ink-100)',
+                borderRadius: 99, padding: '2px 8px',
+              }}>
+                índice {status.indice}/100
+              </span>
+            </div>
+            <p style={{ fontSize: 15, color: 'var(--ink-700)', margin: 0 }}>{status.frase}</p>
           </div>
-          <p style={{ fontSize: 15, color: 'var(--ink-700)', margin: 0 }}>{status.frase}</p>
         </div>
+        <EvidenceChain
+          fontes={['SINAN — epidemiologia', 'Estoque cadastrado — Insumos']}
+          competencia={cutoff || 'não disponível (mock estático, sem corte associado)'}
+          calculo="Índice combina o sinal de crescimento de casos notificados (SINAN) com a cobertura de estoque dos itens críticos (Insumos); não é uma pontuação de um modelo único."
+          premissas={demoAtiva ? 'Casos históricos reais; estoque e preços do cenário demo são fictícios.' : 'não disponível (dados de exemplo estáticos)'}
+          limitacoes="Pontuação de priorização interna do produto, não uma métrica epidemiológica ou financeira padronizada — usar como triagem, não como indicador oficial."
+          versaoModelo="Combinação determinística (sem modelo único de índice)"
+        />
       </div>
       <button
         onClick={() => onNavigate(acao)}
         style={{
-          flexShrink: 0, padding: '9px 18px', borderRadius: 9, border: 'none', cursor: 'pointer',
+          alignSelf: 'flex-start', padding: '9px 18px', borderRadius: 9, border: 'none', cursor: 'pointer',
           background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700,
         }}
       >
@@ -292,7 +209,7 @@ function FaixaTransparenciaDemo({ demoState }) {
   const cutoff = formatarCutoffDemo(demoState.cutoff || demoState.payload?.cutoff || demoState.meta?.cortes?.mes_inicial);
 
   return (
-    <div style={{
+    <div className="responsive-grid-2" style={{
       display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
       padding: '10px 14px', borderRadius: 12, marginBottom: 18,
       border: '1px solid color-mix(in srgb, var(--info) 22%, transparent)',
@@ -306,6 +223,52 @@ function FaixaTransparenciaDemo({ demoState }) {
         {municipio.nome}/{municipio.uf} · corte temporal {cutoff}
       </span>
     </div>
+  );
+}
+
+function CardSusBotContextual({ municipio, alertas, onOpen }) {
+  const prioridade = alertas.find(alerta => (alerta.status || 'novo') !== 'resolvido') || null;
+  const prompt = prioridade
+    ? `Explique por que o alerta "${prioridade.titulo}" exige atenção e quais dados sustentam essa leitura.`
+    : 'Resuma a situação atual do município e indique se existe alguma ação prioritária.';
+
+  return (
+    <Card style={{ height: '100%', background: 'var(--primary-soft)', borderColor: 'var(--primary-soft-border)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box', padding: '20px 22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16 }}>
+          <span style={{ width: 38, height: 38, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: 'var(--primary)', color: 'white' }}>
+            <MIcon m="smart_toy" size={20} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>SusBot · leitura rápida</p>
+            <p style={{ fontSize: 11.5, color: 'var(--ink-500)', margin: '3px 0 0' }}>IA integrada ao contexto operacional</p>
+          </div>
+          <span style={{ marginLeft: 'auto' }}><Badge label="Contexto ativo" color="var(--primary)" /></span>
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--ink-700)', margin: 0 }}>
+            {prioridade ? (
+              <>Prioridade acompanhada: <strong>{prioridade.titulo}</strong>. {prioridade.evidencia}.</>
+            ) : (
+              <>Nenhum alerta prioritário está ativo neste corte.</>
+            )}
+          </p>
+          <p style={{ fontSize: 11.5, color: 'var(--ink-500)', margin: '4px 0 0' }}>
+            Contexto compartilhado: Visão Geral · {municipio.nome}/{municipio.uf} · histórico da conversa
+          </p>
+        </div>
+
+        <button
+          onClick={() => onOpen?.(prompt)}
+          aria-label="Abrir SusBot com uma pergunta sobre a situação atual"
+          style={{ alignSelf: 'flex-start', minHeight: 44, marginTop: 18, padding: '9px 15px', borderRadius: 9, border: '1px solid var(--primary)', cursor: 'pointer', background: 'var(--elev)', color: 'var(--primary)', fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0 }}
+        >
+          Conversar sobre esta situação
+          <MIcon m="arrow_forward" size={16} />
+        </button>
+      </div>
+    </Card>
   );
 }
 
@@ -443,22 +406,6 @@ function RevelacaoCurvaDemo({ payload }) {
   );
 }
 
-function BlocoSusBot({ texto = SUSBOT_TEXTO }) {
-  return (
-    <div style={{
-      background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)',
-      borderRadius: 12, padding: '16px 18px', marginBottom: 28, maxWidth: '78ch',
-    }}>
-      <p className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <MIcon m="smart_toy" size={14} /> SusBot
-      </p>
-      <p style={{ fontSize: 15, lineHeight: 1.65, color: 'var(--ink-700)', margin: 0 }}>
-        {texto}
-      </p>
-    </div>
-  );
-}
-
 function BotaoAlerta({ children, primario, onClick }) {
   return (
     <button
@@ -479,10 +426,11 @@ function LinhaAlerta({ alerta, isLast, onNavigate, onGerarEtp }) {
   const dotCor = alerta.severidade === 'critico' ? 'var(--risk-alto)' : 'var(--risk-medio)';
   const handleAcao = () => {
     if (alerta.acao?.tipo === 'etp' && alerta.payload) onGerarEtp(alerta.payload);
-    else onNavigate('alertas');
+    else onNavigate({ page: 'alertas', alertaId: alerta.id });
   };
   return (
     <div
+      className="visao-alert-row"
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
         padding: '15px 22px', borderBottom: isLast ? 'none' : '1px solid var(--ink-100)',
@@ -535,61 +483,6 @@ function AlertasPrioritarios({ onNavigate, onGerarEtp, alertas = ALERTAS }) {
   );
 }
 
-function TooltipDengue({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null;
-  const real = payload.find(p => p.dataKey === 'real')?.value;
-  const previsto = payload.find(p => p.dataKey === 'previsto')?.value;
-  const valor = real ?? previsto;
-  if (valor == null) return null;
-  return (
-    <div style={{
-      background: 'var(--elev)', border: '1px solid var(--ink-100)', borderRadius: 8,
-      padding: '8px 12px', fontSize: 13, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-    }}>
-      <p style={{ fontWeight: 700, color: 'var(--ink-900)', marginBottom: 2 }}>{label}</p>
-      <p style={{ color: 'var(--ink-500)' }}>
-        {real != null ? 'Casos reais: ' : 'Casos previstos: '}
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: 'var(--ink-900)' }}>
-          {valor.toLocaleString('pt-BR')}
-        </span>
-      </p>
-    </div>
-  );
-}
-
-function CardPrevisaoDengue({ serie = DENGUE_SERIE }) {
-  return (
-    <Card className="p-5">
-      <SectionTitle>Previsão de casos — dengue</SectionTitle>
-      <ResponsiveContainer width="100%" height={270}>
-        <ComposedChart data={serie} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="var(--ink-100)" vertical={false} />
-          <XAxis
-            dataKey="mes" tick={{ fontSize: 11, fill: 'var(--ink-400)' }}
-            axisLine={{ stroke: 'var(--ink-100)' }} tickLine={false} interval={1}
-          />
-          <YAxis tick={{ fontSize: 11, fill: 'var(--ink-400)' }} axisLine={false} tickLine={false} width={40} />
-          <Tooltip content={<TooltipDengue />} />
-          <Area type="monotone" dataKey="icBaixo" stackId="ic" stroke="none" fill="transparent" isAnimationActive={false} />
-          <Area type="monotone" dataKey="icRange" stackId="ic" stroke="none" fill="var(--accent)" fillOpacity={0.16} isAnimationActive={false} />
-          <Line type="monotone" dataKey="real" stroke="var(--primary)" strokeWidth={2.5} dot={false} isAnimationActive={false} />
-          <Line type="monotone" dataKey="previsto" stroke="var(--accent)" strokeWidth={2.5} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
-        </ComposedChart>
-      </ResponsiveContainer>
-      <div style={{ display: 'flex', gap: 18, marginTop: 4, fontSize: 11, color: 'var(--ink-500)' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 14, height: 2, background: 'var(--primary)', display: 'inline-block' }} />
-          Real
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 14, borderTop: '2px dashed var(--accent)', display: 'inline-block' }} />
-          Previsto (IC 80%)
-        </span>
-      </div>
-    </Card>
-  );
-}
-
 function CardJanelaDecisao({ demoState, status, alertas = [] }) {
   const prova = demoState?.payload?.prova_valor || null;
   const cutoff = demoState?.payload?.cutoff || demoState?.cutoff || null;
@@ -637,7 +530,7 @@ function CardJanelaDecisao({ demoState, status, alertas = [] }) {
         {resumo}
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
+      <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
         <div style={{ padding: '12px 13px', borderRadius: 10, background: 'var(--subtle)' }}>
           <p style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-400)', margin: '0 0 6px' }}>
             Antecedência
@@ -691,22 +584,61 @@ function CardJanelaDecisao({ demoState, status, alertas = [] }) {
         ))}
       </div>
 
-      <p style={{ fontSize: 11, color: 'var(--ink-400)', margin: 0 }}>
+      <p style={{ fontSize: 11, color: 'var(--ink-400)', margin: '0 0 14px' }}>
         Esta leitura prioriza a decisão operacional: quando agir, quanto tempo ainda existe e qual custo pode ser evitado.
       </p>
+
+      <EvidenceChain
+        fontes={['SINAN — epidemiologia', 'Estoque cadastrado — Insumos']}
+        competencia={cutoff ? formatarCutoffDemo(cutoff) : 'não disponível (mock estático, sem corte associado)'}
+        calculo="Antecedência = data de ruptura prevista − data de ação recomendada; economia estimada = custo emergencial − custo planejado."
+        premissas={prova ? 'Baseado no cenário demo de estoque e preços — fictício, não é o estoque real do município.' : 'não disponível (dados de exemplo estáticos, sem prova de valor calculada)'}
+        limitacoes="Combina sinal epidemiológico (SINAN) e estoque cadastrado (Insumos); a decisão de ruptura e a quantidade recomendada vêm de cálculo determinístico, não do SusBot."
+        versaoModelo="Cascade Holt → OLS (epidemiologia) + cálculo determinístico (insumos)"
+      />
     </Card>
   );
 }
 
+// Compara os alertas ativos de hoje com os vistos na última visita (localStorage) e
+// devolve quantos são novos — dá a sensação de "o sistema trabalha enquanto você não
+// está olhando" (docs/telas/01-visao-geral.md, decisão 07/08/2026).
+// ponytail: chave única por navegador, sem multiusuário/expiração — troca por
+// campo real de "último acesso" quando existir autenticação de verdade.
+const CHAVE_ALERTAS_VISTOS = 'sus_predict_alertas_vistos';
+
+function useAlertasNovosDesdeUltimoAcesso(alertas) {
+  const [contagem, setContagem] = useState(0);
+  const idsAtivos = alertas.filter(a => (a.status || 'novo') !== 'resolvido').map(a => a.id).join(',');
+
+  useEffect(() => {
+    const idsAtuais = idsAtivos ? idsAtivos.split(',') : [];
+    let vistos = [];
+    try {
+      vistos = JSON.parse(localStorage.getItem(CHAVE_ALERTAS_VISTOS) || '[]');
+    } catch {
+      vistos = [];
+    }
+    setContagem(idsAtuais.filter(id => !vistos.includes(id)).length);
+    localStorage.setItem(CHAVE_ALERTAS_VISTOS, JSON.stringify(idsAtuais));
+  }, [idsAtivos]);
+
+  return contagem;
+}
+
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-export default function VisaoGeral({ onNavigate, onGerarEtp, demoState }) {
+export default function VisaoGeral({ onNavigate, onGerarEtp, onOpenSusBot, demoState }) {
   const demoAtiva = demoState?.enabled && demoState.payload;
   const municipio = obterMunicipioDemo(demoState, MUNICIPIO);
   const statusDemo = demoAtiva ? construirStatusDemo(demoState.payload) : STATUS;
-  const serieDemo = demoAtiva ? construirSerieDemo(demoState.payload) : DENGUE_SERIE;
   const alertasDemo = demoAtiva ? construirAlertasDemo(demoState.payload) : ALERTAS;
-  const textoSusbot = demoAtiva ? (demoState.payload.susbot_briefing || []).join('\n') : SUSBOT_TEXTO;
+  const alertasNovos = useAlertasNovosDesdeUltimoAcesso(alertasDemo);
+  const temJanelaConcreta = !!(
+    demoAtiva
+    && (demoState.payload?.prova_valor?.mes_acao_recomendado
+      || demoState.payload?.prova_valor?.etp_recomendado_em)
+  );
 
   return (
     <div className="rise">
@@ -752,16 +684,24 @@ export default function VisaoGeral({ onNavigate, onGerarEtp, demoState }) {
         </div>
       )}
 
-      <BannerStatus onNavigate={onNavigate} status={statusDemo} acao="alertas" rotuloAcao="Ver plano" />
-      <BlocoSusBot texto={textoSusbot} />
+      {alertasNovos > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16,
+          fontSize: 13, fontWeight: 700, color: 'var(--primary)',
+        }}>
+          <MIcon m="notifications_active" size={16} />
+          {alertasNovos} {alertasNovos === 1 ? 'alerta novo' : 'alertas novos'} desde seu último acesso
+        </div>
+      )}
+
+      <div className="visao-resumo-grid">
+        <BannerStatus onNavigate={onNavigate} status={statusDemo} acao="alertas" rotuloAcao="Ver plano" demoState={demoState} />
+        <CardSusBotContextual municipio={municipio} alertas={alertasDemo} onOpen={onOpenSusBot} />
+      </div>
+      <AlertasPrioritarios onNavigate={onNavigate} onGerarEtp={onGerarEtp} alertas={alertasDemo} />
       <ProvaValorDemo demoState={demoState} />
       {demoAtiva && <RevelacaoCurvaDemo payload={demoState.payload} />}
-      <AlertasPrioritarios onNavigate={onNavigate} onGerarEtp={onGerarEtp} alertas={alertasDemo} />
-
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
-        <CardPrevisaoDengue serie={serieDemo} />
-        <CardJanelaDecisao demoState={demoState} status={statusDemo} alertas={alertasDemo} />
-      </div>
+      {temJanelaConcreta && <CardJanelaDecisao demoState={demoState} status={statusDemo} alertas={alertasDemo} />}
     </div>
   );
 }

@@ -2,13 +2,21 @@ export const SUSBOT_ENDPOINTS = {
   perguntar: '/api/susbot/perguntar',
   conversas: '/api/susbot/conversas',
   mensagens: conversaId => `/api/susbot/conversas/${conversaId}/mensagens`,
+  canais: '/api/susbot/canais',
+  pareamentos: '/api/susbot/canais/pareamentos',
+  pareamento: pareamentoId => `/api/susbot/canais/pareamentos/${pareamentoId}`,
+  confirmarPareamento: pareamentoId => `/api/susbot/canais/pareamentos/${pareamentoId}/confirmar`,
+  canal: provedor => `/api/susbot/canais/${provedor}`,
 };
 
 export const SUSBOT_SSE_EVENTS = {
   status: 'status',
   token: 'token',
   referencia: 'referencia',
+  artefato: 'artefato',
+  confirmacao_pendente: 'confirmacao_pendente',
   fim: 'fim',
+  erro: 'erro',
 };
 
 export const SUSBOT_REQUEST_FIELDS = {

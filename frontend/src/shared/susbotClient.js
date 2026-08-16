@@ -40,6 +40,67 @@ async function lerJson(response) {
   return response.json();
 }
 
+async function requisicaoJson(path, {
+  baseUrl = '', fetchImpl = globalThis.fetch, method = 'GET', body, signal, headers = {},
+} = {}) {
+  const fetchFn = fetchImpl || globalThis.fetch;
+  if (typeof fetchFn !== 'function') throw new Error('fetch indisponivel para consultar canais do SusBot');
+  const response = await fetchFn(resolverUrl(baseUrl, path), {
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal,
+  });
+  if (response.status === 204) return null;
+  return lerJson(response);
+}
+
+export function listarCanaisSusbot(opcoes = {}) {
+  return requisicaoJson(SUSBOT_ENDPOINTS.canais, opcoes);
+}
+
+export function criarPareamentoCanalSusbot({ provedor = 'telegram', ibge6, ...opcoes } = {}) {
+  return requisicaoJson(SUSBOT_ENDPOINTS.pareamentos, {
+    ...opcoes,
+    method: 'POST',
+    body: { provedor, ibge6 },
+  });
+}
+
+export function consultarPareamentoCanalSusbot({ pareamentoId, ...opcoes } = {}) {
+  if (!pareamentoId) throw new Error('pareamentoId ausente');
+  return requisicaoJson(SUSBOT_ENDPOINTS.pareamento(pareamentoId), opcoes);
+}
+
+export function confirmarPareamentoCanalSusbot({ pareamentoId, ...opcoes } = {}) {
+  if (!pareamentoId) throw new Error('pareamentoId ausente');
+  return requisicaoJson(SUSBOT_ENDPOINTS.confirmarPareamento(pareamentoId), {
+    ...opcoes,
+    method: 'POST',
+  });
+}
+
+export function cancelarPareamentoCanalSusbot({ pareamentoId, ...opcoes } = {}) {
+  if (!pareamentoId) throw new Error('pareamentoId ausente');
+  return requisicaoJson(SUSBOT_ENDPOINTS.pareamento(pareamentoId), {
+    ...opcoes,
+    method: 'DELETE',
+  });
+}
+
+export function revogarCanalSusbot({ provedor, ...opcoes } = {}) {
+  if (!provedor) throw new Error('provedor ausente');
+  return requisicaoJson(SUSBOT_ENDPOINTS.canal(provedor), {
+    ...opcoes,
+    method: 'DELETE',
+  });
+}
+
 export async function listarConversasSusbot({
   baseUrl = '',
   fetchImpl = globalThis.fetch,
@@ -188,6 +249,16 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
       return;
     }
 
+    if (evento.event === SUSBOT_SSE_EVENTS.artefato) {
+      handlers.onArtefato?.(evento.data);
+      return;
+    }
+
+    if (evento.event === SUSBOT_SSE_EVENTS.confirmacao_pendente) {
+      handlers.onConfirmacaoPendente?.(evento.data);
+      return;
+    }
+
     if (evento.event === SUSBOT_SSE_EVENTS.fim) {
       if (evento.data && typeof evento.data === 'object') {
         respostaFinal = normalizarTexto(evento.data.resposta) || respostaFinal;
@@ -196,6 +267,11 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
         if (evento.data.conversa_id) conversaId = String(evento.data.conversa_id);
       }
       handlers.onFim?.(evento.data);
+      return;
+    }
+
+    if (evento.event === SUSBOT_SSE_EVENTS.erro) {
+      throw new Error(evento.data?.mensagem || 'Falha ao gerar resposta do SusBot.');
     }
   };
 
@@ -249,6 +325,7 @@ export async function conversarComSusbot({
   conversa_id,
   ibge6,
   ibge,
+  confirmar,
   baseUrl = '',
   fetchImpl = globalThis.fetch,
   timeoutMs = SUSBOT_TIMEOUT_MS,
@@ -257,6 +334,8 @@ export async function conversarComSusbot({
   onStatus,
   onToken,
   onReferencia,
+  onArtefato,
+  onConfirmacaoPendente,
   onFim,
   onEvento,
 } = {}) {
@@ -266,7 +345,7 @@ export async function conversarComSusbot({
   }
 
   const perguntaNormalizada = normalizarTexto(pergunta);
-  if (!perguntaNormalizada) {
+  if (!perguntaNormalizada && !confirmar) {
     throw new Error('pergunta ausente');
   }
 
@@ -299,6 +378,7 @@ export async function conversarComSusbot({
         ibge: ibge6Normalizado,
         tela_origem: telaNormalizada,
         tela_atual: telaNormalizada,
+        confirmar: confirmar || undefined,
       }),
       signal: controller.signal,
     });
@@ -307,6 +387,8 @@ export async function conversarComSusbot({
       onStatus,
       onToken,
       onReferencia,
+      onArtefato,
+      onConfirmacaoPendente,
       onFim,
       onEvento,
     });

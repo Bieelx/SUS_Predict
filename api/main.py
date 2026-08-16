@@ -28,6 +28,9 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+from dotenv import load_dotenv
+load_dotenv(ROOT / ".env")
+
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -71,6 +74,7 @@ from api.core.export import csv_gz_bytes, slug_filename, xlsx_bytes
 from api.core.ibge import buscar_municipios, get_estados
 from api.core.prediction import PROPHET_OK, gerar_predicao
 from api.core.susbot_router import router as susbot_router
+from api.core.channel_router import router as channel_router
 
 if PYSUS_OK:
     from api.core.download import baixar_ano, baixar_sinan, limpar_cache_pysus
@@ -99,6 +103,8 @@ PUBLIC_API_PATHS = {
     "/api/auth/forgot-password",
     "/api/auth/recovery/session",
     "/api/auth/dev-login",
+    # O Telegram autentica o webhook com TELEGRAM_WEBHOOK_SECRET na própria rota.
+    "/api/susbot/telegram/webhook",
     # Não há rota de signup; deixá-la passar resulta em 404 em vez de autenticar.
     "/api/auth/signup",
 }
@@ -142,7 +148,9 @@ async def proteger_api(request: Request, call_next):
         except HTTPException as error:
             response = JSONResponse({"detail": error.detail}, status_code=error.status_code)
             if error.status_code == 401:
-                auth_core.clear_session_cookies(response)
+                # O frontend ainda precisa do refresh cookie para renovar uma
+                # sessão cujo access token acabou de expirar.
+                auth_core.clear_access_cookie(response)
             # Esta resposta nasce antes do CORSMiddleware interno; preserve CORS
             # para que o frontend consiga tratar 401/403 sem um falso erro de rede.
             if origin in ALLOWED_ORIGINS:
@@ -163,6 +171,7 @@ async def proteger_api(request: Request, call_next):
 app.include_router(dengue_router)
 app.include_router(demo_router)
 app.include_router(susbot_router)
+app.include_router(channel_router)
 
 jobs: dict = {}
 TEMP_DIR = Path("./temp_data")
@@ -402,10 +411,22 @@ def auth_dev_login(req: LoginRequest, response: Response):
 
 @app.post("/api/auth/refresh")
 def auth_refresh(request: Request, response: Response):
-    session = auth_core.refresh_session(auth_core.refresh_token_from_request(request))
-    user = auth_core.authorize_user(session.get("user") or {}, "admin")
-    auth_core.set_session_cookies(response, session)
-    return {"user": auth_core.serialize_user(user)}
+    try:
+        session = auth_core.refresh_session(auth_core.refresh_token_from_request(request))
+        user = auth_core.authorize_user(session.get("user") or {}, "admin")
+        auth_core.set_session_cookies(response, session)
+        return {"user": auth_core.serialize_user(user)}
+    except HTTPException as error:
+        failure = JSONResponse(
+            {"detail": error.detail},
+            status_code=error.status_code,
+            headers=error.headers,
+        )
+        # Somente uma renovação definitivamente inválida encerra a sessão.
+        # Falhas 5xx transitórias preservam o refresh token para nova tentativa.
+        if error.status_code in {401, 403}:
+            auth_core.clear_session_cookies(failure)
+        return failure
 
 
 @app.post("/api/auth/logout")

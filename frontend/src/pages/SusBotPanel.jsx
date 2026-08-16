@@ -1,6 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { API_BASE, MIcon } from '../shared/ui.jsx';
-import { conversarComSusbot, listarConversasSusbot, listarMensagensSusbot } from '../shared/susbotClient.js';
+import {
+  cancelarPareamentoCanalSusbot,
+  confirmarPareamentoCanalSusbot,
+  consultarPareamentoCanalSusbot,
+  conversarComSusbot,
+  criarPareamentoCanalSusbot,
+  listarCanaisSusbot,
+  listarConversasSusbot,
+  listarMensagensSusbot,
+  revogarCanalSusbot,
+} from '../shared/susbotClient.js';
 import { getSusbotPageLabel } from '../shared/susbotContract.js';
 import { apiFetch } from '../shared/authClient.js';
 
@@ -255,7 +265,167 @@ const ROTULO_META = {
 // A resposta do bot não é balão: é um bloco de texto com régua lateral — o
 // mesmo idioma do card de insight na Visão Geral. A pergunta do usuário é um
 // bloco alinhado à direita, sem rabinho.
-function Bolha({ msg, onNavigate }) {
+function ArtefatoView({ artefato }) {
+  if (!artefato) return null;
+
+  if (artefato.tipo === 'tabela') {
+    if (!artefato.linhas?.length) return null;
+    return (
+      <div style={{ marginTop: 10, border: '1px solid var(--ink-100)', borderRadius: 10, overflow: 'hidden' }}>
+        <p style={{
+          margin: 0, padding: '6px 10px', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase',
+          letterSpacing: '0.05em', color: 'var(--ink-400)', background: 'var(--subtle)',
+        }}>
+          {artefato.titulo}
+        </p>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr>
+                {artefato.colunas.map(col => (
+                  <th key={col} style={{
+                    textAlign: 'left', padding: '6px 10px', color: 'var(--ink-500)',
+                    fontWeight: 700, borderBottom: '1px solid var(--ink-100)', whiteSpace: 'nowrap',
+                  }}>
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {artefato.linhas.map((linha, i) => (
+                <tr key={i}>
+                  {artefato.colunas.map(col => (
+                    <td key={col} style={{ padding: '6px 10px', borderTop: '1px solid var(--ink-50)', color: 'var(--ink-700)', whiteSpace: 'nowrap' }}>
+                      {String(linha[col] ?? '—')}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {artefato.evidencia && (
+          <div style={{ padding: '9px 10px', borderTop: '1px solid var(--ink-100)', background: 'var(--subtle)' }}>
+            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--ink-500)' }}>
+              <strong style={{ color: 'var(--ink-700)' }}>Fonte:</strong> {artefato.evidencia.fonte}
+            </p>
+            {!!artefato.evidencia.competencias?.length && (
+              <p style={{ margin: '2px 0 0', fontSize: 11, lineHeight: 1.5, color: 'var(--ink-500)' }}>
+                <strong style={{ color: 'var(--ink-700)' }}>Competência:</strong>{' '}
+                {Array.from(new Set(artefato.evidencia.competencias)).join(', ')}
+              </p>
+            )}
+            <p style={{ margin: '2px 0 0', fontSize: 11, lineHeight: 1.5, color: 'var(--warn)' }}>
+              <strong>Limitação:</strong> {artefato.evidencia.limitacao}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (artefato.tipo === 'resumo') {
+    const entradas = Object.entries(artefato.campos || {});
+    if (!entradas.length) return null;
+    return (
+      <div style={{ marginTop: 10 }}>
+        <p style={{ margin: '0 0 6px', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+          {artefato.titulo}
+        </p>
+        <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(entradas.length, 3)}, 1fr)`, gap: 8 }}>
+          {entradas.map(([chave, valor]) => (
+            <div key={chave} style={{ padding: '8px 10px', borderRadius: 10, background: 'var(--subtle)', border: '1px solid var(--ink-100)' }}>
+              <p style={{ margin: 0, fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+                {chave.replace(/_/g, ' ')}
+              </p>
+              <p style={{ margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: 'var(--ink-900)' }}>
+                {String(valor)}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (artefato.tipo === 'etp') {
+    return (
+      <div style={{
+        marginTop: 10, padding: '10px 12px', borderRadius: 10,
+        border: '1px solid color-mix(in srgb, var(--good) 22%, transparent)',
+        background: 'color-mix(in srgb, var(--good) 6%, white)',
+      }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--good)' }}>{artefato.titulo}</p>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-700)', lineHeight: 1.5 }}>{artefato.justificativa}</p>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function ConfirmacaoAcao({ msg, onConfirmar, onCancelar }) {
+  const confirmacao = msg.confirmacao;
+  if (!confirmacao) return null;
+  const item = String(confirmacao.argumentos?.item || '').trim();
+  const geracaoEtp = confirmacao.ferramenta === 'gerar_etp';
+  const titulo = geracaoEtp ? 'Confirmação para gerar rascunho de ETP' : 'Confirmação de ação';
+  const rotuloConfirmar = geracaoEtp ? 'Confirmar geração do rascunho' : 'Confirmar ação';
+
+  return (
+    <div role="group" aria-label={titulo} aria-live="polite" style={{
+      marginTop: 10, padding: '10px 12px', borderRadius: 10,
+      border: '1px solid color-mix(in srgb, var(--primary) 25%, transparent)',
+      background: 'var(--primary-soft)',
+    }}>
+      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: 'var(--ink-900)' }}>{titulo}</p>
+      <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--ink-700)', lineHeight: 1.5 }}>{confirmacao.resumo}</p>
+      {item && (
+        <p style={{ margin: '5px 0 0', fontSize: 11.5, color: 'var(--ink-500)' }}>
+          <strong style={{ color: 'var(--ink-700)' }}>Item:</strong> {item}
+        </p>
+      )}
+      <p style={{ margin: '5px 0 0', fontSize: 11.5, color: 'var(--ink-500)', lineHeight: 1.45 }}>
+        O SusBot não executa esta ação sem sua autorização. Você pode cancelar sem alterar o alerta.
+      </p>
+      {!confirmacao.resolvido ? (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => onConfirmar?.(msg.id, confirmacao.ferramenta, confirmacao.argumentos)}
+            disabled={confirmacao.processando}
+            aria-busy={confirmacao.processando || undefined}
+            style={{
+              minHeight: 44, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: confirmacao.processando ? 'wait' : 'pointer',
+              background: 'var(--primary)', color: 'white', fontSize: 12, fontWeight: 700,
+            }}
+          >
+            {confirmacao.processando ? 'Confirmando…' : rotuloConfirmar}
+          </button>
+          <button
+            type="button"
+            onClick={() => onCancelar?.(msg.id)}
+            disabled={confirmacao.processando}
+            style={{
+              minHeight: 44, padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+              border: '1px solid var(--ink-100)', background: 'transparent', color: 'var(--ink-500)',
+            }}
+          >
+            Cancelar
+          </button>
+        </div>
+      ) : (
+        <p role="status" style={{ margin: '6px 0 0', fontSize: 11, color: confirmacao.cancelado ? 'var(--ink-500)' : 'var(--good)' }}>
+          {confirmacao.cancelado ? 'Ação cancelada. Nenhuma alteração foi realizada.' : 'Ação confirmada pelo usuário.'}
+        </p>
+      )}
+      {confirmacao.erro && <p role="alert" style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--bad)' }}>{confirmacao.erro}</p>}
+    </div>
+  );
+}
+
+function Bolha({ msg, onNavigate, onConfirmar, onCancelar }) {
   const isUser = msg.autor === 'user';
   const isErro = msg.autor === 'error';
   const isStreaming = msg.autor === 'bot' && msg.streaming;
@@ -294,6 +464,9 @@ function Bolha({ msg, onNavigate }) {
       {isStreaming && msg.status && (
         <p style={{ ...ROTULO_META, marginTop: 6 }}>{msg.status}</p>
       )}
+
+      {!isErro && <ArtefatoView artefato={msg.artefato} />}
+      {!isErro && <ConfirmacaoAcao msg={msg} onConfirmar={onConfirmar} onCancelar={onCancelar} />}
 
       {isErro && (
         <button
@@ -345,11 +518,228 @@ function ItemHistorico({ thread, onAbrir }) {
   );
 }
 
+function ContinuidadeCanais({ ibge6 }) {
+  const [conexoes, setConexoes] = useState([]);
+  const [pareamento, setPareamento] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [copiado, setCopiado] = useState(false);
+  const telegram = conexoes.find(item => item.provedor === 'telegram');
+
+  async function carregarCanais() {
+    setErro('');
+    try {
+      const data = await listarCanaisSusbot({ baseUrl: API_BASE, fetchImpl: apiFetch });
+      setConexoes(Array.isArray(data?.itens) ? data.itens : []);
+    } catch (error) {
+      setErro(error?.message || 'Não foi possível consultar os canais conectados.');
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  useEffect(() => { void carregarCanais(); }, []);
+
+  useEffect(() => {
+    if (!pareamento?.id || !['emitido', 'reivindicado'].includes(pareamento.status)) return undefined;
+    const timer = window.setInterval(async () => {
+      try {
+        const atualizado = await consultarPareamentoCanalSusbot({
+          pareamentoId: pareamento.id,
+          baseUrl: API_BASE,
+          fetchImpl: apiFetch,
+        });
+        setPareamento(atual => ({ ...atual, ...atualizado }));
+      } catch {
+        // Mantém o estado atual e permite nova tentativa manual pelo fluxo.
+      }
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [pareamento?.id, pareamento?.status]);
+
+  async function iniciarPareamento() {
+    setProcessando(true);
+    setErro('');
+    try {
+      const novo = await criarPareamentoCanalSusbot({
+        provedor: 'telegram', ibge6, baseUrl: API_BASE, fetchImpl: apiFetch,
+      });
+      setPareamento(novo);
+    } catch (error) {
+      setErro(error?.message || 'Não foi possível iniciar a conexão.');
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  async function confirmarPareamento() {
+    setProcessando(true);
+    setErro('');
+    try {
+      const conexao = await confirmarPareamentoCanalSusbot({
+        pareamentoId: pareamento.id, baseUrl: API_BASE, fetchImpl: apiFetch,
+      });
+      setConexoes(items => [...items.filter(item => item.provedor !== 'telegram'), conexao]);
+      setPareamento(null);
+    } catch (error) {
+      setErro(error?.message || 'Não foi possível confirmar a conexão.');
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  async function cancelarPareamento() {
+    setProcessando(true);
+    try {
+      await cancelarPareamentoCanalSusbot({
+        pareamentoId: pareamento.id, baseUrl: API_BASE, fetchImpl: apiFetch,
+      });
+      setPareamento(null);
+    } catch (error) {
+      setErro(error?.message || 'Não foi possível cancelar o pareamento.');
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  async function desconectarTelegram() {
+    setProcessando(true);
+    setErro('');
+    try {
+      await revogarCanalSusbot({ provedor: 'telegram', baseUrl: API_BASE, fetchImpl: apiFetch });
+      setConexoes(items => items.filter(item => item.provedor !== 'telegram'));
+    } catch (error) {
+      setErro(error?.message || 'Não foi possível desconectar o Telegram.');
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  async function copiarCodigo() {
+    try {
+      await navigator.clipboard.writeText(pareamento.codigo);
+      setCopiado(true);
+      window.setTimeout(() => setCopiado(false), 1800);
+    } catch {
+      setErro('Não foi possível copiar. Selecione o código manualmente.');
+    }
+  }
+
+  return (
+    <div className="susbot-panel-body" style={{ flex: 1, padding: '18px 16px' }}>
+      <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--ink-900)', fontFamily: 'var(--ff-tight)' }}>
+        Continuidade entre canais
+      </p>
+      <p style={{ margin: '7px 0 18px', fontSize: 13, lineHeight: 1.55, color: 'var(--ink-500)' }}>
+        Use a mesma identidade e o mesmo histórico onde sua equipe já conversa. Cada novo canal exige sua confirmação no SusPredict.
+      </p>
+      {erro && (
+        <p role="alert" style={{ padding: '10px 12px', borderRadius: 9, background: 'color-mix(in srgb, var(--bad) 8%, var(--elev))', color: 'var(--bad)', fontSize: 12, lineHeight: 1.5 }}>
+          {erro}
+        </p>
+      )}
+
+      <div style={{ borderTop: '1px solid var(--ink-100)' }} aria-busy={carregando || processando}>
+        <div style={{ padding: '13px 0', borderBottom: '1px solid var(--ink-100)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+            <strong style={{ fontSize: 13, color: 'var(--ink-900)' }}>Web</strong>
+            <span style={{ ...ROTULO_META, color: 'var(--good)' }}>Ativo</span>
+          </div>
+          <p style={{ margin: '5px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-500)' }}>Conversa, contexto de tela e município ativos.</p>
+        </div>
+
+        <div style={{ padding: '14px 0', borderBottom: '1px solid var(--ink-100)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <div>
+              <strong style={{ display: 'block', fontSize: 13, color: 'var(--ink-900)' }}>Telegram</strong>
+              <span style={{ ...ROTULO_META, color: telegram ? 'var(--good)' : 'var(--ink-400)' }}>
+                {telegram ? 'Conectado' : pareamento ? 'Pareamento em andamento' : 'Não conectado'}
+              </span>
+            </div>
+            {!telegram && !pareamento && (
+              <button type="button" disabled={processando || carregando} onClick={() => void iniciarPareamento()} className="susbot-channel-primary">
+                Conectar
+              </button>
+            )}
+          </div>
+
+          {telegram && (
+            <div style={{ marginTop: 12, padding: '11px 12px', borderRadius: 10, background: 'var(--primary-soft)' }}>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--ink-900)' }}>
+                {telegram.external_username ? `@${telegram.external_username}` : 'Conta Telegram conectada'}
+              </p>
+              <p style={{ margin: '4px 0 10px', fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-500)' }}>
+                Novas conversas entram no mesmo histórico. Ações continuam exigindo confirmação.
+              </p>
+              <button type="button" disabled={processando} onClick={() => void desconectarTelegram()} className="susbot-channel-danger">
+                Desconectar Telegram
+              </button>
+            </div>
+          )}
+
+          {pareamento?.status === 'emitido' && (
+            <div style={{ marginTop: 12, padding: '12px', borderRadius: 10, background: 'var(--primary-soft)' }}>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: 'var(--ink-900)' }}>1. Abra o SusBot no Telegram</p>
+              <p style={{ margin: '5px 0 10px', fontSize: 11.5, lineHeight: 1.5, color: 'var(--ink-500)' }}>
+                O link é de uso único e expira em 10 minutos. Depois, volte aqui para confirmar a conta encontrada.
+              </p>
+              {pareamento.deep_link ? (
+                <a href={pareamento.deep_link} target="_blank" rel="noreferrer" className="susbot-channel-primary" style={{ textDecoration: 'none' }}>
+                  Abrir Telegram <MIcon m="open_in_new" size={15} />
+                </a>
+              ) : (
+                <p style={{ margin: '0 0 9px', fontSize: 11.5, color: 'var(--warn)' }}>O usuário oficial do bot ainda não foi configurado.</p>
+              )}
+              <div className="susbot-channel-code">
+                <code>{pareamento.codigo}</code>
+                <button type="button" onClick={() => void copiarCodigo()}>{copiado ? 'Copiado' : 'Copiar'}</button>
+              </div>
+              <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-channel-link">Cancelar</button>
+            </div>
+          )}
+
+          {pareamento?.status === 'reivindicado' && (
+            <div role="group" aria-label="Confirmar conta Telegram" style={{ marginTop: 12, padding: '12px', borderRadius: 10, border: '1px solid var(--primary-soft-border)', background: 'var(--elev)' }}>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: 'var(--ink-900)' }}>2. Confirme a conta encontrada</p>
+              <p style={{ margin: '5px 0 12px', fontSize: 12, color: 'var(--ink-700)' }}>
+                Conectar {pareamento.external_username ? `@${pareamento.external_username}` : 'esta conta do Telegram'} ao seu histórico SusPredict?
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button type="button" disabled={processando} onClick={() => void confirmarPareamento()} className="susbot-channel-primary">Confirmar conexão</button>
+                <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-channel-link">Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {pareamento && ['expirado', 'cancelado'].includes(pareamento.status) && (
+            <div style={{ marginTop: 10 }}>
+              <p style={{ fontSize: 12, color: 'var(--ink-500)' }}>Este pareamento não está mais disponível.</p>
+              <button type="button" onClick={() => { setPareamento(null); void iniciarPareamento(); }} className="susbot-channel-primary">Gerar novo link</button>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '13px 0', borderBottom: '1px solid var(--ink-100)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+            <strong style={{ fontSize: 13, color: 'var(--ink-900)' }}>WhatsApp</strong>
+            <span style={{ ...ROTULO_META, color: 'var(--ink-400)' }}>Próximo canal</span>
+          </div>
+          <p style={{ margin: '5px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-500)' }}>Usará o mesmo pareamento seguro e o mesmo histórico.</p>
+        </div>
+      </div>
+      <p style={{ margin: '16px 0 0', padding: '10px 12px', background: 'var(--subtle)', borderRadius: 8, fontSize: 12, lineHeight: 1.55, color: 'var(--ink-700)' }}>
+        O código nunca é permanente: expira, funciona uma vez e só conclui a conexão depois da sua confirmação aqui.
+      </p>
+    </div>
+  );
+}
+
 // ─── Componente principal ───────────────────────────────────────────────────
 
-export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChange }) {
+export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChange, openRequest = null }) {
   const [open, setOpen] = useState(false);
-  const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history'
+  const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history' | 'channels'
   const [threads, setThreads] = useState([]);
   const [current, setCurrent] = useState(() => criarThreadVazia());
   const [input, setInput] = useState('');
@@ -363,6 +753,8 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
   const fimRef = useRef(null);
   const inputRef = useRef(null);
   const painelRef = useRef(null);
+  const focoAnteriorRef = useRef(null);
+  const enviandoRef = useRef(false);
 
   // O painel fica montado o tempo todo (translada para fora quando fechado), então
   // precisa sair da árvore de foco ao fechar. `inert` faz as duas coisas: esconde
@@ -383,8 +775,23 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
   useEffect(() => { onOpenChange?.(open); }, [open, onOpenChange]);
 
   useEffect(() => {
+    enviandoRef.current = enviando;
+  }, [enviando]);
+
+  useEffect(() => {
+    if (open) focoAnteriorRef.current = document.activeElement;
+  }, [open]);
+
+  useEffect(() => {
     if (open && viewMode === 'chat') inputRef.current?.focus();
   }, [open, viewMode, current.id]);
+
+  useEffect(() => {
+    if (!openRequest?.id) return;
+    setViewMode('chat');
+    setOpen(true);
+    if (openRequest.prompt) setInput(openRequest.prompt);
+  }, [openRequest?.id]);
 
   useEffect(() => {
     if (!open || viewMode !== 'chat') return;
@@ -411,12 +818,34 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
     if (!open) return;
 
     const onKeyDown = e => {
-      if (e.key === 'Escape' && !enviando) setOpen(false);
+      if (e.key === 'Escape' && !enviandoRef.current) {
+        e.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (e.key !== 'Tab' || !painelRef.current) return;
+      const focaveis = painelRef.current.querySelectorAll(
+        'button:not([disabled]), [href], textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focaveis.length) return;
+      const primeiro = focaveis[0];
+      const ultimo = focaveis[focaveis.length - 1];
+      if (e.shiftKey && document.activeElement === primeiro) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primeiro.focus();
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, enviando]);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      focoAnteriorRef.current?.focus?.();
+      focoAnteriorRef.current = null;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -565,6 +994,15 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
             link: criarLinkReferencia(rota, dadosReferencia?.label) || msg.link,
           }));
         },
+        onArtefato: artefato => {
+          atualizarMensagemAtual(idResposta, msg => ({ ...msg, artefato }));
+        },
+        onConfirmacaoPendente: dados => {
+          atualizarMensagemAtual(idResposta, msg => ({
+            ...msg,
+            confirmacao: { ferramenta: dados?.ferramenta, argumentos: dados?.argumentos, resumo: dados?.resumo, resolvido: false },
+          }));
+        },
       });
 
       if (resp.conversaId) {
@@ -594,6 +1032,90 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       setEnviando(false);
       setEtapa('');
     }
+  }
+
+  async function confirmarAcao(idMensagemConfirmacao, ferramenta, argumentos) {
+    if (enviando) return;
+
+    atualizarMensagemAtual(idMensagemConfirmacao, msg => (
+      msg.confirmacao ? { ...msg, confirmacao: { ...msg.confirmacao, processando: true, erro: null } } : msg
+    ));
+
+    const idResultado = uid();
+    setCurrent(c => ({
+      ...c,
+      mensagens: [...c.mensagens, { id: idResultado, autor: 'bot', texto: '', status: 'Executando', streaming: true, ts: new Date() }],
+    }));
+    setEnviando(true);
+    setEtapa('executando...');
+
+    try {
+      const resp = await conversarComSusbot({
+        confirmar: { ferramenta, argumentos },
+        telaAtual: page,
+        tela_atual: page,
+        tela_origem: page,
+        conversaId: current.conversaId || undefined,
+        ibge6: ibge6Atual,
+        baseUrl: API_BASE,
+        fetchImpl: apiFetch,
+        onStatus: status => {
+          const mensagem = typeof status === 'string' ? status : status?.mensagem;
+          if (mensagem) setEtapa(mensagem);
+          atualizarMensagemAtual(idResultado, msg => ({ ...msg, status: mensagem || msg.status }));
+        },
+        onToken: tokenParcial => {
+          atualizarMensagemAtual(idResultado, msg => ({
+            ...msg,
+            texto: `${msg.texto || ''}${tokenParcial}`,
+            status: msg.status || 'digitando...',
+            streaming: true,
+          }));
+        },
+        onReferencia: (rota, dadosReferencia) => {
+          atualizarMensagemAtual(idResultado, msg => ({
+            ...msg,
+            link: criarLinkReferencia(rota, dadosReferencia?.label) || msg.link,
+          }));
+        },
+        onArtefato: artefato => {
+          atualizarMensagemAtual(idResultado, msg => ({ ...msg, artefato }));
+        },
+      });
+
+      atualizarMensagemAtual(idResultado, msg => ({
+        ...msg,
+        texto: resp.resposta || msg.texto,
+        streaming: false,
+        status: undefined,
+        link: criarLinkReferencia(resp.referenciaRota, resp.referenciaLabel) || msg.link || null,
+      }));
+      atualizarMensagemAtual(idMensagemConfirmacao, msg => (
+        msg.confirmacao ? { ...msg, confirmacao: { ...msg.confirmacao, processando: false, resolvido: true } } : msg
+      ));
+      void recarregarHistoricoSilencioso();
+    } catch (error) {
+      atualizarMensagemAtual(idMensagemConfirmacao, msg => (
+        msg.confirmacao
+          ? { ...msg, confirmacao: { ...msg.confirmacao, processando: false, resolvido: false, erro: 'Não foi possível executar. Revise os dados e tente confirmar novamente.' } }
+          : msg
+      ));
+      atualizarMensagemAtual(idResultado, () => ({
+        id: uid(),
+        autor: 'error',
+        texto: ERRO_SUSBOT_PADRAO,
+        ts: new Date(),
+      }));
+    } finally {
+      setEnviando(false);
+      setEtapa('');
+    }
+  }
+
+  function cancelarConfirmacao(idMensagemConfirmacao) {
+    atualizarMensagemAtual(idMensagemConfirmacao, msg => (
+      msg.confirmacao ? { ...msg, confirmacao: { ...msg.confirmacao, resolvido: true, cancelado: true } } : msg
+    ));
   }
 
   function novaConversa() {
@@ -657,6 +1179,77 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
         }
         .susbot-icon-btn:hover { background: var(--subtle); color: var(--ink-900); }
 
+        .susbot-channel-trigger {
+          min-height: 36px;
+          padding: 7px 10px;
+          border: 1px solid var(--primary-soft-border);
+          border-radius: 9px;
+          background: var(--primary-soft);
+          color: var(--primary);
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 800;
+          white-space: nowrap;
+          transition: border-color .15s, background .15s;
+        }
+        .susbot-channel-trigger:hover { border-color: var(--primary); }
+
+        .susbot-channel-primary,
+        .susbot-channel-link,
+        .susbot-channel-danger {
+          min-height: 40px;
+          padding: 8px 12px;
+          border-radius: 9px;
+          font-size: 12px;
+          font-weight: 750;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .susbot-channel-primary { border: 1px solid var(--primary); background: var(--primary); color: var(--elev); }
+        .susbot-channel-link { border: 1px solid var(--ink-100); background: var(--elev); color: var(--ink-700); }
+        .susbot-channel-danger { border: 1px solid color-mix(in srgb, var(--bad) 28%, var(--ink-100)); background: var(--elev); color: var(--bad); }
+        .susbot-channel-primary:disabled,
+        .susbot-channel-link:disabled,
+        .susbot-channel-danger:disabled { opacity: .55; cursor: wait; }
+        .susbot-channel-code {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          margin-top: 9px;
+          padding: 8px 9px;
+          border: 1px solid var(--primary-soft-border);
+          border-radius: 8px;
+          background: var(--elev);
+        }
+        .susbot-channel-code code {
+          min-width: 0;
+          flex: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          color: var(--ink-700);
+          font-family: var(--ff-mono);
+          font-size: 10px;
+        }
+        .susbot-channel-code button {
+          min-height: 32px;
+          padding: 5px 8px;
+          border: 0;
+          border-radius: 6px;
+          background: var(--primary-soft);
+          color: var(--primary);
+          font-size: 11px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
         .susbot-panel-shell {
           width: min(var(--chat-w), calc(100vw - var(--gap)));
           border-radius: 18px;
@@ -677,16 +1270,29 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
 
         @media (max-width: 720px) {
           .susbot-panel-shell {
-            width: calc(100vw - 12px);
-            top: 66px !important;
-            right: 6px !important;
-            bottom: 6px !important;
+            width: 100vw;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            border: 0 !important;
+            border-radius: 0;
           }
 
           .susbot-panel-fab {
-            bottom: 16px;
-            right: 16px;
+            display: none !important;
           }
+
+          .susbot-icon-btn { min-width: 44px; min-height: 44px; justify-content: center; }
+          .susbot-channel-trigger { min-height: 44px; }
+          .susbot-chip { min-height: 44px; font-size: 13px; }
+          .susbot-channel-primary,
+          .susbot-channel-link,
+          .susbot-channel-danger { min-height: 44px; }
+        }
+
+        @media (max-width: 360px) {
+          .susbot-channel-trigger { width: 44px; padding-inline: 0; }
+          .susbot-channel-trigger span { display: none; }
         }
       `}</style>
 
@@ -694,6 +1300,8 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       <div
         ref={painelRef}
         role="dialog"
+        aria-modal={open ? 'true' : undefined}
+        aria-hidden={!open}
         aria-label="Painel do SusBot"
         className="susbot-panel-shell"
         style={{
@@ -713,13 +1321,13 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
           padding: '13px 14px 13px 16px', borderBottom: '1px solid var(--ink-100)', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
         }}>
-          {viewMode === 'history' ? (
+          {viewMode !== 'chat' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button onClick={() => setViewMode('chat')} title="Voltar" className="susbot-icon-btn">
                 <MIcon m="arrow_back" size={19} />
               </button>
               <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', fontFamily: 'var(--ff-tight)' }}>
-                Conversas
+                {viewMode === 'history' ? 'Conversas' : 'Canais'}
               </p>
             </div>
           ) : (
@@ -742,6 +1350,16 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                 <button onClick={() => setViewMode('history')} title="Conversas anteriores" className="susbot-icon-btn">
                   <MIcon m="history" size={19} />
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('channels')}
+                  aria-label="Conectar ao Telegram"
+                  title="Conectar ao Telegram"
+                  className="susbot-channel-trigger"
+                >
+                  <MIcon m="send" size={16} />
+                  <span>Conectar Telegram</span>
+                </button>
                 <button onClick={novaConversa} title="Nova conversa" className="susbot-icon-btn">
                   <MIcon m="edit_square" size={19} />
                 </button>
@@ -754,7 +1372,9 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
         </div>
 
         {/* Corpo — histórico ou conversa */}
-        {viewMode === 'history' ? (
+        {viewMode === 'channels' ? (
+          <ContinuidadeCanais ibge6={ibge6Atual} />
+        ) : viewMode === 'history' ? (
           <div className="susbot-panel-body" style={{ flex: 1, padding: '4px 16px' }}>
             {carregandoHistorico ? (
               <EstadoPainel
@@ -830,7 +1450,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
 
               {current.mensagens.map(m => (
                 <div key={m.id} className="susbot-msg">
-                  <Bolha msg={m} onNavigate={onNavigate} />
+                  <Bolha msg={m} onNavigate={onNavigate} onConfirmar={confirmarAcao} onCancelar={cancelarConfirmacao} />
                 </div>
               ))}
               <div ref={fimRef} />
@@ -839,7 +1459,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
             {/* Input */}
             <div style={{ padding: '10px 12px 12px', flexShrink: 0 }}>
               <div className="susbot-composer" style={{ padding: '10px 10px 8px 12px' }}>
-                <textarea
+                  <textarea
                   ref={inputRef}
                   value={input}
                   rows={1}
@@ -850,7 +1470,8 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                       void enviar();
                     }
                   }}
-                  placeholder="Pergunte sobre este município…"
+                    placeholder="Pergunte sobre este município…"
+                    aria-label="Mensagem para o SusBot"
                   style={{
                     width: '100%', fontSize: 13, border: 'none', outline: 'none', padding: 0,
                     color: 'var(--ink-900)', background: 'transparent', resize: 'none',
@@ -865,6 +1486,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                     onClick={() => enviar()}
                     disabled={!input.trim() || enviando}
                     title="Enviar"
+                    aria-label="Enviar mensagem ao SusBot"
                     style={{
                       width: 30, height: 30, borderRadius: 9, border: 'none', flexShrink: 0,
                       cursor: input.trim() && !enviando ? 'pointer' : 'default',
@@ -892,6 +1514,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
         <button
           onClick={() => setOpen(true)}
           title="SusBot — assistente"
+          aria-label="Abrir SusBot"
           className="susbot-panel-fab"
           style={{
             position: 'fixed', width: 48, height: 48, borderRadius: '50%',
