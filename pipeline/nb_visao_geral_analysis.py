@@ -58,9 +58,14 @@ def valor_json(valor):
     if isinstance(valor, np.integer):
         return int(valor)
     if isinstance(valor, np.floating):
-        return None if np.isnan(valor) or np.isinf(valor) else float(valor)
+        if np.isnan(valor) or np.isinf(valor):
+            return None
+        valor_float = float(valor)
+        return int(valor_float) if valor_float.is_integer() else valor_float
     if isinstance(valor, float):
-        return None if math.isnan(valor) or math.isinf(valor) else valor
+        if math.isnan(valor) or math.isinf(valor):
+            return None
+        return int(valor) if valor.is_integer() else valor
     return valor
 
 
@@ -398,8 +403,6 @@ df_kpis_atuais = (
 # MAGIC ## KPIs por período (Mês / Trimestre / Ano)
 
 # COMMAND ----------
-
-from pyspark.sql.functions import col
 
 periodos_config = [
     ("Mes", 0, 1, 1),
@@ -820,25 +823,13 @@ df_evolucao_casos = (
     .withColumn("DATA_PROCESSAMENTO", F.current_timestamp())
 )
 
-df_evolucao_casos = (
-    df_evolucao_casos
-    .withColumn(
-        "CASOS_NOTIFICADOS",
-        F.col("CASOS_NOTIFICADOS").cast("long")
-    )
-    .withColumn(
-        "CASOS_TENDENCIA",
-        F.col("CASOS_TENDENCIA").cast("double")
-    )
+(
+    df_evolucao_casos.write
+    .format("delta")
+    .mode("overwrite")
+    .option("overwriteSchema", "true")
+    .saveAsTable(f"{CATALOGO}.gold.VISAO_GERAL_EVOLUCAO_CASOS")
 )
-
-# COMMAND ----------
-
-df_evolucao_casos.printSchema()
-
-# COMMAND ----------
-
-display(df_evolucao_casos.filter(F.col("CASOS_NOTIFICADOS") == 13158))
 
 # COMMAND ----------
 
@@ -949,8 +940,6 @@ df_alertas_recentes = (
 
 # COMMAND ----------
 
-from pyspark.sql.functions import col
-
 df_competencia_referencia = spark.table(
     f"{CATALOGO}.gold.RUPTURA_INSUMOS_COMPETENCIA_REFERENCIA"
 ).select(
@@ -995,7 +984,7 @@ enviar_para_supabase(
     "visao_geral_kpis_atuais",
 )
 enviar_para_supabase(
-    spark.table(f"{CATALOGO}.gold.VISAO_GERAL_KPIS_PERIODO").select(*[col for col in COLUNAS_KPIS_PERIODO]).withColumn('ID_AGRAVO', col('ID_AGRAVO').cast('bigint')).withColumn('CASOS_NOTIFICADOS', col('CASOS_NOTIFICADOS').cast('bigint')).withColumn('CASOS_NOTIFICADOS_ANTERIOR', col('CASOS_NOTIFICADOS_ANTERIOR').cast('bigint')),
+    spark.table(f"{CATALOGO}.gold.VISAO_GERAL_KPIS_PERIODO").select(*COLUNAS_KPIS_PERIODO),
     "visao_geral_kpis_periodo",
 )
 enviar_para_supabase(
