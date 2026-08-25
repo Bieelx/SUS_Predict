@@ -105,6 +105,7 @@ export async function listarConversasSusbot({
   fetchImpl = globalThis.fetch,
   page = 1,
   pageSize = 20,
+  canal,
   signal,
   headers = {},
 } = {}) {
@@ -114,6 +115,7 @@ export async function listarConversasSusbot({
   }
 
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (canal) params.set('canal', String(canal));
   const response = await fetchFn(resolverUrl(baseUrl, `${SUSBOT_ENDPOINTS.conversas}?${params.toString()}`), {
     method: 'GET',
     headers: {

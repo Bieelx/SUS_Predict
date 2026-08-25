@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Card, API_BASE } from '../shared/ui.jsx';
+import { Card } from '../shared/ui.jsx';
+import { authenticatedFetch } from '../shared/auth.js';
 
 // CardHead não é exportado por shared/ui.jsx (é específico de Configurações/Perfil
 // no protótipo original) — declarado localmente para não acoplar os dois módulos.
@@ -37,9 +38,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('sus_predict_token');
-    if (!token) { setCarregando(false); return; }
-    fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    authenticatedFetch('/api/auth/me')
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Falha ao carregar perfil.');
         return r.json();

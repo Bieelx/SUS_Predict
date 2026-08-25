@@ -2,6 +2,7 @@ import importlib
 import json
 import os
 import tempfile
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from cryptography.fernet import Fernet
@@ -136,6 +137,44 @@ def test_clear_inicia_nova_conversa(canais):
 
     assert "Nova conversa pronta" in mensagens[-2][1]
     assert len(db_module.listar_conversas("user-abc")) == 2
+
+
+def test_inatividade_do_telegram_inicia_nova_conversa(canais, monkeypatch):
+    router_module, db_module, _mensagens = canais
+    monkeypatch.setenv("TELEGRAM_SESSION_TIMEOUT_MINUTES", "30")
+    _parear(canais)
+
+    router_module.processar_update_telegram(_update(60, "Primeira pergunta"))
+    conexao = db_module.get_conexao_canal_por_externo("telegram", "778899")
+    primeira_conversa_id = conexao["conversa_atual_id"]
+    uso_antigo = (datetime.now(timezone.utc) - timedelta(minutes=31)).isoformat()
+    with db_module._conn() as con:
+        con.execute(
+            "UPDATE canal_conexoes SET ultimo_uso_em = ? WHERE id = ?",
+            (uso_antigo, conexao["id"]),
+        )
+
+    router_module.processar_update_telegram(_update(61, "Pergunta depois da pausa"))
+
+    conexao_atualizada = db_module.get_conexao_canal_por_externo("telegram", "778899")
+    assert conexao_atualizada["conversa_atual_id"] != primeira_conversa_id
+    assert db_module.contar_conversas("user-abc", canal="telegram") == 2
+    assert db_module.contar_mensagens(primeira_conversa_id) == 1
+
+
+def test_telegram_mantem_conversa_dentro_da_janela_de_atividade(canais, monkeypatch):
+    router_module, db_module, _mensagens = canais
+    monkeypatch.setenv("TELEGRAM_SESSION_TIMEOUT_MINUTES", "30")
+    _parear(canais)
+
+    router_module.processar_update_telegram(_update(70, "Primeira pergunta"))
+    primeira = db_module.get_conexao_canal_por_externo("telegram", "778899")["conversa_atual_id"]
+    router_module.processar_update_telegram(_update(71, "Segunda pergunta"))
+    segunda = db_module.get_conexao_canal_por_externo("telegram", "778899")["conversa_atual_id"]
+
+    assert segunda == primeira
+    assert db_module.contar_conversas("user-abc", canal="telegram") == 1
+    assert db_module.contar_mensagens(primeira) == 2
 
 
 def test_telegram_entrega_historico_recente_ao_agente(canais, monkeypatch):

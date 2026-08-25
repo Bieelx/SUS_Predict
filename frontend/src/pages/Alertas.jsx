@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { Card, Badge, MIcon, EvidenceChain } from '../shared/ui.jsx';
 import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
+import { AlertasReais } from '../shared/RupturaReal.jsx';
 
 // ─── Dados mock (topo do arquivo — sem fetch/axios) ────────────────────────────
 //
@@ -732,6 +733,10 @@ export default function Alertas({
       gatilhoRef.current?.focus?.();
     };
   }, [drawer]);
+
+  if (!demoState?.enabled) {
+    return <AlertasReais onOpenSusBot={onOpenSusBot} deepLinkAlertaId={deepLinkAlertaId} />;
+  }
 
   return (
     <div className="rise">

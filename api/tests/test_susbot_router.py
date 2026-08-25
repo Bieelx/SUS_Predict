@@ -158,6 +158,23 @@ def test_perguntar_cria_outra_conversa_e_lista_paginado(router):
     assert conversas_p2["itens"][0]["titulo"] == "Primeira conversa"
 
 
+def test_listagem_de_conversas_pode_filtrar_por_canal(router):
+    router_module, db_module = router
+    user = {"id": "user-abc"}
+    app = db_module.criar_conversa("user-abc", "Conversa app")
+    telegram = db_module.criar_conversa("user-abc", "Conversa Telegram")
+    db_module.adicionar_mensagem(app["id"], "insumos", "Estoque?", "Ok", None)
+    db_module.adicionar_mensagem(telegram["id"], "telegram", "Alertas?", "Ok", None)
+
+    resposta_app = router_module.listar_conversas(canal="app", user=user)
+    resposta_telegram = router_module.listar_conversas(canal="telegram", user=user)
+
+    assert [item["id"] for item in resposta_app["itens"]] == [app["id"]]
+    assert resposta_app["canal"] == "app"
+    assert [item["id"] for item in resposta_telegram["itens"]] == [telegram["id"]]
+    assert resposta_telegram["canal"] == "telegram"
+
+
 def test_ownership_bloqueia_conversa_de_outro_usuario(router):
     router_module, db_module = router
     user = {"id": "user-abc", "email": "user@example.com"}
@@ -190,3 +207,24 @@ def test_endpoints_de_memoria_usam_apenas_usuario_autenticado(router):
     router_module.excluir_memoria(user=gabriel)
     assert router_module.consultar_memoria(user=gabriel)["fatos"] == []
     assert "Yasmin" in str(router_module.consultar_memoria(user=yasmin))
+
+
+def test_endpoint_de_metricas_expoe_somente_contagens_anonimas(router):
+    router_module, _db = router
+    from api.core.susbot_metrics import registrar_execucao, resetar_metricas
+
+    resetar_metricas()
+    registrar_execucao({
+        "modo": "deterministico",
+        "intencao": "consultar_estoque",
+        "sem_llm": True,
+        "llm_planejamento": False,
+        "llm_resposta": False,
+    })
+
+    resposta = router_module.metricas_uso(user={"id": "user-abc"})
+
+    assert resposta["respostas_total"] == 1
+    assert resposta["taxa_respostas_sem_llm"] == 1.0
+    assert resposta["dados_pessoais_coletados"] is False
+    assert "usuario" not in resposta

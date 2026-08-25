@@ -384,6 +384,21 @@ chat são ignorados.
 
 ## 9. Processamento de uma mensagem
 
+### Sessões e inatividade
+
+Mensagens consecutivas do Telegram permanecem na mesma conversa enquanto o usuário
+estiver ativo. Após 30 minutos sem mensagens, a próxima mensagem inicia automaticamente
+uma nova conversa. A sessão anterior continua disponível no histórico, na aba Telegram.
+
+O intervalo pode ser alterado no ambiente:
+
+```env
+TELEGRAM_SESSION_TIMEOUT_MINUTES=30
+```
+
+Os comandos `/nova` e `/clear` continuam encerrando a sessão imediatamente, sem
+aguardar o tempo de inatividade.
+
 Depois que a conexão está ativa, o fluxo é:
 
 1. validar e deduplicar o `update_id`;
@@ -577,6 +592,7 @@ Os testes da integração ficam em `api/tests/test_channel_router.py` e cobrem:
 - token de uso único, confirmação bilateral e revogação;
 - deduplicação de updates;
 - continuidade e reinício de conversa;
+- criação automática de outra conversa após inatividade;
 - entrega do histórico recente ao agente;
 - memória pessoal;
 - segredo do webhook e ausência de configuração;
@@ -631,4 +647,3 @@ pytest -q api/tests
 - `frontend/src/shared/susbotContract.js`
 - `frontend/src/pages/SusBotPanel.jsx`
 - `start_dev.sh`
-

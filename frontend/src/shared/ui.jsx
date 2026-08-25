@@ -1,5 +1,5 @@
 import { createContext, useContext, Fragment } from 'react';
-import logoImage from '../../assets/logo-128.png';
+import logoImage from '../../../logo.svg';
 
 // ─── Esquemas de cores (sidebar + cor primária unificados) ────────────────────
 //
@@ -105,18 +105,28 @@ export function MIcon({ m, size = 19 }) {
   );
 }
 
-// Logo do produto em imagem. O tamanho é controlado pelo `size` para manter
-// a harmonia entre a sidebar e a tela de login.
-export function LogoIcon({ size = 30, style = {} }) {
+// A marca vetorial colorida é exibida diretamente para preservar sua paleta.
+export function LogoIcon({ size = 36, style = {} }) {
   return (
-    <img
-      src={logoImage}
-      alt=""
+    <span
       aria-hidden="true"
-      width={size}
-      height={size}
-      style={{ display: 'block', objectFit: 'contain', flexShrink: 0, ...style }}
-    />
+      style={{
+        display: 'block', width: size, height: size, flexShrink: 0,
+        overflow: 'hidden',
+        ...style,
+      }}
+    >
+      <img
+        src={logoImage}
+        alt=""
+        width={size}
+        height={size}
+        style={{
+          display: 'block', width: '100%', height: '100%', objectFit: 'contain',
+          transform: 'scale(1.22)', transformOrigin: 'center',
+        }}
+      />
+    </span>
   );
 }
 

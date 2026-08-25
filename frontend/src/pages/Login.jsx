@@ -1,21 +1,20 @@
 import { useState } from 'react';
 import { LogoIcon, API_BASE, MIcon, THEMES } from '../shared/ui.jsx';
+import { saveSession } from '../shared/auth.js';
 
-// O acesso institucional usa autenticação real. A entrada de demonstração
-// existe somente no servidor de desenvolvimento e nunca aparece no build final.
+// O acesso institucional usa autenticação real. A entrada de demonstração usa
+// uma sessão isolada emitida pelo backend quando SUS_PREDICT_DEV_AUTH está ativo.
 export default function LoginScreen({ onEnter }) {
   const [erro, setErro] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [acaoCarregando, setAcaoCarregando] = useState('');
-  const ambienteDesenvolvimento = import.meta.env.DEV;
 
   async function concluirLogin(resp) {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.detail || 'Não foi possível autenticar com os dados informados.');
-    if (!data.access_token) throw new Error('A autenticação não retornou uma sessão válida.');
-    localStorage.setItem('sus_predict_token', data.access_token);
-    onEnter();
+    saveSession(data);
+    onEnter(data.user || null);
   }
 
   async function loginDemonstracao() {
@@ -65,7 +64,7 @@ export default function LoginScreen({ onEnter }) {
     <div className="login-page" style={temaLogin}>
       <header className="login-masthead">
         <div className="login-masthead__brand">
-          <LogoIcon size={38} />
+          <LogoIcon size={56} />
           <div>
             <p className="login-masthead__name">SusPredict</p>
             <p className="login-masthead__descriptor">Inteligência municipal em saúde</p>
@@ -156,26 +155,24 @@ export default function LoginScreen({ onEnter }) {
             </div>
           )}
 
-          {ambienteDesenvolvimento && (
-            <div className="login-demo">
-              <div className="login-demo__copy">
-                <div>
-                  <span className="login-demo__badge">Ambiente de demonstração</span>
-                  <h3>Explorar sem credenciais institucionais</h3>
-                </div>
-                <p>Casos históricos reais; estoques, preços e ações operacionais são cenário fictício.</p>
+          <div className="login-demo">
+            <div className="login-demo__copy">
+              <div>
+                <span className="login-demo__badge">Ambiente de demonstração</span>
+                <h3>Explorar sem credenciais institucionais</h3>
               </div>
-              <button
-                type="button"
-                onClick={loginDemonstracao}
-                disabled={carregando}
-                className="login-demo__button touch-target"
-              >
-                {acaoCarregando === 'demo' ? 'Preparando demonstração…' : 'Acessar demonstração'}
-                <MIcon m="arrow_forward" size={17} />
-              </button>
+              <p>Casos históricos reais; estoques, preços e ações operacionais são cenário fictício.</p>
             </div>
-          )}
+            <button
+              type="button"
+              onClick={loginDemonstracao}
+              disabled={carregando}
+              className="login-demo__button touch-target"
+            >
+              {acaoCarregando === 'demo' ? 'Preparando demonstração…' : 'Acessar demonstração'}
+              <MIcon m="arrow_forward" size={17} />
+            </button>
+          </div>
 
           <p className="login-access__footer">
             Acesso restrito. As ações realizadas no ambiente institucional devem seguir os fluxos de revisão e aprovação do município.

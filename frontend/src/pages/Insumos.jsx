@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { Card, Badge, MIcon, EvidenceChain } from '../shared/ui.jsx';
 import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
+import { InsumosReais } from '../shared/RupturaReal.jsx';
 
 // ─── Mock: fatos canônicos do município (Cotia — SP) ──────────────────────────
 
@@ -862,6 +863,8 @@ export default function Insumos({ onNavigate, onGerarEtp, demoState }) {
       : prev.map(it => ({ ...it, atualizadoHaDias: 0, origem: 'upload' }))));
     setUploadPreview(false);
   };
+
+  if (!demoState?.enabled) return <InsumosReais />;
 
   if (view === 'crud') {
     return (

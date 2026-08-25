@@ -34,6 +34,7 @@ log = logging.getLogger("sus_predict.channel_router")
 router = APIRouter(prefix="/api/susbot", tags=["susbot-canais"])
 PROVEDORES_SUPORTADOS = {"telegram"}
 PAREAMENTO_TTL_MINUTOS = 10
+TELEGRAM_SESSAO_INATIVIDADE_MINUTOS_PADRAO = 30
 
 
 class CriarPareamentoRequest(BaseModel):
@@ -59,6 +60,27 @@ def _telegram_bot_username() -> str:
 
 def _telegram_bot_token() -> str:
     return os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+
+def _telegram_sessao_expirada(conexao: dict, agora: datetime | None = None) -> bool:
+    ultimo_uso = str(conexao.get("ultimo_uso_em") or "").strip()
+    if not ultimo_uso or not conexao.get("conversa_atual_id"):
+        return False
+    try:
+        limite = max(
+            1,
+            int(os.getenv(
+                "TELEGRAM_SESSION_TIMEOUT_MINUTES",
+                str(TELEGRAM_SESSAO_INATIVIDADE_MINUTOS_PADRAO),
+            )),
+        )
+        usado_em = datetime.fromisoformat(ultimo_uso.replace("Z", "+00:00"))
+        if usado_em.tzinfo is None:
+            usado_em = usado_em.replace(tzinfo=timezone.utc)
+        return (agora or datetime.now(timezone.utc)) - usado_em >= timedelta(minutes=limite)
+    except (TypeError, ValueError):
+        log.warning("ultimo_uso_em invalido na conexao Telegram %s", conexao.get("id"))
+        return True
 
 
 def _resumo_pareamento(pareamento: dict) -> dict:
@@ -333,7 +355,8 @@ def revogar_canal(provedor: str, user: dict = Depends(require_user)):
 def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
     usuario = conexao["usuario"]
     ibge6 = conexao["ibge6"]
-    conversa = db.get_conversa(conexao.get("conversa_atual_id")) if conexao.get("conversa_atual_id") else None
+    conversa_id_atual = None if _telegram_sessao_expirada(conexao) else conexao.get("conversa_atual_id")
+    conversa = db.get_conversa(conversa_id_atual) if conversa_id_atual else None
     if not conversa or conversa.get("usuario") != usuario:
         titulo = " ".join(texto.split()).strip()[:60] or "Conversa pelo Telegram"
         conversa = db.criar_conversa(usuario, titulo)

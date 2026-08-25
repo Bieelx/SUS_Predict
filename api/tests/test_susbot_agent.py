@@ -71,8 +71,10 @@ def test_stream_do_susbot_emite_tool_token_referencia_e_fim(db):
     assert fim["data"]["referencia_rota"] == "/insumos"
     assert fim["data"]["resultado_ferramenta"]["encontrado"] is True
 
-    assert llm.planejar_chamadas
+    assert not llm.planejar_chamadas
     assert not llm.stream_chamadas
+    assert fim["data"]["execucao"]["modo"] == "deterministico"
+    assert fim["data"]["execucao"]["sem_llm"] is True
 
 
 def test_stream_do_susbot_usa_llm_quando_nao_ha_ferramenta(db):
@@ -174,6 +176,63 @@ def test_consulta_de_insumos_em_falta_forca_ferramenta(db):
     assert fim["data"]["plano"]["ferramenta"] == "consultar_estoque"
     assert fim["data"]["resultado_ferramenta"]["somente_risco"] is True
     assert "Dipirona 500mg" in fim["data"]["resposta"]
+    assert not llm.planejar_chamadas
+
+
+def test_consulta_operacional_nao_inicializa_provedor_llm(db, monkeypatch):
+    from api.core import susbot_agent
+    from api.core.susbot_seed import seed_susbot_municipio
+
+    seed_susbot_municipio("351300")
+
+    def falhar_se_inicializar():
+        raise AssertionError("LLM não deveria ser inicializado nesta rota")
+
+    monkeypatch.setattr(susbot_agent, "_montar_llm_com_fallback", falhar_se_inicializar)
+    agente = susbot_agent.criar_susbot_agente("351300")
+    eventos = list(agente.stream_eventos("Quais insumos estão em falta?"))
+    fim = next(evento for evento in eventos if evento["event"] == "fim")
+
+    assert fim["data"]["execucao"]["sem_llm"] is True
+    assert fim["data"]["execucao"]["llm_planejamento"] is False
+
+
+def test_consulta_epidemiologica_extrai_periodo_sem_llm(db):
+    from api.core.susbot_agent import criar_susbot_agente
+
+    llm = LLMMock()
+    agente = criar_susbot_agente("351300", llm=llm)
+    eventos = list(agente.stream_eventos("Internações entre 2022 e 2024"))
+    fim = next(evento for evento in eventos if evento["event"] == "fim")
+
+    assert fim["data"]["plano"]["argumentos"]["ano_ini"] == 2022
+    assert fim["data"]["plano"]["argumentos"]["ano_fim"] == 2024
+    assert not llm.planejar_chamadas
+
+
+def test_metricas_contabilizam_rotas_com_e_sem_llm(db):
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.susbot_metrics import obter_metricas, resetar_metricas
+    from api.core.susbot_seed import seed_susbot_municipio
+
+    class LLMSemFerramenta(LLMMock):
+        def planejar(self, pergunta, contexto, ferramentas):
+            self.planejar_chamadas.append((pergunta, contexto, ferramentas))
+            return {"acao": "resposta", "resposta": "", "referencia_rota": None}
+
+    resetar_metricas()
+    seed_susbot_municipio("351300")
+    agente = criar_susbot_agente("351300", llm=LLMSemFerramenta())
+    list(agente.stream_eventos("Quais insumos estão em falta?"))
+    list(agente.stream_eventos("O que é vigilância epidemiológica?"))
+
+    metricas = obter_metricas()
+    assert metricas["respostas_total"] == 2
+    assert metricas["respostas_sem_llm"] == 1
+    assert metricas["chamadas_planejamento_llm"] == 1
+    assert metricas["chamadas_resposta_llm"] == 1
+    assert metricas["taxa_respostas_sem_llm"] == 0.5
+    assert metricas["dados_pessoais_coletados"] is False
 
 
 def test_internacoes_por_dengue_sao_roteadas_para_sih(db):
@@ -235,6 +294,29 @@ def test_consulta_de_insumos_nao_e_confundida_com_perfil_de_outro_usuario(db):
     assert fim["data"]["plano"]["ferramenta"] == "consultar_estoque"
     assert "Amoxicilina 500mg" in fim["data"]["resposta"]
     assert "Não tenho acesso à memória" not in fim["data"]["resposta"]
+
+
+@pytest.mark.parametrize("pergunta", [
+    "Como está o estoque de insumos?",
+    "Como está o estoque de insumos em Cotia?",
+    "Me fale sobre os insumos em Cotia",
+])
+def test_consulta_generica_de_insumos_retorna_estoque_completo(db, pergunta):
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.susbot_seed import seed_susbot_municipio
+
+    seed_susbot_municipio("351300")
+    llm = LLMMock()
+    agente = criar_susbot_agente("351300", llm=llm)
+
+    eventos = list(agente.stream_eventos(pergunta))
+    fim = next(evento for evento in eventos if evento["event"] == "fim")
+
+    assert fim["data"]["plano"]["argumentos"] == {"somente_risco": False}
+    assert fim["data"]["resultado_ferramenta"]["total_itens"] == 8
+    assert "Amoxicilina 500mg" in fim["data"]["resposta"]
+    assert fim["data"]["execucao"]["sem_llm"] is True
+    assert not llm.planejar_chamadas
 
 
 def test_fallback_llm_cai_pro_fallback_quando_primario_falha():

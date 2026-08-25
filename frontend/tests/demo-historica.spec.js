@@ -13,10 +13,7 @@ test('replay histórico de dengue segue funcional e coerente', async ({ page }) 
 
   await page.goto('/?demo=crise-historica');
 
-  const entrarDev = page.getByRole('button', { name: /entrar como dev/i });
-  if (await entrarDev.isVisible()) {
-    await entrarDev.click();
-  }
+  await page.getByRole('button', { name: /acessar demonstração/i }).click();
 
   await expect(page.getByRole('heading', { name: /visão geral/i })).toBeVisible();
   await expect(page.getByText(/campinas\/sp · corte temporal jan\/2024/i)).toBeVisible();

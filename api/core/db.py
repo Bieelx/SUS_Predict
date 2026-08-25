@@ -463,6 +463,9 @@ def upsert_estoque(rows: list[dict]) -> None:
                 atualizado_em     = excluded.atualizado_em
         """, payload)
 
+    for row in payload:
+        _sync_row("estoque", row)
+
 
 def get_estoque(ibge6: str, item: str | None = None) -> list[dict]:
     with _conn() as con:
@@ -525,6 +528,9 @@ def insert_alertas(rows: list[dict]) -> None:
                 criado_em        = excluded.criado_em
         """, payload)
 
+    for row in payload:
+        _sync_row("alertas", row)
+
 
 def get_alertas(ibge6: str, status: str | None = None, tipo: str | None = None) -> list[dict]:
     sql = [
@@ -560,6 +566,9 @@ def has_alertas(ibge6: str) -> bool:
 def atualizar_status_alerta(alerta_id: str, status: str) -> None:
     with _conn() as con:
         con.execute("UPDATE alertas SET status = ? WHERE id = ?", (status, alerta_id))
+        row = con.execute("SELECT * FROM alertas WHERE id = ?", (alerta_id,)).fetchone()
+    if row:
+        _sync_row("alertas", dict(row))
 
 
 def criar_etp(
@@ -588,6 +597,7 @@ def criar_etp(
     if alerta_id:
         atualizar_status_alerta(alerta_id, "em_andamento")
 
+    _sync_row("etps", row)
     return row
 
 
@@ -612,6 +622,7 @@ def criar_conversa(usuario: str, titulo: str) -> dict:
             INSERT INTO susbot_conversas (id, usuario, titulo, criada_em)
             VALUES (:id, :usuario, :titulo, :criada_em)
         """, conversa)
+    _sync_row("susbot_conversas", conversa)
     return conversa
 
 
@@ -625,25 +636,83 @@ def get_conversa(conversa_id: str) -> dict | None:
     return _row_dict(row)
 
 
-def listar_conversas(usuario: str, page: int = 1, page_size: int = 20) -> list[dict]:
+def _normalizar_canal_conversa(canal: str | None) -> str | None:
+    valor = str(canal or "").strip().lower()
+    return valor if valor in {"app", "telegram"} else None
+
+
+def listar_conversas(
+    usuario: str,
+    page: int = 1,
+    page_size: int = 20,
+    canal: str | None = None,
+) -> list[dict]:
     page, page_size, offset = _clamp_page(page, page_size, 100)
+    canal_normalizado = _normalizar_canal_conversa(canal)
     with _conn() as con:
         rows = con.execute("""
-            SELECT id, usuario, titulo, criada_em
-            FROM susbot_conversas
-            WHERE usuario = ?
-            ORDER BY criada_em DESC, id DESC
+            WITH conversas_enriquecidas AS (
+                SELECT
+                    c.id,
+                    c.usuario,
+                    c.titulo,
+                    c.criada_em,
+                    COALESCE((
+                        SELECT CASE
+                            WHEN m.tela_origem = 'telegram' THEN 'telegram'
+                            ELSE 'app'
+                        END
+                        FROM susbot_mensagens m
+                        WHERE m.conversa_id = c.id
+                        ORDER BY m.criado_em ASC, m.id ASC
+                        LIMIT 1
+                    ), 'app') AS canal,
+                    COALESCE((
+                        SELECT MAX(m.criado_em)
+                        FROM susbot_mensagens m
+                        WHERE m.conversa_id = c.id
+                    ), c.criada_em) AS atualizada_em,
+                    (
+                        SELECT COUNT(*)
+                        FROM susbot_mensagens m
+                        WHERE m.conversa_id = c.id
+                    ) AS total_mensagens
+                FROM susbot_conversas c
+                WHERE c.usuario = ?
+            )
+            SELECT id, usuario, titulo, criada_em, canal, atualizada_em, total_mensagens
+            FROM conversas_enriquecidas
+            WHERE (? IS NULL OR canal = ?)
+            ORDER BY atualizada_em DESC, id DESC
             LIMIT ? OFFSET ?
-        """, (usuario, page_size, offset)).fetchall()
+        """, (usuario, canal_normalizado, canal_normalizado, page_size, offset)).fetchall()
     return [dict(row) for row in rows]
 
 
-def contar_conversas(usuario: str) -> int:
+def contar_conversas(usuario: str, canal: str | None = None) -> int:
+    canal_normalizado = _normalizar_canal_conversa(canal)
     with _conn() as con:
-        row = con.execute(
-            "SELECT COUNT(*) AS total FROM susbot_conversas WHERE usuario = ?",
-            (usuario,),
-        ).fetchone()
+        row = con.execute("""
+            WITH conversas_enriquecidas AS (
+                SELECT
+                    c.id,
+                    COALESCE((
+                        SELECT CASE
+                            WHEN m.tela_origem = 'telegram' THEN 'telegram'
+                            ELSE 'app'
+                        END
+                        FROM susbot_mensagens m
+                        WHERE m.conversa_id = c.id
+                        ORDER BY m.criado_em ASC, m.id ASC
+                        LIMIT 1
+                    ), 'app') AS canal
+                FROM susbot_conversas c
+                WHERE c.usuario = ?
+            )
+            SELECT COUNT(*) AS total
+            FROM conversas_enriquecidas
+            WHERE (? IS NULL OR canal = ?)
+        """, (usuario, canal_normalizado, canal_normalizado)).fetchone()
     return int(row["total"] if row else 0)
 
 
@@ -673,6 +742,7 @@ def adicionar_mensagem(
             VALUES
                 (:id, :conversa_id, :tela_origem, :pergunta, :resposta, :referencia_rota, :criado_em)
         """, mensagem)
+    _sync_row("susbot_mensagens", mensagem)
     return mensagem
 
 
@@ -730,6 +800,7 @@ def criar_pareamento_canal(
             VALUES
                 (:id, :usuario, :provedor, :token_hash, :ibge6, :status, :criado_em, :expira_em)
         """, pareamento)
+    _sync_row("canal_pareamentos", pareamento)
     return pareamento
 
 
@@ -773,7 +844,10 @@ def reivindicar_pareamento_canal(
                    reivindicado_em, confirmado_em, cancelado_em
             FROM canal_pareamentos WHERE id = ?
         """, (row["id"],)).fetchone()
-    return _row_dict(resultado)
+    out = _row_dict(resultado)
+    if out:
+        _sync_row("canal_pareamentos", out)
+    return out
 
 
 def confirmar_pareamento_canal(pareamento_id: str, usuario: str) -> dict | None:
@@ -823,7 +897,15 @@ def confirmar_pareamento_canal(pareamento_id: str, usuario: str) -> dict | None:
         conexao = con.execute("""
             SELECT * FROM canal_conexoes WHERE usuario = ? AND provedor = ?
         """, (usuario, pareamento["provedor"])).fetchone()
-    return _row_dict(conexao)
+        pareamento_atualizado = con.execute(
+            "SELECT * FROM canal_pareamentos WHERE id = ?", (pareamento_id,)
+        ).fetchone()
+    out = _row_dict(conexao)
+    if out:
+        _sync_row("canal_conexoes", out)
+    if pareamento_atualizado:
+        _sync_row("canal_pareamentos", dict(pareamento_atualizado))
+    return out
 
 
 def cancelar_pareamento_canal(pareamento_id: str, usuario: str) -> bool:
@@ -833,6 +915,8 @@ def cancelar_pareamento_canal(pareamento_id: str, usuario: str) -> bool:
             UPDATE canal_pareamentos SET status = 'cancelado', cancelado_em = ?
             WHERE id = ? AND usuario = ? AND status IN ('emitido', 'reivindicado')
         """, (agora, pareamento_id, usuario))
+    if cursor.rowcount == 1:
+        _sync_row("canal_pareamentos", {"id": pareamento_id, "status": "cancelado", "cancelado_em": agora})
     return cursor.rowcount == 1
 
 
@@ -866,6 +950,13 @@ def revogar_conexao_canal(usuario: str, provedor: str) -> bool:
             SET status = 'revogado', revogado_em = ?, conversa_atual_id = NULL
             WHERE usuario = ? AND provedor = ? AND status = 'ativo'
         """, (agora, usuario, provedor))
+        row = con.execute(
+            "SELECT id FROM canal_conexoes WHERE usuario = ? AND provedor = ?", (usuario, provedor)
+        ).fetchone()
+    if cursor.rowcount == 1 and row:
+        _sync_row("canal_conexoes", {
+            "id": row["id"], "status": "revogado", "revogado_em": agora, "conversa_atual_id": None,
+        })
     return cursor.rowcount == 1
 
 
@@ -876,6 +967,9 @@ def atualizar_conversa_canal(conexao_id: str, conversa_id: str | None) -> None:
             UPDATE canal_conexoes
             SET conversa_atual_id = ?, ultimo_uso_em = ? WHERE id = ? AND status = 'ativo'
         """, (conversa_id, agora, conexao_id))
+    _sync_row("canal_conexoes", {
+        "id": conexao_id, "conversa_atual_id": conversa_id, "ultimo_uso_em": agora,
+    })
 
 
 def registrar_evento_canal(provedor: str, external_id: str) -> bool:
@@ -905,6 +999,7 @@ def upsert_memoria_usuario(owner_ref: str, fact_ref: str, payload_encrypted: str
             SELECT id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em
             FROM susbot_memorias WHERE owner_ref = ? AND fact_ref = ?
         """, (owner_ref, fact_ref)).fetchone()
+    _sync_row("susbot_memorias", dict(row))
     return dict(row)
 
 
@@ -928,21 +1023,37 @@ def deletar_memoria_usuario(owner_ref: str, fact_ref: str | None = None) -> int:
             )
         else:
             cursor = con.execute("DELETE FROM susbot_memorias WHERE owner_ref = ?", (owner_ref,))
+    eq = {"owner_ref": owner_ref, **({"fact_ref": fact_ref} if fact_ref else {})}
+    _sync_delete("susbot_memorias", eq)
     return int(cursor.rowcount)
 
 
 # ── Supabase read-only query (curated tables, e.g. sih_dengue_*, sinan_dengue_*) ──
 
+def _supabase_read_key() -> str:
+    """Return the backend-only key used by read contracts.
+
+    Modern ``sb_secret_`` keys are preferred. The legacy service-role JWT is
+    kept as a compatibility fallback for existing deployments.
+    """
+    return (
+        os.getenv("SUPABASE_SECRET_KEY", "").strip()
+        or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    )
+
+
 def supabase_configured() -> bool:
-    return bool(os.getenv("SUPABASE_URL", "").strip() and os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip())
+    return bool(os.getenv("SUPABASE_URL", "").strip() and _supabase_read_key())
 
 
 def sb_select(table: str, eq: dict | None = None, order: str | None = None, limit: int | None = None) -> list[dict]:
     """Read-only SELECT against a Supabase table via PostgREST. Never writes."""
     sb_url = os.getenv("SUPABASE_URL", "").strip()
-    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    sb_key = _supabase_read_key()
     if not sb_url or not sb_key:
-        raise RuntimeError("Supabase não configurado (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes)")
+        raise RuntimeError(
+            "Supabase não configurado (SUPABASE_URL e chave secreta de leitura ausentes)"
+        )
 
     filters = [f"{k}=eq.{urllib.parse.quote(str(v))}" for k, v in (eq or {}).items() if v is not None]
     qs = "&".join(["select=*"] + filters)
@@ -959,7 +1070,12 @@ def sb_select(table: str, eq: dict | None = None, order: str | None = None, limi
 # ── Supabase helpers (internal) ───────────────────────────────────────────────
 
 def _sb_headers(key: str) -> dict:
-    return {"apikey": key, "Authorization": f"Bearer {key}"}
+    headers = {"apikey": key}
+    # Modern sb_secret_ keys are not JWTs and must not be sent as Bearer tokens.
+    # Legacy anon/service-role keys remain compatible with PostgREST this way.
+    if not key.startswith(("sb_secret_", "sb_publishable_")):
+        headers["Authorization"] = f"Bearer {key}"
+    return headers
 
 
 def _sb_request(method: str, url: str, key: str,
@@ -980,6 +1096,14 @@ def _sb_get(url: str, key: str):
     if code >= 300:
         raise RuntimeError(f"Supabase GET {code}: {payload.decode('utf-8', errors='ignore')[:300]}")
     return json.loads(payload.decode("utf-8")) if payload else None
+
+
+def _sb_delete(base_url: str, key: str, table: str, eq: dict) -> None:
+    filters = "&".join(f"{k}=eq.{urllib.parse.quote(str(v))}" for k, v in eq.items())
+    url = f"{base_url.rstrip('/')}/rest/v1/{table}?{filters}"
+    code, payload = _sb_request("DELETE", url, key)
+    if code >= 300:
+        raise RuntimeError(f"Supabase delete {table} {code}: {payload.decode('utf-8', errors='ignore')[:300]}")
 
 
 def _sb_upsert(base_url: str, key: str, table: str, rows: list[dict]) -> None:
@@ -1007,6 +1131,30 @@ def _try_supabase_sync(job_id, resultado, run_row, serie_rows, sexo_rows, faixa_
         log.info(f"Synced {job_id} to Supabase")
     except Exception as e:
         log.warning(f"Supabase sync failed (SQLite ok): {e}")
+
+
+def _sync_row(table: str, row: dict) -> None:
+    """Best-effort upsert of a single row to Supabase. No-op if not configured, never raises."""
+    sb_url = os.getenv("SUPABASE_URL", "").strip()
+    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not sb_url or not sb_key:
+        return
+    try:
+        _sb_upsert(sb_url, sb_key, table, [row])
+    except Exception as e:
+        log.warning(f"Supabase sync failed for {table} (SQLite ok): {e}")
+
+
+def _sync_delete(table: str, eq: dict) -> None:
+    """Best-effort delete from Supabase. No-op if not configured, never raises."""
+    sb_url = os.getenv("SUPABASE_URL", "").strip()
+    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not sb_url or not sb_key:
+        return
+    try:
+        _sb_delete(sb_url, sb_key, table, eq)
+    except Exception as e:
+        log.warning(f"Supabase delete sync failed for {table} (SQLite ok): {e}")
 
 
 def _supabase_find_cached(req: dict) -> dict | None:

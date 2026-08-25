@@ -96,3 +96,22 @@ def test_crud_de_conversas_e_mensagens(db):
     mensagens = db.listar_mensagens(conversa["id"])
     assert len(mensagens) == 1
     assert mensagens[0]["resposta"] == "Seu estoque dura 12 dias."
+
+
+def test_historico_classifica_e_filtra_conversas_por_canal(db):
+    conversa_app = db.criar_conversa(usuario="user-abc", titulo="Conversa no app")
+    db.adicionar_mensagem(conversa_app["id"], "insumos", "Estoque?", "Disponível.", None)
+
+    conversa_telegram = db.criar_conversa(usuario="user-abc", titulo="Conversa no Telegram")
+    db.adicionar_mensagem(conversa_telegram["id"], "telegram", "Alertas?", "Nenhum.", None)
+
+    app = db.listar_conversas("user-abc", canal="app")
+    telegram = db.listar_conversas("user-abc", canal="telegram")
+
+    assert [item["id"] for item in app] == [conversa_app["id"]]
+    assert app[0]["canal"] == "app"
+    assert app[0]["total_mensagens"] == 1
+    assert [item["id"] for item in telegram] == [conversa_telegram["id"]]
+    assert telegram[0]["canal"] == "telegram"
+    assert db.contar_conversas("user-abc", canal="app") == 1
+    assert db.contar_conversas("user-abc", canal="telegram") == 1

@@ -1,10 +1,11 @@
 """
 Agente do SusBot com stream SSE.
 
-O fluxo é dividido em 3 partes:
-1. Planejamento da resposta (LLM decide se usa tool ou responde direto)
-2. Execução da tool escolhida
-3. Stream token a token da resposta final
+O fluxo usa uma cascata de custo:
+1. Roteamento local para intenções operacionais de alta confiança
+2. Planejamento por LLM somente para perguntas não resolvidas localmente
+3. Execução da tool escolhida e resposta determinística quando possível
+4. Geração por LLM apenas quando ainda for necessária
 
 LangGraph e Gemini entram por adaptação opcional. Nos testes, o LLM pode ser
 substituído por um mock simples com `planejar()` e `stream_resposta()`.
@@ -16,13 +17,14 @@ import json
 import logging
 import os
 import re
-import unicodedata
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
 
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
+from api.core.susbot_intents import normalizar_texto, rotear_intencao
+from api.core.susbot_metrics import registrar_execucao
 
 log = logging.getLogger("sus_predict.susbot_agent")
 
@@ -65,12 +67,7 @@ def _ibge6(valor: str) -> str:
 
 
 def _normalizar_intencao(texto: str) -> str:
-    sem_acentos = unicodedata.normalize("NFKD", str(texto or ""))
-    return " ".join("".join(ch for ch in sem_acentos if not unicodedata.combining(ch)).lower().split())
-
-
-def _contem_termo(texto: str, termos: set[str]) -> bool:
-    return any(re.search(rf"\b{re.escape(termo)}\w*\b", texto) for termo in termos)
+    return normalizar_texto(texto)
 
 
 def montar_historico_recente(mensagens: list[dict[str, Any]], limite: int = 8) -> list[dict[str, str]]:
@@ -85,62 +82,6 @@ def montar_historico_recente(mensagens: list[dict[str, Any]], limite: int = 8) -
         if pergunta or resposta:
             historico.append({"pergunta": pergunta, "resposta": resposta})
     return historico
-
-
-def _plano_deterministico(pergunta: str) -> dict[str, Any] | None:
-    """Garante uso de ferramenta para intenções operacionais inequívocas."""
-
-    texto = _normalizar_intencao(pergunta)
-    if texto.startswith(("o que e ", "o que sao ", "explique ", "como funciona ")):
-        return None
-    termos_estoque = {"estoque", "insumo", "medicamento", "remedio", "abastecimento"}
-    termos_risco = {"falta", "faltando", "critico", "ruptura", "acabando", "baixo"}
-    if _contem_termo(texto, termos_estoque):
-        return {
-            "acao": "ferramenta",
-            "ferramenta": "consultar_estoque",
-            "argumentos": {"somente_risco": _contem_termo(texto, termos_risco)},
-            "resposta": "",
-            "referencia_rota": "/insumos",
-        }
-
-    if _contem_termo(texto, {"alerta", "risco", "ocorrencia"}):
-        return {
-            "acao": "ferramenta",
-            "ferramenta": "consultar_alertas",
-            "argumentos": {},
-            "resposta": "",
-            "referencia_rota": "/alertas",
-        }
-
-    termos_internacao = {"internac", "hospitaliz", "hospitalar", "leito", "uti"}
-    termos_epidemiologia = {
-        "dengue", "caso", "epidemiologia", "notific", "obito", "mortalidade",
-        "nascimento", "ambulatorial",
-    }
-    if _contem_termo(texto, termos_internacao | termos_epidemiologia):
-        if _contem_termo(texto, termos_internacao):
-            sistema = "SIH"
-        elif _contem_termo(texto, {"obito", "mortalidade"}):
-            sistema = "SIM"
-        elif _contem_termo(texto, {"nascimento"}):
-            sistema = "SINASC"
-        elif _contem_termo(texto, {"ambulatorial"}):
-            sistema = "SIA"
-        else:
-            sistema = "SINAN"
-        argumentos = {"sistema": sistema}
-        if _contem_termo(texto, {"uti"}):
-            argumentos["escopo_solicitado"] = "uti"
-        return {
-            "acao": "ferramenta",
-            "ferramenta": "consultar_epidemiologia",
-            "argumentos": argumentos,
-            "resposta": "",
-            "referencia_rota": "/epidemiologia",
-        }
-
-    return None
 
 
 def _jsonable(valor: Any) -> Any:
@@ -611,9 +552,14 @@ class SusBotAgent:
         self.ibge6 = _ibge6(self.ibge6)
         if not self.tools:
             self.tools = criar_susbot_tools(self.ibge6)
+        self._graph = self._montar_grafo() if LANGGRAPH_OK else None
+
+    def _obter_llm(self) -> Any:
+        """Inicializa o provedor somente quando uma rota realmente precisa dele."""
+
         if self.llm is None:
             self.llm = _montar_llm_com_fallback()
-        self._graph = self._montar_grafo() if LANGGRAPH_OK else None
+        return self.llm
 
     def _montar_grafo(self):  # pragma: no cover - só valida integração quando disponível
         builder = StateGraph(dict)
@@ -700,7 +646,7 @@ class SusBotAgent:
 
     def _node_planejar(self, state: dict[str, Any]) -> dict[str, Any]:
         plano = _normalizar_plano(
-            self.llm.planejar(state["pergunta"], self._contexto(), list(self.tools.keys()))
+            self._obter_llm().planejar(state["pergunta"], self._contexto(), list(self.tools.keys()))
         )
         return {"plano": plano}
 
@@ -734,8 +680,10 @@ class SusBotAgent:
         resultado_ferramenta: dict[str, Any] | None,
         referencia_rota: str | None,
         ferramenta_executada: str | None = None,
+        execucao: dict[str, Any] | None = None,
     ) -> Iterable[dict[str, Any]]:
         contexto = self._contexto()
+        execucao_final = dict(execucao or {})
 
         if referencia_rota:
             info_referencia = next((item for item in _REFERENCIAS.values() if item["rota"] == referencia_rota), None)
@@ -758,14 +706,23 @@ class SusBotAgent:
             resposta_final.append(texto_fixo)
             yield {"event": "token", "data": {"texto": texto_fixo}}
         else:
+            execucao_final["llm_resposta"] = True
+            execucao_final["sem_llm"] = False
             yield {"event": "status", "data": {"mensagem": "Gerando resposta final"}}
-            for token in self.llm.stream_resposta(pergunta, contexto, plano, resultado_ferramenta):
+            for token in self._obter_llm().stream_resposta(pergunta, contexto, plano, resultado_ferramenta):
                 if not token:
                     continue
                 resposta_final.append(token)
                 yield {"event": "token", "data": {"texto": token}}
 
         texto_final = "".join(resposta_final)
+        execucao_final.setdefault("llm_planejamento", False)
+        execucao_final.setdefault("llm_resposta", False)
+        execucao_final.setdefault(
+            "sem_llm",
+            not execucao_final["llm_planejamento"] and not execucao_final["llm_resposta"],
+        )
+        registrar_execucao(execucao_final)
         yield {
             "event": "fim",
             "data": {
@@ -774,19 +731,30 @@ class SusBotAgent:
                 "plano": plano,
                 "resultado_ferramenta": resultado_ferramenta,
                 "artefato": artefato,
+                "execucao": execucao_final,
             },
         }
 
     def stream_eventos(self, pergunta: str) -> Iterable[dict[str, Any]]:
         yield {"event": "status", "data": {"mensagem": "Planejando resposta"}}
 
-        plano_obrigatorio = _plano_deterministico(pergunta)
+        rota_local = rotear_intencao(pergunta)
+        plano_obrigatorio = rota_local.plano if rota_local else None
         # Perguntas operacionais sobre saúde/estoque precisam chegar à ferramenta
         # antes das heurísticas de perfil. Expressões como "fale sobre a situação"
         # e "fale sobre os insumos" não são consultas sobre outra pessoa.
         if plano_obrigatorio is None:
             resposta_contextual = self._resposta_contextual(pergunta)
             if resposta_contextual is not None:
+                execucao = {
+                    "modo": "contextual_local",
+                    "intencao": "contexto_usuario",
+                    "confianca": 1.0,
+                    "llm_planejamento": False,
+                    "llm_resposta": False,
+                    "sem_llm": True,
+                }
+                registrar_execucao(execucao)
                 yield {"event": "token", "data": {"texto": resposta_contextual}}
                 yield {
                     "event": "fim",
@@ -795,39 +763,34 @@ class SusBotAgent:
                         "referencia_rota": None,
                         "plano": {"acao": "resposta", "origem": "contexto_seguro"},
                         "resultado_ferramenta": None,
+                        "execucao": execucao,
                     },
                 }
                 return
 
         if plano_obrigatorio is None:
-            plano = _normalizar_plano(self.llm.planejar(pergunta, self._contexto(), list(self.tools.keys())))
+            plano = _normalizar_plano(
+                self._obter_llm().planejar(pergunta, self._contexto(), list(self.tools.keys()))
+            )
+            execucao = {
+                "modo": "generativo",
+                "intencao": str(plano.get("ferramenta") or "conversa_livre"),
+                "confianca": None,
+                "llm_planejamento": True,
+                "llm_resposta": False,
+                "sem_llm": False,
+            }
         else:
             plano = plano_obrigatorio
-            # O modelo ainda pode ajudar a extrair item/período, mas não pode cancelar
-            # o uso da ferramenta determinado para uma consulta operacional inequívoca.
-            try:
-                sugestao = _normalizar_plano(
-                    self.llm.planejar(pergunta, self._contexto(), list(self.tools.keys()))
-                )
-                if sugestao.get("ferramenta") == plano["ferramenta"]:
-                    argumentos_sugeridos = sugestao.get("argumentos") or {}
-                    if plano["ferramenta"] == "consultar_estoque":
-                        argumentos_sugeridos = {
-                            chave: valor for chave, valor in argumentos_sugeridos.items() if chave == "item"
-                        }
-                    elif plano["ferramenta"] == "consultar_epidemiologia":
-                        permitidos = {"ano_ini", "ano_fim"}
-                        if (plano.get("argumentos") or {}).get("sistema") == "SINAN":
-                            permitidos.add("doenca_cod")
-                        argumentos_sugeridos = {
-                            chave: valor for chave, valor in argumentos_sugeridos.items() if chave in permitidos
-                        }
-                    plano["argumentos"] = {
-                        **argumentos_sugeridos,
-                        **(plano.get("argumentos") or {}),
-                    }
-            except Exception as exc:  # pragma: no cover - fallback determinístico
-                log.warning("Planejamento do LLM falhou; usando roteamento determinístico: %s", exc)
+            execucao = {
+                "modo": "deterministico",
+                "intencao": rota_local.intencao,
+                "confianca": rota_local.confianca,
+                "motivo": rota_local.motivo,
+                "llm_planejamento": False,
+                "llm_resposta": False,
+                "sem_llm": True,
+            }
         ferramenta = str(plano.get("ferramenta") or "").strip()
 
         if plano.get("acao") == "ferramenta" and ferramenta in FERRAMENTAS_ESCRITA:
@@ -841,6 +804,7 @@ class SusBotAgent:
                     or f"Posso executar {ferramenta} com os dados acima. Confirma?",
                 },
             }
+            registrar_execucao(execucao)
             yield {
                 "event": "fim",
                 "data": {
@@ -849,6 +813,7 @@ class SusBotAgent:
                     "plano": plano,
                     "resultado_ferramenta": None,
                     "aguardando_confirmacao": True,
+                    "execucao": execucao,
                 },
             }
             return
@@ -863,6 +828,7 @@ class SusBotAgent:
         yield from self._emitir_resultado(
             pergunta, plano, resultado_ferramenta, referencia_rota,
             ferramenta_executada=ferramenta if plano.get("acao") == "ferramenta" else None,
+            execucao=execucao,
         )
 
     def stream_eventos_confirmado(self, ferramenta: str, argumentos: dict[str, Any]) -> Iterable[dict[str, Any]]:
@@ -882,6 +848,14 @@ class SusBotAgent:
         yield from self._emitir_resultado(
             f"Executar {ferramenta} confirmado pelo usuário", plano, resultado, referencia,
             ferramenta_executada=ferramenta,
+            execucao={
+                "modo": "acao_confirmada",
+                "intencao": ferramenta,
+                "confianca": 1.0,
+                "llm_planejamento": False,
+                "llm_resposta": False,
+                "sem_llm": True,
+            },
         )
 
     def stream_sse(self, pergunta: str) -> Iterable[str]:

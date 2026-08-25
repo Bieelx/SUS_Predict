@@ -8,6 +8,7 @@ const Insumos = lazy(() => import('./pages/Insumos.jsx'));
 const Documentos = lazy(() => import('./pages/Documentos.jsx'));
 const Epidemiologia = lazy(() => import('./pages/Epidemiologia.jsx'));
 const Internacoes = lazy(() => import('./pages/Internacoes.jsx'));
+const Vacinacao = lazy(() => import('./pages/Vacinacao.jsx'));
 const Superlotacao = lazy(() => import('./pages/Superlotacao.jsx'));
 const PageConfiguracoes = lazy(() => import('./pages/Configuracoes.jsx'));
 const PagePerfil = lazy(() => import('./pages/Perfil.jsx'));
@@ -15,6 +16,7 @@ const GeradorEtp = lazy(() => import('./pages/GeradorEtp.jsx'));
 const SusBotPanel = lazy(() => import('./pages/SusBotPanel.jsx').then(modulo => ({ default: modulo.SusBotPanel })));
 import { DOCUMENTOS_INICIAIS } from './shared/etp.js';
 import { obterIbgeDemo, obterMunicipioDemo } from './shared/demo.js';
+import { signOut, validateSession } from './shared/auth.js';
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 //
@@ -45,6 +47,7 @@ const NAV_OPERACIONAL = [
 const NAV_ANALISES = [
   { id: 'epidemiologia', label: 'Epidemiologia', icon: 'coronavirus' },
   { id: 'internacoes',   label: 'Internações',   icon: 'bed' },
+  { id: 'vacinacao',     label: 'Vacinação',     icon: 'vaccines' },
   { id: 'superlotacao',  label: 'Superlotação',  icon: 'emergency' },
 ];
 
@@ -68,6 +71,7 @@ const PAGE_PATHS = {
   documentos: '/documentos',
   epidemiologia: '/epidemiologia',
   internacoes: '/internacoes',
+  vacinacao: '/vacinacao',
   superlotacao: '/superlotacao',
   configuracoes: '/configuracoes',
   perfil: '/perfil',
@@ -238,7 +242,7 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled }) {
       {/* Logo */}
       <div style={{ height: 'var(--topbar-h)', boxSizing: 'border-box', padding: '0 20px', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--sb-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <LogoIcon size={34} />
+          <LogoIcon size={52} />
           <p style={{ fontFamily: 'var(--ff-tight)', fontWeight: 800, fontSize: 'var(--fs-md)', color: 'var(--sb-strong)', lineHeight: 1 }}>
             SusPredict
           </p>
@@ -369,7 +373,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
         </button>
 
         <div className="mobile-topbar-title" aria-label={`Página atual: ${tituloPagina}`}>
-          <LogoIcon size={30} />
+          <LogoIcon size={42} />
           <div>
             <p>{tituloPagina}</p>
             <span>{municipio.nome} · {municipio.uf}</span>
@@ -380,7 +384,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
             o app nunca fica sem identificação no canto superior esquerdo. */}
         {!sidebarAberta && (
           <div className="app-topbar-brand" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <LogoIcon size={28} />
+            <LogoIcon size={40} />
             <p style={{ fontFamily: 'var(--ff-tight)', fontWeight: 800, fontSize: 'var(--fs-sm)', color: 'var(--sb-strong)', lineHeight: 1, margin: 0 }}>
               SusPredict
             </p>
@@ -652,7 +656,7 @@ async function lerJson(response, fallback) {
 }
 
 export default function App() {
-  const [authed, setAuthed] = useState(() => !!localStorage.getItem('sus_predict_token'));
+  const [authStatus, setAuthStatus] = useState('checking');
   const [rota, setRota] = useState(lerRotaAtual);
   const page = rota.page;
   const [themeId, setThemeId] = useState('teal');
@@ -704,6 +708,28 @@ export default function App() {
     error: null,
   });
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
+
+  useEffect(() => {
+    let ativo = true;
+    async function verificarSessao() {
+      const user = await validateSession();
+      if (ativo) setAuthStatus(user ? 'authenticated' : 'unauthenticated');
+    }
+    void verificarSessao();
+    const intervalo = window.setInterval(verificarSessao, 5 * 60 * 1000);
+    const sincronizarAbas = () => void verificarSessao();
+    window.addEventListener('storage', sincronizarAbas);
+    return () => {
+      ativo = false;
+      window.clearInterval(intervalo);
+      window.removeEventListener('storage', sincronizarAbas);
+    };
+  }, []);
+
+  async function handleLogout() {
+    await signOut();
+    setAuthStatus('unauthenticated');
+  }
   const municipioDemo = demoEnabled ? obterMunicipioDemo(demo, MUNICIPIOS[0]) : null;
   const ibgeDemo = demoEnabled ? obterIbgeDemo(demo, MUNICIPIOS[0].ibge6) : null;
   const municipioAtual = demoEnabled && municipioDemo
@@ -908,16 +934,18 @@ export default function App() {
     ? (demo.payload.alertas || []).filter(a => a.status === 'novo' || a.status === 'andamento').length
     : 3;
 
-  if (!authed) {
+  if (authStatus === 'checking') return <CarregandoPagina />;
+
+  if (authStatus !== 'authenticated') {
     return (
       <Suspense fallback={<CarregandoPagina />}>
-        <LoginScreen onEnter={() => setAuthed(true)} />
+        <LoginScreen onEnter={() => setAuthStatus('authenticated')} />
       </Suspense>
     );
   }
 
   function render() {
-    const foraDoEscopoDemo = demoEnabled && ['epidemiologia', 'internacoes', 'superlotacao', 'configuracoes', 'perfil'].includes(page);
+    const foraDoEscopoDemo = demoEnabled && ['epidemiologia', 'internacoes', 'vacinacao', 'superlotacao', 'configuracoes', 'perfil'].includes(page);
     if (foraDoEscopoDemo) {
       return <DemoForaDoEscopo page={page} onNavigate={navegar} />;
     }
@@ -927,11 +955,12 @@ export default function App() {
       case 'alertas':       return <Alertas onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} deepLinkAlertaId={rota.alertaId} filtroInicial={rota.alertaTipo} onFiltroChange={alertaTipo => navegar({ page: 'alertas', alertaId: rota.alertaId, alertaTipo }, { replace: true })} onDeepLinkClose={() => navegar({ page: 'alertas', alertaTipo: rota.alertaTipo }, { replace: true })} />;
       case 'insumos':       return <Insumos onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
       case 'documentos':    return <Documentos onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} documentos={documentosVisiveis} demoState={demoState} />;
-      case 'epidemiologia': return <Epidemiologia onNavigate={navegar} demoState={demoState} />;
+      case 'epidemiologia': return <Epidemiologia onNavigate={navegar} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
       case 'internacoes':   return <Internacoes onNavigate={navegar} demoState={demoState} />;
+      case 'vacinacao':     return <Vacinacao onNavigate={navegar} demoState={demoState} />;
       case 'superlotacao':  return <Superlotacao onNavigate={navegar} demoState={demoState} />;
       case 'configuracoes': return <PageConfiguracoes onNavigate={navegar} demoState={demoState} />;
-      case 'perfil':        return <PagePerfil onNavigate={navegar} onLogout={() => { localStorage.removeItem('sus_predict_token'); setAuthed(false); }} demoState={demoState} />;
+      case 'perfil':        return <PagePerfil onNavigate={navegar} onLogout={handleLogout} demoState={demoState} />;
       default:              return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
     }
   }

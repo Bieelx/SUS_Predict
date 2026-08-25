@@ -1,7 +1,8 @@
 """
 Auth layer: Supabase Auth via REST (GoTrue), mesmo padrão do db.py (urllib, sem SDK).
 
-Requer SUPABASE_URL + SUPABASE_ANON_KEY no .env.
+Requer SUPABASE_URL + SUPABASE_PUBLISHABLE_KEY (ou a chave legada
+SUPABASE_ANON_KEY) no .env.
 """
 import json
 import os
@@ -22,15 +23,28 @@ def _sb_url() -> str:
     return url.rstrip("/")
 
 
-def _anon_key() -> str:
-    key = os.getenv("SUPABASE_ANON_KEY", "").strip()
+def _publishable_key() -> str:
+    key = (
+        os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
+        or os.getenv("SUPABASE_ANON_KEY", "").strip()
+    )
     if not key:
-        raise HTTPException(503, "Supabase não configurado (SUPABASE_ANON_KEY ausente)")
+        raise HTTPException(503, "Supabase não configurado (chave publicável ausente)")
     return key
 
 
 def _supabase_configurado() -> bool:
-    return bool(os.getenv("SUPABASE_URL", "").strip() and os.getenv("SUPABASE_ANON_KEY", "").strip())
+    return bool(
+        os.getenv("SUPABASE_URL", "").strip()
+        and (
+            os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
+            or os.getenv("SUPABASE_ANON_KEY", "").strip()
+        )
+    )
+
+
+def _dev_auth_habilitado() -> bool:
+    return os.getenv("SUS_PREDICT_DEV_AUTH", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _dev_secret() -> str:
@@ -110,7 +124,7 @@ def is_dev_token(token: str) -> bool:
 
 
 def _gotrue_request(path: str, body: dict, token: str | None = None) -> dict:
-    key = _anon_key()
+    key = _publishable_key()
     headers = {"apikey": key, "Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -122,7 +136,8 @@ def _gotrue_request(path: str, body: dict, token: str | None = None) -> dict:
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            payload = resp.read().decode("utf-8")
+            return json.loads(payload) if payload else {}
     except urllib.error.HTTPError as e:
         payload = e.read().decode("utf-8", errors="ignore")
         try:
@@ -134,7 +149,9 @@ def _gotrue_request(path: str, body: dict, token: str | None = None) -> dict:
 
 def signup(email: str, password: str, metadata: dict | None = None) -> dict:
     if not _supabase_configurado():
-        return _dev_assinar_token(email)
+        if _dev_auth_habilitado():
+            return _dev_assinar_token(email)
+        raise HTTPException(503, "Supabase Auth não configurado")
     body = {"email": email, "password": password}
     if metadata:
         body["data"] = metadata
@@ -143,12 +160,37 @@ def signup(email: str, password: str, metadata: dict | None = None) -> dict:
 
 def login(email: str, password: str) -> dict:
     if not _supabase_configurado():
-        return _dev_assinar_token(email)
+        if _dev_auth_habilitado():
+            return _dev_assinar_token(email)
+        raise HTTPException(503, "Supabase Auth não configurado")
     return _gotrue_request("token?grant_type=password", {"email": email, "password": password})
+
+
+def refresh_session(refresh_token: str) -> dict:
+    if is_dev_token(refresh_token):
+        usuario = _dev_validar_token(refresh_token)
+        return _dev_assinar_token(usuario.get("email", ""))
+    if not _supabase_configurado():
+        raise HTTPException(503, "Supabase Auth não configurado")
+    return _gotrue_request(
+        "token?grant_type=refresh_token",
+        {"refresh_token": refresh_token},
+    )
+
+
+def logout(token: str) -> None:
+    if is_dev_token(token):
+        _dev_validar_token(token)
+        return
+    if not _supabase_configurado():
+        raise HTTPException(503, "Supabase Auth não configurado")
+    _gotrue_request("logout", {}, token=token)
 
 
 def dev_login(email: str = "marcia.oliveira@dev.local") -> dict:
     """Gera um token local de desenvolvimento sem depender de Supabase."""
+    if not _dev_auth_habilitado():
+        raise HTTPException(404, "Login de demonstração desabilitado")
     return _dev_assinar_token(email)
 
 
@@ -157,7 +199,7 @@ def get_user(token: str) -> dict:
         return _dev_validar_token(token)
     if not _supabase_configurado():
         raise HTTPException(401, "Token inválido ou expirado")
-    key = _anon_key()
+    key = _publishable_key()
     req = urllib.request.Request(
         f"{_sb_url()}/auth/v1/user",
         headers={"apikey": key, "Authorization": f"Bearer {token}"},

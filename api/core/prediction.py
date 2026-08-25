@@ -7,6 +7,7 @@ on outbreak-dominated epidemiological series.
 """
 import logging
 import math
+from datetime import date
 
 log = logging.getLogger("sus_predict.prediction")
 
@@ -203,3 +204,131 @@ def gerar_predicao(
     previsao, modelo = _predicao_ols(serie_limpa, anos_previsao)
     previsao = _restaurar_reais(previsao, serie)
     return previsao, modelo, sorted(surtos)
+
+
+# ── Monthly seasonal forecast ─────────────────────────────────────────────────
+
+def _parse_month(value: str) -> date:
+    return date.fromisoformat(str(value)[:10]).replace(day=1)
+
+
+def _next_month(value: date, offset: int = 1) -> date:
+    absolute = value.year * 12 + value.month - 1 + offset
+    return date(absolute // 12, absolute % 12 + 1, 1)
+
+
+def _continuous_monthly_series(serie: list[dict]) -> list[dict]:
+    """Sort months and fill absent notification months with zero cases."""
+    by_month: dict[date, float] = {}
+    for item in serie:
+        month = _parse_month(item["mes"])
+        by_month[month] = max(0.0, float(item.get("total") or 0))
+    if not by_month:
+        return []
+
+    result = []
+    current = min(by_month)
+    end = max(by_month)
+    while current <= end:
+        result.append({"mes": current.isoformat(), "total": by_month.get(current, 0.0)})
+        current = _next_month(current)
+    return result
+
+
+def gerar_predicao_mensal(
+    serie: list[dict],
+    meses_previsao: int = 3,
+) -> tuple[list[dict], str, dict]:
+    """Forecast monthly counts with additive Holt-Winters on a log1p scale.
+
+    A 12-month seasonal component is fitted when at least two complete years
+    are available. Shorter series fall back to the existing Holt/OLS cascade.
+    The returned interval is an empirical 80% model interval, not a guarantee.
+    """
+    if meses_previsao < 1:
+        raise ValueError("meses_previsao deve ser maior que zero")
+
+    continuous = _continuous_monthly_series(serie)
+    if len(continuous) < 2:
+        raise ValueError("série mensal insuficiente para gerar previsão")
+
+    values = [math.log1p(item["total"]) for item in continuous]
+    last_month = _parse_month(continuous[-1]["mes"])
+    interval_level = 80
+
+    if len(values) < 24:
+        indexed = [
+            {"ano": index + 1, "total": item["total"], "tipo": "real"}
+            for index, item in enumerate(continuous)
+        ]
+        fitted, fallback_model, _ = gerar_predicao(indexed, anos_previsao=meses_previsao)
+        future = [item for item in fitted if item["tipo"] == "previsto"]
+        forecast = [
+            {
+                "mes": _next_month(last_month, index).isoformat(),
+                "casos_previstos": int(item["total"]),
+                "limite_inferior": int(item.get("lower") or 0),
+                "limite_superior": int(item.get("upper") or item["total"]),
+                "tipo": "previsto",
+            }
+            for index, item in enumerate(future, start=1)
+        ]
+        return forecast, f"{fallback_model}, série mensal curta", {
+            "nivel_intervalo": interval_level,
+            "pontos_treino": len(continuous),
+            "sazonalidade_meses": None,
+        }
+
+    season_length = 12
+    first_level = sum(values[:season_length]) / season_length
+    second_level = sum(values[season_length:season_length * 2]) / season_length
+    initial_trend = (second_level - first_level) / season_length
+    initial_season = [value - first_level for value in values[:season_length]]
+    grid = (0.2, 0.4, 0.6, 0.8)
+    best = None
+
+    for alpha in grid:
+        for beta in grid:
+            for gamma in grid:
+                level = first_level
+                trend = initial_trend
+                season = list(initial_season)
+                errors = []
+                for index in range(season_length, len(values)):
+                    seasonal_index = index % season_length
+                    previous_level = level
+                    predicted = level + trend + season[seasonal_index]
+                    errors.append(values[index] - predicted)
+                    level = alpha * (values[index] - season[seasonal_index]) + (1 - alpha) * (level + trend)
+                    trend = beta * (level - previous_level) + (1 - beta) * trend
+                    season[seasonal_index] = gamma * (values[index] - level) + (1 - gamma) * season[seasonal_index]
+
+                rmse = math.sqrt(sum(error * error for error in errors) / max(len(errors), 1))
+                candidate = {
+                    "score": rmse,
+                    "level": level,
+                    "trend": trend,
+                    "season": season,
+                }
+                if best is None or candidate["score"] < best["score"]:
+                    best = candidate
+
+    forecast = []
+    for step in range(1, meses_previsao + 1):
+        seasonal_index = (len(values) + step - 1) % season_length
+        estimate_log = best["level"] + step * best["trend"] + best["season"][seasonal_index]
+        margin = 1.28 * best["score"] * (1 + 0.10 * step)
+        forecast.append({
+            "mes": _next_month(last_month, step).isoformat(),
+            "casos_previstos": max(0, int(round(math.expm1(estimate_log)))),
+            "limite_inferior": max(0, int(round(math.expm1(estimate_log - margin)))),
+            "limite_superior": max(0, int(round(math.expm1(estimate_log + margin)))),
+            "tipo": "previsto",
+        })
+
+    return forecast, "Holt-Winters aditivo (log1p, sazonalidade 12m)", {
+        "nivel_intervalo": interval_level,
+        "pontos_treino": len(continuous),
+        "sazonalidade_meses": season_length,
+        "rmse_log": round(best["score"], 4),
+    }

@@ -26,6 +26,7 @@ from api.core.susbot_memory import (
     resumo_transparente,
 )
 from api.core.susbot_seed import seed_susbot_municipio
+from api.core.susbot_metrics import obter_metricas
 
 log = logging.getLogger("sus_predict.susbot_router")
 
@@ -48,6 +49,15 @@ class PerguntaSusBotRequest(BaseModel):
 
 def _usuario_referencia(user: dict[str, Any]) -> str:
     return str(user.get("id") or user.get("email") or user.get("sub") or "").strip()
+
+
+@router.get("/metricas-uso")
+def metricas_uso(user: dict = Depends(require_user)):
+    """Contagens anônimas do processo atual para acompanhar economia de LLM."""
+
+    if not _usuario_referencia(user):
+        raise HTTPException(401, "Usuario autenticado invalido")
+    return obter_metricas()
 
 
 def _ibge6(req: PerguntaSusBotRequest) -> str:
@@ -228,16 +238,22 @@ def excluir_fato_da_memoria(chave: str, user: dict = Depends(require_user)):
 def listar_conversas(
     page: int = 1,
     page_size: int = 20,
+    canal: str | None = None,
     user: dict = Depends(require_user),
 ):
     usuario = _usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
+    canal_normalizado = str(canal or "").strip().lower() or None
+    if canal_normalizado not in {None, "app", "telegram"}:
+        raise HTTPException(400, "canal invalido")
 
     page, page_size = _clamp_pagination(page, page_size)
-    itens = db.listar_conversas(usuario, page=page, page_size=page_size)
-    total = db.contar_conversas(usuario)
-    return _resposta_paginada(itens, page, page_size, total, usuario=usuario)
+    itens = db.listar_conversas(usuario, page=page, page_size=page_size, canal=canal_normalizado)
+    total = db.contar_conversas(usuario, canal=canal_normalizado)
+    return _resposta_paginada(
+        itens, page, page_size, total, usuario=usuario, canal=canal_normalizado,
+    )
 
 
 @router.get("/conversas/{conversa_id}/mensagens")

@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -68,6 +68,7 @@ from api.core.db import delete_run, find_cached, find_latest_by_ibge, init_db, l
 from api.core import auth as auth_core
 from api.core.demo_router import router as demo_router
 from api.core.dengue import router as dengue_router
+from api.core.operational_router import router as operational_router
 from api.core.export import csv_gz_bytes, slug_filename, xlsx_bytes
 from api.core.ibge import buscar_municipios, get_estados
 from api.core.prediction import PROPHET_OK, gerar_predicao
@@ -88,6 +89,7 @@ app.add_middleware(
 )
 
 app.include_router(dengue_router)
+app.include_router(operational_router)
 app.include_router(demo_router)
 app.include_router(susbot_router)
 app.include_router(channel_router)
@@ -267,6 +269,10 @@ class AuthRequest(BaseModel):
     cargo:    str = ""
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 class DownloadRequest(BaseModel):
     sistema:    str
     uf:         str
@@ -303,6 +309,11 @@ def auth_login(req: AuthRequest):
     return auth_core.login(req.email, req.password)
 
 
+@app.post("/api/auth/refresh")
+def auth_refresh(req: RefreshRequest):
+    return auth_core.refresh_session(req.refresh_token)
+
+
 @app.post("/api/auth/dev-login")
 def auth_dev_login(req: AuthRequest | None = None):
     email = (req.email if req else "") or "marcia.oliveira@dev.local"
@@ -312,6 +323,13 @@ def auth_dev_login(req: AuthRequest | None = None):
 @app.get("/api/auth/me")
 def auth_me(user: dict = Depends(auth_core.require_user)):
     return user
+
+
+@app.post("/api/auth/logout", status_code=204)
+def auth_logout(authorization: str = Header(default="")):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Token ausente")
+    auth_core.logout(authorization.removeprefix("Bearer ").strip())
 
 
 @app.get("/api/sistemas")

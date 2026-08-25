@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { Card, SectionTitle, Badge, MIcon, EvidenceChain } from '../shared/ui.jsx';
 import { formatarCutoffDemo, obterMunicipioDemo } from '../shared/demo.js';
+import { VisaoGeralReal } from '../shared/RupturaReal.jsx';
 
 // ─── Mock: fatos canônicos do município (Cotia — SP, Dra. Márcia) ─────────────
 
@@ -639,6 +640,10 @@ export default function VisaoGeral({ onNavigate, onGerarEtp, onOpenSusBot, demoS
     && (demoState.payload?.prova_valor?.mes_acao_recomendado
       || demoState.payload?.prova_valor?.etp_recomendado_em)
   );
+
+  if (!demoState?.enabled) {
+    return <VisaoGeralReal onNavigate={onNavigate} onOpenSusBot={onOpenSusBot} onDemo={() => demoState?.iniciarDemo?.()} />;
+  }
 
   return (
     <div className="rise">

@@ -106,6 +106,9 @@ function conversaParaThread(conversa, mensagens = []) {
     conversaId: conversa.id,
     titulo: conversa.titulo || '',
     criadaEm: parseIsoDate(conversa.criada_em),
+    atualizadaEm: parseIsoDate(conversa.atualizada_em || conversa.criada_em),
+    canal: conversa.canal === 'telegram' ? 'telegram' : 'app',
+    totalMensagens: Number(conversa.total_mensagens || 0),
     mensagens,
   };
 }
@@ -516,7 +519,8 @@ function ItemHistorico({ thread, onAbrir }) {
     >
       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink-900)' }}>{titulo}</p>
       <p style={{ margin: 0, fontFamily: 'var(--ff-mono, monospace)', fontSize: 11, color: 'var(--ink-400)' }}>
-        {formatRelativo(thread.criadaEm)}
+        {formatRelativo(thread.atualizadaEm || thread.criadaEm)}
+        {thread.totalMensagens > 0 ? ` · ${thread.totalMensagens} ${thread.totalMensagens === 1 ? 'troca' : 'trocas'}` : ''}
       </p>
     </div>
   );
@@ -745,6 +749,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
   const [open, setOpen] = useState(false);
   const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history' | 'channels'
   const [threads, setThreads] = useState([]);
+  const [canalHistorico, setCanalHistorico] = useState('app');
   const [current, setCurrent] = useState(() => criarThreadVazia());
   const [input, setInput] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -1139,6 +1144,11 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
 
   const semMensagens = current.mensagens.length === 0;
   const carregandoConversaAtual = carregandoConversaId != null && carregandoConversaId === current.conversaId;
+  const threadsDoCanal = threads.filter(thread => thread.canal === canalHistorico);
+  const totaisPorCanal = threads.reduce((totais, thread) => ({
+    ...totais,
+    [thread.canal]: (totais[thread.canal] || 0) + 1,
+  }), { app: 0, telegram: 0 });
 
   return (
     <>
@@ -1380,6 +1390,50 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
           <ContinuidadeCanais ibge6={ibge6Atual} />
         ) : viewMode === 'history' ? (
           <div className="susbot-panel-body" style={{ flex: 1, padding: '4px 16px' }}>
+            <div
+              role="tablist"
+              aria-label="Origem das conversas"
+              style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4,
+                margin: '8px 0 10px', padding: 4, borderRadius: 10,
+                background: 'var(--subtle)', border: '1px solid var(--ink-100)',
+              }}
+            >
+              {[
+                { id: 'app', label: 'App', icon: 'devices' },
+                { id: 'telegram', label: 'Telegram', icon: 'send' },
+              ].map(canal => {
+                const selecionado = canalHistorico === canal.id;
+                return (
+                  <button
+                    key={canal.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selecionado}
+                    onClick={() => setCanalHistorico(canal.id)}
+                    style={{
+                      minHeight: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                      border: selecionado ? '1px solid var(--ink-100)' : '1px solid transparent',
+                      borderRadius: 7, background: selecionado ? 'var(--elev)' : 'transparent',
+                      color: selecionado ? 'var(--ink-900)' : 'var(--ink-500)', cursor: 'pointer',
+                      fontSize: 12, fontWeight: 700,
+                      boxShadow: selecionado ? '0 1px 3px rgba(20, 16, 8, .06)' : 'none',
+                    }}
+                  >
+                    <MIcon m={canal.icon} size={16} />
+                    <span>{canal.label}</span>
+                    <span style={{
+                      minWidth: 20, padding: '2px 6px', borderRadius: 999,
+                      background: selecionado ? 'var(--primary-50)' : 'var(--ink-50)',
+                      color: selecionado ? 'var(--primary)' : 'var(--ink-400)',
+                      fontFamily: 'var(--ff-mono, monospace)', fontSize: 10,
+                    }}>
+                      {totaisPorCanal[canal.id] || 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
             {carregandoHistorico ? (
               <EstadoPainel
                 icone="hourglass_empty"
@@ -1405,14 +1459,16 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                   </button>
                 )}
               />
-            ) : threads.length === 0 ? (
+            ) : threadsDoCanal.length === 0 ? (
               <EstadoPainel
-                icone="forum"
-                titulo="Nenhuma conversa ainda"
-                texto="Quando você fizer a primeira pergunta, ela aparece aqui no histórico."
+                icone={canalHistorico === 'telegram' ? 'send' : 'forum'}
+                titulo={canalHistorico === 'telegram' ? 'Nenhuma conversa do Telegram' : 'Nenhuma conversa do app'}
+                texto={canalHistorico === 'telegram'
+                  ? 'Depois de conectar o Telegram e conversar com o SusBot, as sessões aparecem aqui.'
+                  : 'Quando você fizer uma pergunta pelo app, a conversa aparece aqui.'}
               />
             ) : (
-              threads.map(t => <ItemHistorico key={t.id} thread={t} onAbrir={abrirThread} />)
+              threadsDoCanal.map(t => <ItemHistorico key={t.id} thread={t} onAbrir={abrirThread} />)
             )}
           </div>
         ) : (
