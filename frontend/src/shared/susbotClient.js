@@ -47,6 +47,7 @@ async function requisicaoJson(path, {
   if (typeof fetchFn !== 'function') throw new Error('fetch indisponivel para consultar canais do SusBot');
   const response = await fetchFn(resolverUrl(baseUrl, path), {
     method,
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...(body ? { 'Content-Type': 'application/json' } : {}),
@@ -116,6 +117,7 @@ export async function listarConversasSusbot({
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   const response = await fetchFn(resolverUrl(baseUrl, `${SUSBOT_ENDPOINTS.conversas}?${params.toString()}`), {
     method: 'GET',
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...headers,
@@ -147,6 +149,7 @@ export async function listarMensagensSusbot({
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   const response = await fetchFn(resolverUrl(baseUrl, `${SUSBOT_ENDPOINTS.mensagens(conversaId)}?${params.toString()}`), {
     method: 'GET',
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...headers,
@@ -362,6 +365,7 @@ export async function conversarComSusbot({
   try {
     const response = await fetchFn(resolverUrl(baseUrl, SUSBOT_ENDPOINTS.perguntar), {
       method: 'POST',
+      credentials: 'include',
       headers: {
         Accept: 'text/event-stream',
         'Content-Type': 'application/json',

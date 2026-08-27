@@ -12,13 +12,13 @@ test('replay histórico de dengue segue funcional e coerente', async ({ page }) 
   });
 
   await page.goto('/?demo=crise-historica');
-
-  const entrarDev = page.getByRole('button', { name: /entrar como dev/i });
-  if (await entrarDev.isVisible()) {
-    await entrarDev.click();
-  }
+  await page.getByLabel('E-mail').fill('admin@dev.local');
+  await page.getByLabel('Senha', { exact: true }).fill('playwright-local-password');
+  await page.getByRole('button', { name: 'Entrar com credenciais', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: /visão geral/i })).toBeVisible();
+  // O bootstrap anônimo testa /me e recebe 401 antes do login; não é erro da demo.
+  consoleErrors.length = 0;
   await expect(page.getByText(/campinas\/sp · corte temporal jan\/2024/i)).toBeVisible();
   await expect(page.getByText(/corte temporal jan\/2024/i)).toBeVisible();
 

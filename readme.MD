@@ -34,10 +34,13 @@ Necessário para rodar o frontend (Vite).
 ### 3) Chaves opcionais/necessárias por recurso
 
 - `GEMINI_API_KEY`: necessária para o SusBot responder com LLM real.
-- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`: opcionais, só se quiser sincronizar cache/persistência com Supabase.
-- `SUSBOT_DEV_AUTH_SECRET`: opcional, usado para assinar o login de desenvolvimento quando Supabase não estiver configurado.
+- `SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY` (ou a chave legada `SUPABASE_ANON_KEY`): obrigatórias para login.
+- `SUPABASE_SECRET_KEY` (ou a chave legada `SUPABASE_SERVICE_ROLE_KEY`): obrigatória no backend para roles, convites e persistência.
+- `VITE_API_BASE`: URL pública da API injetada no build do frontend; em produção, use HTTPS e não deixe o fallback `localhost`.
+- `SUSBOT_DEV_AUTH_SECRET`: usado somente no login local quando o modo de desenvolvimento é habilitado explicitamente; nunca substitui o Supabase em produção.
 - `SUSBOT_MEMORY_KEY`: chave Fernet opcional para criptografar a memória pessoal do SusBot. Em desenvolvimento, uma chave local com permissão `0600` é criada em `api/.secrets/`; em produção, configure-a pelo gerenciador de segredos da infraestrutura.
-- Telegram: `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` e `CHANNEL_PAIRING_SECRET`. Veja [INTEGRACAO_CANAIS_SUSBOT.md](./INTEGRACAO_CANAIS_SUSBOT.md).
+- `GROQ_API_KEY` e `GROQ_MODEL`: configuram o fallback opcional do SusBot quando o Gemini não estiver disponível.
+- Telegram: `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` e `CHANNEL_PAIRING_SECRET`. Veja [API_TELEGRAM.md](docs/documentacao/API_TELEGRAM.md).
 
 ## Instalação (local)
 
@@ -113,13 +116,21 @@ npm install
 npm run dev
 ```
 
-## Auth de desenvolvimento
+## Autenticação e autorização
 
-Para testar o SusBot sem Supabase, use o botão **Entrar como dev** na tela de login.
+O dashboard exige uma sessão Supabase válida com a role de negócio `admin`. A
+existência de uma string no navegador não libera nenhuma tela, e todas as rotas
+`/api/*` são validadas no backend. As únicas entradas sem sessão Admin são o
+fluxo público de autenticação e o webhook do Telegram, que exige seu próprio
+`TELEGRAM_WEBHOOK_SECRET`.
 
-- Ele chama `POST /api/auth/dev-login`.
-- O backend gera um token local assinado.
-- Esse token é aceito em `GET /api/auth/me` e nas rotas do SusBot.
+- Não existe cadastro público.
+- Novos usuários são convidados por um Admin na aba **Perfil do Usuário**.
+- Access e refresh tokens permanecem em cookies `HttpOnly`; não são gravados no `localStorage`.
+- O modo dev é desligado por padrão, não aparece no frontend e é recusado em produção.
+
+O tutorial de configuração do painel, primeiro Admin, SMTP e recuperação de
+senha está em [`supabase/SETUP.md`](supabase/SETUP.md).
 
 ## Supabase (cache + organização)
 
@@ -127,40 +138,39 @@ O Supabase é usado para evitar re-download e manter os dados tratados organizad
 
 ### Segurança
 
-- Nunca use `SUPABASE_SERVICE_ROLE_KEY` no frontend.
+- Nunca use `SUPABASE_SECRET_KEY`/`SUPABASE_SERVICE_ROLE_KEY` no frontend.
 - Nunca comite `.env`.
 - Se uma chave vazar, rotacione imediatamente no Supabase.
 
-### 1) Criar schema no Supabase (SQL)
+### Provisionamento do banco
 
-No Supabase, abra `SQL Editor` e rode:
+O schema de persistência DATASUS existente permanece em `supabase/schema.sql`
+para compatibilidade com o funcionamento atual. No **SQL Editor** do Supabase,
+execute esse arquivo ao provisionar um projeto novo. Ele cria `datasus_runs`,
+`datasus_serie`, `datasus_sexo`, `datasus_faixa_etaria`, `datasus_top_causas` e
+`datasus_raw_objects`. O provisionamento de autenticação, roles e políticas RLS
+é realizado diretamente no projeto Supabase pela equipe responsável antes de
+iniciar a aplicação.
 
-- `supabase/schema.sql`
-
-O schema cria:
-
-- `datasus_runs`: metadados de cada execução (run).
-- `datasus_serie`: série (real + previsto) por ano.
-- `datasus_sexo`: distribuição por sexo (%).
-- `datasus_faixa_etaria`: distribuição por faixa (%).
-- `datasus_top_causas`: top causas/diagnósticos (%).
-- `datasus_raw_objects`: objetos brutos no Storage associados ao run.
-
-### 2) Criar bucket no Storage
+### Criar bucket no Storage
 
 Crie um bucket (exemplo):
 
 - Nome: `datasus-raw`
 - Tipo: recomendado **Private**
 
-### 3) Configurar `.env`
+### Configurar `.env`
 
 Crie um arquivo `.env` na raiz (existe um modelo em `.env.example`).
 
 Variáveis usadas pelo backend:
 
 - `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_PUBLISHABLE_KEY` (ou `SUPABASE_ANON_KEY`)
+- `SUPABASE_SECRET_KEY` (ou `SUPABASE_SERVICE_ROLE_KEY`)
+- `FRONTEND_URL`
+- `AUTH_REDIRECT_URL`
+- `CORS_ALLOWED_ORIGINS`
 - `SUPABASE_BUCKET_RAW` (default: `datasus-raw`)
 - `SUPABASE_ENABLE_RAW_UPLOAD` (default: `true`)
 - `SUPABASE_RAW_MAX_BYTES` (default: `250000000`)
@@ -170,14 +180,19 @@ Exemplo:
 
 ```bash
 SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxx
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
+SUPABASE_SECRET_KEY=sb_secret_xxx
+FRONTEND_URL=http://localhost:3000
+AUTH_REDIRECT_URL=http://localhost:3000/auth/update-password
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 SUPABASE_BUCKET_RAW=datasus-raw
 SUPABASE_ENABLE_RAW_UPLOAD=true
 SUPABASE_RAW_MAX_BYTES=250000000
 SUPABASE_ENABLE_CACHE_READ=true
 ```
 
-Se `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` não estiverem definidos, o projeto continua funcionando em modo local, usando SQLite e o login de desenvolvimento.
+Se as chaves de autenticação não estiverem definidas, o backend falha fechado com
+`503`; ele não cria mais uma sessão local silenciosamente.
 
 ### Como funciona o upload no Supabase
 
@@ -203,7 +218,7 @@ em andamento — ver `CLAUDE.md` (seção "Redesenho de telas") e `docs/telas/` 
 real do frontend e a especificação de telas em vigor.**
 
 Hoje o frontend monta:
-- Login/cadastro.
+- Login e recuperação de senha (sem cadastro público).
 - Dashboard das telas do redesenho.
 - Painel flutuante do SusBot.
 - Gerador de ETP.
@@ -227,6 +242,8 @@ O frontend mostra o botão `Exportar XLSX` quando a análise está carregada.
 
 ## Endpoints principais (backend)
 
+Todos os endpoints abaixo exigem sessão Admin:
+
 - `POST /api/download`: inicia um job de download/processamento (com cache opcional).
 - `GET /api/status/{job_id}`: progresso e status.
 - `GET /api/resultado/{job_id}`: resultado final (JSON).
@@ -247,4 +264,4 @@ O frontend mostra o botão `Exportar XLSX` quando a análise está carregada.
 - Com as quatro variáveis do Telegram preenchidas, `start_dev.sh` instala ou reutiliza `cloudflared`, cria um Quick Tunnel HTTPS para a API e registra o webhook automaticamente. Use `ENABLE_TELEGRAM_TUNNEL=false` para desativar.
 - Se o frontend abrir em outra porta, pare os processos antigos e rode `bash start_dev.sh` de novo.
 - Para forçar re-download (ignorando cache), envie `usar_cache=false` no `POST /api/download`.
-- Para manter o projeto seguro, nunca exponha `SUPABASE_SERVICE_ROLE_KEY`.
+- Para manter o projeto seguro, nunca exponha `SUPABASE_SECRET_KEY`/`SUPABASE_SERVICE_ROLE_KEY`.
