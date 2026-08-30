@@ -386,13 +386,20 @@ class GeminiSusBotLLM:
         except Exception as exc:  # pragma: no cover - depende do ambiente final
             raise RuntimeError("langchain-google-genai indisponível") from exc
 
-        self._client = ChatGoogleGenerativeAI(model=model, google_api_key=chave, temperature=0.2)
+        # max_retries=0: o SDK do google-genai reteta 503 ("high demand") com backoff
+        # por ~1min antes de propagar o erro — isso atrasava o fallback pro Groq.
+        # Falha rápido e deixa o FallbackSusBotLLM decidir.
+        self._client = ChatGoogleGenerativeAI(
+            model=model, google_api_key=chave, temperature=0.2,
+            max_retries=0, timeout=20,
+        )
         # Cliente separado só pro passo de planejamento: força saída JSON e limita
         # tokens (é so um objeto pequeno) — corta a maior parte dos 25-35s observados,
         # que vinham de um round-trip de texto livre + parsing manual de ```json.
         self._client_planejamento = ChatGoogleGenerativeAI(
             model=model, google_api_key=chave, temperature=0.1,
             max_output_tokens=256, response_mime_type="application/json",
+            max_retries=0, timeout=20,
         )
 
     def planejar(self, pergunta: str, contexto: dict[str, Any], ferramentas: list[str]) -> dict[str, Any]:
@@ -516,6 +523,18 @@ class FallbackSusBotLLM:
 
 
 def _montar_llm_com_fallback() -> Any:
+    provedor = (os.getenv("SUSBOT_LLM_PROVIDER") or "").strip().lower()
+    if provedor == "local":
+        from api.core.local_llm import LocalSusBotLLM
+
+        log.info("SusBot usando Ollama local")
+        return LocalSusBotLLM()
+    if provedor == "groq":
+        log.info("SusBot usando Groq (Gemini ignorado)")
+        return GroqSusBotLLM()
+    if provedor and provedor not in {"gemini", "cloud", "auto"}:
+        raise RuntimeError(f"SUSBOT_LLM_PROVIDER desconhecido: {provedor}")
+
     primario = None
     erro_primario: Exception | None = None
     try:

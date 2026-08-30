@@ -1,0 +1,80 @@
+import io
+import json
+import urllib.error
+
+import pytest
+
+from api.core.local_llm import LocalSusBotLLM, OllamaIndisponivel, PLANO_SCHEMA
+
+
+class FakeResponse:
+    def __init__(self, body=b"", lines=()):
+        self._body = body
+        self._lines = list(lines)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self):
+        return self._body
+
+    def __iter__(self):
+        return iter(self._lines)
+
+
+def test_planejamento_usa_api_nativa_schema_e_normaliza_responder(monkeypatch):
+    requisicao = {}
+
+    def urlopen(req, timeout):
+        requisicao["url"] = req.full_url
+        requisicao["payload"] = json.loads(req.data)
+        requisicao["timeout"] = timeout
+        corpo = {"message": {"content": json.dumps({
+            "acao": "responder",
+            "ferramenta": "gerar_etp",
+            "argumentos": {"item": "dipirona"},
+        })}}
+        return FakeResponse(json.dumps(corpo).encode())
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    llm = LocalSusBotLLM(base_url="http://127.0.0.1:11434/v1", model="susbot-3b", timeout=91)
+    plano = llm.planejar("O que e dengue?", {}, ["gerar_etp"])
+
+    assert requisicao["url"] == "http://127.0.0.1:11434/api/chat"
+    assert requisicao["payload"]["format"] == PLANO_SCHEMA
+    assert requisicao["payload"]["stream"] is False
+    assert requisicao["timeout"] == 91
+    assert plano == {"acao": "resposta", "resposta": ""}
+
+
+def test_planejamento_json_invalido_faz_fallback_seguro(monkeypatch):
+    corpo = {"message": {"content": "nao e json"}}
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *_args, **_kwargs: FakeResponse(json.dumps(corpo).encode()),
+    )
+    llm = LocalSusBotLLM()
+    assert llm.planejar("pergunta", {}, []) == {"acao": "resposta", "resposta": ""}
+
+
+def test_resposta_repassa_chunks_sem_bufferizar(monkeypatch):
+    linhas = [
+        b'data: {"choices":[{"delta":{"content":"Ola"}}]}\n',
+        b'data: {"choices":[{"delta":{"content":" mundo"}}]}\n',
+        b'data: [DONE]\n',
+    ]
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: FakeResponse(lines=linhas))
+    llm = LocalSusBotLLM()
+    assert list(llm.stream_resposta("oi", {}, {}, None)) == ["Ola", " mundo"]
+
+
+def test_conexao_recusada_vira_erro_operacional(monkeypatch):
+    def falhar(*_args, **_kwargs):
+        raise urllib.error.URLError(ConnectionRefusedError())
+
+    monkeypatch.setattr("urllib.request.urlopen", falhar)
+    with pytest.raises(OllamaIndisponivel, match="Ollama"):
+        LocalSusBotLLM().planejar("oi", {}, [])

@@ -1,0 +1,7 @@
+tunnel: SUBSTITUA_PELO_ID_DO_TUNEL
+credentials-file: /home/bieelx/.cloudflared/SUBSTITUA_PELO_ID_DO_TUNEL.json
+
+ingress:
+  - hostname: susbot.seudominio.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404

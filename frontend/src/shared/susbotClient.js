@@ -330,6 +330,7 @@ export async function conversarComSusbot({
   timeoutMs = SUSBOT_TIMEOUT_MS,
   signal,
   headers = {},
+  apiKey = '',
   onStatus,
   onToken,
   onReferencia,
@@ -367,6 +368,7 @@ export async function conversarComSusbot({
       headers: {
         Accept: 'text/event-stream',
         'Content-Type': 'application/json',
+        ...(apiKey ? { 'X-API-Key': apiKey } : {}),
         ...headers,
       },
       body: JSON.stringify({

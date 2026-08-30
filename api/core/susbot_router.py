@@ -27,6 +27,7 @@ from api.core.susbot_memory import (
 )
 from api.core.susbot_seed import seed_susbot_municipio
 from api.core.susbot_metrics import obter_metricas
+from api.core.susbot_access import verificar_acesso_susbot
 
 log = logging.getLogger("sus_predict.susbot_router")
 
@@ -117,7 +118,11 @@ def _sse(evento: str, dados: dict[str, Any]) -> str:
 
 
 @router.post("/perguntar")
-def perguntar(req: PerguntaSusBotRequest, user: dict = Depends(require_user)):
+def perguntar(
+    req: PerguntaSusBotRequest,
+    user: dict = Depends(require_user),
+    _acesso: str = Depends(verificar_acesso_susbot),
+):
     usuario = _usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")

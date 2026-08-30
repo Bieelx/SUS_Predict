@@ -17,6 +17,7 @@ Runtime capabilities:
 import gc
 import json
 import logging
+import os
 import shutil
 import sys
 import uuid
@@ -81,9 +82,17 @@ if PYSUS_OK:
 # ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="SUS Predict API", version="2.1.0")
+cors_origins = [
+    origem.strip()
+    for origem in os.getenv(
+        "SUSBOT_CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origem.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"], allow_headers=["*"],
 )
@@ -296,6 +305,13 @@ def root():
         "prophet_ok": PROPHET_OK,
         "docs":       "/docs",
     }
+
+
+@app.get("/health")
+def health():
+    """Sonda publica: nao consulta banco, usuario, segredos ou LLM."""
+
+    return {"status": "ok"}
 
 
 @app.post("/api/auth/signup")

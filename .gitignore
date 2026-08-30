@@ -106,6 +106,7 @@ PRODUCT.md
 .docs/*
 .docs/
 docs/
+docs
 !docs/
 docs/*
 !docs/documentacao/

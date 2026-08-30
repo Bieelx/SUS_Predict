@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import QRCode from 'react-qr-code';
 import { API_BASE, MIcon } from '../shared/ui.jsx';
 import {
   cancelarPareamentoCanalSusbot,
@@ -693,9 +694,17 @@ function ContinuidadeCanais({ ibge6 }) {
                 O link é de uso único e expira em 10 minutos. Depois, volte aqui para confirmar a conta encontrada.
               </p>
               {pareamento.deep_link ? (
-                <a href={pareamento.deep_link} target="_blank" rel="noreferrer" className="susbot-channel-primary" style={{ textDecoration: 'none' }}>
-                  Abrir Telegram <MIcon m="open_in_new" size={15} />
-                </a>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ background: '#fff', padding: 8, borderRadius: 8, lineHeight: 0 }}>
+                    <QRCode value={pareamento.deep_link} size={112} bgColor="#ffffff" fgColor="#000000" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>Aponte a câmera do celular para o QR code</span>
+                    <a href={pareamento.deep_link} target="_blank" rel="noreferrer" className="susbot-channel-primary" style={{ textDecoration: 'none' }}>
+                      Abrir Telegram <MIcon m="open_in_new" size={15} />
+                    </a>
+                  </div>
+                </div>
               ) : (
                 <p style={{ margin: '0 0 9px', fontSize: 11.5, color: 'var(--warn)' }}>O usuário oficial do bot ainda não foi configurado.</p>
               )}
