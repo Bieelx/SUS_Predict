@@ -120,8 +120,8 @@ def _sse(evento: str, dados: dict[str, Any]) -> str:
 @router.post("/perguntar")
 def perguntar(
     req: PerguntaSusBotRequest,
-    user: dict = Depends(require_user),
     _acesso: str = Depends(verificar_acesso_susbot),
+    user: dict = Depends(require_user),
 ):
     usuario = _usuario_referencia(user)
     if not usuario:

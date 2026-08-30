@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 import os
 import threading
 import time
@@ -11,12 +12,27 @@ from collections import defaultdict, deque
 from fastapi import Header, HTTPException, Request
 
 
+log = logging.getLogger("sus_predict.susbot_access")
 _acessos: dict[str, deque[float]] = defaultdict(deque)
 _lock = threading.Lock()
+_aviso_protecao_desativada_emitido = False
 
 
 def _chaves_configuradas() -> tuple[str, ...]:
     return tuple(chave.strip() for chave in os.getenv("SUSBOT_API_KEYS", "").split(",") if chave.strip())
+
+
+def avisar_se_protecao_desativada() -> None:
+    """Registra uma vez por processo quando a camada adicional esta desativada."""
+
+    global _aviso_protecao_desativada_emitido
+    if _chaves_configuradas() or _aviso_protecao_desativada_emitido:
+        return
+    log.warning(
+        "ATENCAO: protecao por chave do SusBot DESATIVADA porque "
+        "SUSBOT_API_KEYS esta vazia. Use apenas em desenvolvimento local."
+    )
+    _aviso_protecao_desativada_emitido = True
 
 
 def verificar_acesso_susbot(

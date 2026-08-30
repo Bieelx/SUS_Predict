@@ -74,6 +74,7 @@ from api.core.export import csv_gz_bytes, slug_filename, xlsx_bytes
 from api.core.ibge import buscar_municipios, get_estados
 from api.core.prediction import PROPHET_OK, gerar_predicao
 from api.core.susbot_router import router as susbot_router
+from api.core.susbot_access import avisar_se_protecao_desativada
 from api.core.channel_router import router as channel_router
 
 if PYSUS_OK:
@@ -84,9 +85,10 @@ if PYSUS_OK:
 app = FastAPI(title="SUS Predict API", version="2.1.0")
 cors_origins = [
     origem.strip()
-    for origem in os.getenv(
-        "SUSBOT_CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
+    for origem in (
+        os.getenv("SUSBOT_CORS_ORIGINS")
+        or os.getenv("CORS_ALLOWED_ORIGINS")
+        or "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
     ).split(",")
     if origem.strip()
 ]
@@ -111,6 +113,7 @@ TEMP_DIR.mkdir(exist_ok=True)
 
 @app.on_event("startup")
 def startup():
+    avisar_se_protecao_desativada()
     init_db()
 
 
