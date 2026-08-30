@@ -35,6 +35,8 @@ function criarErroHttp(response, texto = '') {
   const erro = new Error(`Falha ao consultar SusBot (${response.status} ${response.statusText})${detalhe}`);
   erro.status = response.status;
   erro.responseText = texto;
+  const proxyInjection = response.headers.get('x-susbot-api-key-injected');
+  erro.proxyApiKeyInjected = proxyInjection === null ? null : proxyInjection === '1';
   try {
     erro.detail = texto ? JSON.parse(texto)?.detail : '';
   } catch {

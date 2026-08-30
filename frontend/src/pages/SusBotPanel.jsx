@@ -42,7 +42,13 @@ const SUSBOT_IBGE6_PADRAO = '351300';
 function mensagemErroSusbot(error) {
   const detalhe = String(error?.detail || error?.responseText || error?.message || '');
   if (/chave do susbot inv[aá]lida/i.test(detalhe)) {
-    return 'A chave de acesso deste dispositivo não foi configurada ou não é válida. Configure uma chave individual do SusBot e reinicie o frontend.';
+    if (error?.proxyApiKeyInjected === false) {
+      return 'O proxy local não enviou a chave do SusBot. Configure SUSBOT_API_KEY no .env.local e reinicie o frontend.';
+    }
+    if (error?.proxyApiKeyInjected === true) {
+      return 'O servidor rejeitou a chave enviada pelo proxy. Confirme se SUSBOT_API_KEY corresponde a uma chave ativa no backend e reinicie o frontend.';
+    }
+    return 'O servidor não aceitou a chave do SusBot. Verifique a configuração de acesso do ambiente.';
   }
   if (error?.status === 429 || /limite do susbot/i.test(detalhe)) {
     return 'O limite de consultas deste acesso foi atingido. Aguarde um minuto e tente novamente.';
