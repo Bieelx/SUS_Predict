@@ -16,6 +16,8 @@ TUNNEL_PID=""
 TUNNEL_LOG=""
 TUNNEL_PUBLIC_URL=""
 TELEGRAM_WEBHOOK_REGISTERED=""
+SUSBOT_PROXY_TARGET_WAS_SET="${SUSBOT_PROXY_TARGET+x}"
+SUSBOT_PROXY_TARGET_FROM_SHELL="${SUSBOT_PROXY_TARGET:-}"
 
 # ── Cores para o terminal ─────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'
@@ -232,6 +234,68 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  0b. MODO FRONTEND COM BACKEND REMOTO
+# ══════════════════════════════════════════════════════════════════════════════
+
+if [ "${SUSBOT_BACKEND_REMOTE:-false}" = "true" ]; then
+    # O .env da raiz pertence ao backend. No modo remoto, somente uma variável
+    # passada explicitamente no shell pode prevalecer sobre frontend/.env.local.
+    if [ "$SUSBOT_PROXY_TARGET_WAS_SET" = "x" ]; then
+        export SUSBOT_PROXY_TARGET="$SUSBOT_PROXY_TARGET_FROM_SHELL"
+    else
+        unset SUSBOT_PROXY_TARGET
+    fi
+    echo ""
+    ok "Modo remoto: somente o Vite será iniciado neste Mac."
+    info "O proxy usará SUSBOT_PROXY_TARGET de frontend/.env.local (ou do ambiente)."
+    info "Backend, Quick Tunnel e webhook são gerenciados no servidor Ubuntu."
+
+    cleanup_remote() {
+        echo ""
+        echo -e "  ${RED}🛑${NC}  Encerrando frontend..."
+        [ -n "${FRONTEND_PID:-}" ] && kill "$FRONTEND_PID" 2>/dev/null || true
+        echo "  👋  Até mais!"
+        exit 0
+    }
+    trap cleanup_remote INT TERM
+
+    if lsof -ti:3000 >/dev/null 2>&1; then
+        err "Porta 3000 já está em uso. Encerre o processo antes de iniciar o modo remoto."
+        exit 1
+    fi
+
+    if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
+        info "Instalando dependências do frontend (npm install)..."
+        (cd "$ROOT_DIR/frontend" && npm install --silent)
+    fi
+
+    cd "$ROOT_DIR/frontend"
+    npm run dev -- --host --port 3000 --strictPort 2>&1 &
+    FRONTEND_PID=$!
+    cd "$ROOT_DIR"
+
+    sleep 2
+    if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        err "O Vite encerrou durante a inicialização. Verifique a saída acima."
+        wait "$FRONTEND_PID" 2>/dev/null || true
+        exit 1
+    fi
+
+    echo ""
+    echo "  ─────────────────────────────────────────"
+    echo -e "  ${BOLD}Modo remoto ativo${NC}"
+    echo ""
+    echo "     🌐  Dashboard  →  http://localhost:3000"
+    echo "     📡  API        →  definida por frontend/.env.local"
+    echo ""
+    echo "  Pressione Ctrl+C para encerrar o frontend."
+    echo "  ─────────────────────────────────────────"
+    echo ""
+    wait "$FRONTEND_PID"
+    exit $?
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  1. VERIFICAÇÃO DO VENV (Python 3.12 obrigatório para PySUS)
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -408,8 +472,10 @@ elif tem_config_telegram; then
                 done
 
                 if [ "$TUNNEL_READY" != "true" ]; then
-                    warn "Túnel criado, mas ainda não responde publicamente; webhook não registrado."
-                elif registrar_webhook_telegram "$TUNNEL_PUBLIC_URL"; then
+                    warn "DNS local do túnel ainda não respondeu; tentando registrar pelo Telegram mesmo assim."
+                fi
+
+                if registrar_webhook_telegram "$TUNNEL_PUBLIC_URL"; then
                     TELEGRAM_WEBHOOK_REGISTERED="true"
                     ok "Webhook Telegram → registrado para @${TELEGRAM_BOT_USERNAME#@}"
                 else
@@ -452,7 +518,11 @@ if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
 fi
 
 cd "$ROOT_DIR/frontend"
-npm run dev -- --host --port 3000 --strictPort 2>&1 &
+# No ambiente iniciado por este script, o frontend e o webhook precisam usar a
+# mesma instancia da API. Sobrescreve qualquer Quick Tunnel antigo salvo no
+# .env.local, evitando criar o pareamento em outro banco de dados.
+SUSBOT_PROXY_TARGET="http://127.0.0.1:8000" \
+    npm run dev -- --host --port 3000 --strictPort 2>&1 &
 FRONTEND_PID=$!
 cd "$ROOT_DIR"
 

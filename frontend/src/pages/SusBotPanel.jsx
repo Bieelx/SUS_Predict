@@ -596,7 +596,7 @@ function ContinuidadeCanais({ ibge6 }) {
       });
       setPareamento(novo);
     } catch (error) {
-      setErro(error?.message || 'Não foi possível iniciar a conexão.');
+      setErro(error?.detail || error?.message || 'Não foi possível iniciar a conexão.');
     } finally {
       setProcessando(false);
     }
@@ -645,13 +645,13 @@ function ContinuidadeCanais({ ibge6 }) {
     }
   }
 
-  async function copiarCodigo() {
+  async function copiarLinkTelegram() {
     try {
-      await navigator.clipboard.writeText(pareamento.codigo);
+      await navigator.clipboard.writeText(pareamento.deep_link);
       setCopiado(true);
       window.setTimeout(() => setCopiado(false), 1800);
     } catch {
-      setErro('Não foi possível copiar. Selecione o código manualmente.');
+      setErro('Não foi possível copiar o link. Use o botão Abrir no Telegram.');
     }
   }
 
@@ -708,31 +708,30 @@ function ContinuidadeCanais({ ibge6 }) {
           )}
 
           {pareamento?.status === 'emitido' && (
-            <div style={{ marginTop: 12, padding: '12px', borderRadius: 10, background: 'var(--primary-soft)' }}>
-              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: 'var(--ink-900)' }}>1. Abra o SusBot no Telegram</p>
-              <p style={{ margin: '5px 0 10px', fontSize: 11.5, lineHeight: 1.5, color: 'var(--ink-500)' }}>
-                O link é de uso único e expira em 10 minutos. Depois, volte aqui para confirmar a conta encontrada.
+            <div style={{ marginTop: 12, padding: '14px', borderRadius: 10, background: 'var(--primary-soft)' }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--ink-900)' }}>1. Abra o SusBot no Telegram</p>
+              <p style={{ margin: '5px 0 12px', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-500)' }}>
+                No celular, toque no botão. Em outro dispositivo, escaneie o QR Code. Este convite expira em 10 minutos e funciona uma vez.
               </p>
               {pareamento.deep_link ? (
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div style={{ background: '#fff', padding: 8, borderRadius: 8, lineHeight: 0 }}>
-                    <QRCode value={pareamento.deep_link} size={112} bgColor="#ffffff" fgColor="#000000" />
+                <div className="susbot-channel-connect-options">
+                  <div className="susbot-channel-qr" aria-label="QR Code para abrir o SusBot no Telegram">
+                    <QRCode value={pareamento.deep_link} size={148} bgColor="#fbfaf7" fgColor="#1a1814" />
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <span style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>Aponte a câmera do celular para o QR code</span>
-                    <a href={pareamento.deep_link} target="_blank" rel="noreferrer" className="susbot-channel-primary" style={{ textDecoration: 'none' }}>
-                      Abrir Telegram <MIcon m="open_in_new" size={15} />
+                  <div className="susbot-channel-connect-actions">
+                    <span style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-500)' }}>O link já inclui seu convite seguro. Não é necessário copiar nenhum código.</span>
+                    <a href={pareamento.deep_link} target="_blank" rel="noopener noreferrer" className="susbot-channel-primary" style={{ textDecoration: 'none' }}>
+                      Abrir no Telegram <MIcon m="open_in_new" size={15} />
                     </a>
+                    <button type="button" onClick={() => void copiarLinkTelegram()} className="susbot-channel-link">
+                      <MIcon m="content_copy" size={15} /> {copiado ? 'Link copiado' : 'Copiar link'}
+                    </button>
                   </div>
                 </div>
               ) : (
-                <p style={{ margin: '0 0 9px', fontSize: 11.5, color: 'var(--warn)' }}>O usuário oficial do bot ainda não foi configurado.</p>
+                <p role="alert" style={{ margin: '0 0 9px', fontSize: 11.5, color: 'var(--warn)' }}>O usuário oficial do bot ainda não foi configurado. Reinicie o ambiente depois de definir TELEGRAM_BOT_USERNAME.</p>
               )}
-              <div className="susbot-channel-code">
-                <code>{pareamento.codigo}</code>
-                <button type="button" onClick={() => void copiarCodigo()}>{copiado ? 'Copiado' : 'Copiar'}</button>
-              </div>
-              <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-channel-link">Cancelar</button>
+              <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-channel-link" style={{ marginTop: 10 }}>Cancelar convite</button>
             </div>
           )}
 
@@ -1259,36 +1258,26 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
         .susbot-channel-primary:disabled,
         .susbot-channel-link:disabled,
         .susbot-channel-danger:disabled { opacity: .55; cursor: wait; }
-        .susbot-channel-code {
+        .susbot-channel-connect-options {
           display: flex;
           align-items: center;
-          gap: 7px;
-          margin-top: 9px;
-          padding: 8px 9px;
-          border: 1px solid var(--primary-soft-border);
-          border-radius: 8px;
-          background: var(--elev);
+          gap: 14px;
+          flex-wrap: wrap;
         }
-        .susbot-channel-code code {
-          min-width: 0;
+        .susbot-channel-qr {
+          padding: 9px;
+          border: 1px solid var(--ink-100);
+          border-radius: 10px;
+          background: #fbfaf7;
+          line-height: 0;
+        }
+        .susbot-channel-connect-actions {
+          min-width: 160px;
           flex: 1;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          color: var(--ink-700);
-          font-family: var(--ff-mono);
-          font-size: 10px;
-        }
-        .susbot-channel-code button {
-          min-height: 32px;
-          padding: 5px 8px;
-          border: 0;
-          border-radius: 6px;
-          background: var(--primary-soft);
-          color: var(--primary);
-          font-size: 11px;
-          font-weight: 800;
-          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 8px;
         }
 
         .susbot-panel-shell {
@@ -1329,6 +1318,8 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
           .susbot-channel-primary,
           .susbot-channel-link,
           .susbot-channel-danger { min-height: 44px; }
+          .susbot-channel-connect-options { flex-direction: column; align-items: stretch; }
+          .susbot-channel-qr { display: none; }
         }
 
         @media (max-width: 360px) {

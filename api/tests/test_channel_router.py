@@ -96,6 +96,19 @@ def test_pareamento_tem_token_unico_confirmacao_bilateral_e_revogacao(canais):
     assert router_module.listar_canais(user=_user())["itens"] == []
 
 
+def test_conta_demo_nao_pode_criar_vinculo_persistente(canais):
+    router_module, _db, _mensagens = canais
+
+    with pytest.raises(HTTPException) as exc:
+        router_module.criar_pareamento(
+            router_module.CriarPareamentoRequest(provedor="telegram", ibge6="351300"),
+            user=_user("dev-usuario-demo"),
+        )
+
+    assert exc.value.status_code == 403
+    assert "conta regular" in str(exc.value.detail)
+
+
 def test_token_e_evento_do_telegram_nao_podem_ser_reutilizados(canais):
     router_module, _db, mensagens = canais
     criado = router_module.criar_pareamento(

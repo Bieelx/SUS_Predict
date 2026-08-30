@@ -291,6 +291,8 @@ def criar_pareamento(req: CriarPareamentoRequest, user: dict = Depends(require_u
     ibge6 = str(req.ibge6 or "").strip()[:6]
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
+    if usuario.startswith("dev-"):
+        raise HTTPException(403, "Conecte uma conta regular do SusPredict antes de vincular o Telegram")
     if provedor not in PROVEDORES_SUPORTADOS:
         raise HTTPException(400, "Provedor ainda nao suportado")
     if len(ibge6) != 6 or not ibge6.isdigit():
