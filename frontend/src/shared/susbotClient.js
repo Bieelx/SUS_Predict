@@ -1,5 +1,9 @@
 import { SUSBOT_ENDPOINTS, SUSBOT_SSE_EVENTS, SUSBOT_TIMEOUT_MS } from './susbotContract.js';
 
+// Compatibilidade para frontend publicado. No desenvolvimento local, prefira
+// SUSBOT_API_KEY sem VITE_: o proxy injeta a chave sem expo-la no bundle.
+const SUSBOT_API_KEY = import.meta.env.VITE_SUSBOT_API_KEY || '';
+
 function resolverUrl(baseUrl, path) {
   if (/^https?:\/\//i.test(path)) return path;
   if (!baseUrl) return path;
@@ -28,7 +32,15 @@ function mergeAbortSignals(controller, signal) {
 
 function criarErroHttp(response, texto = '') {
   const detalhe = texto ? `: ${texto}` : '';
-  return new Error(`Falha ao consultar SusBot (${response.status} ${response.statusText})${detalhe}`);
+  const erro = new Error(`Falha ao consultar SusBot (${response.status} ${response.statusText})${detalhe}`);
+  erro.status = response.status;
+  erro.responseText = texto;
+  try {
+    erro.detail = texto ? JSON.parse(texto)?.detail : '';
+  } catch {
+    erro.detail = texto;
+  }
+  return erro;
 }
 
 async function lerJson(response) {
@@ -330,7 +342,7 @@ export async function conversarComSusbot({
   timeoutMs = SUSBOT_TIMEOUT_MS,
   signal,
   headers = {},
-  apiKey = '',
+  apiKey = SUSBOT_API_KEY,
   onStatus,
   onToken,
   onReferencia,

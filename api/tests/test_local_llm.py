@@ -60,6 +60,34 @@ def test_planejamento_json_invalido_faz_fallback_seguro(monkeypatch):
     assert llm.planejar("pergunta", {}, []) == {"acao": "resposta", "resposta": ""}
 
 
+def test_planejamento_normaliza_alias_e_remove_ibge_dos_argumentos(monkeypatch):
+    corpo = {"message": {"content": json.dumps({
+        "acao": "chamar_ferramenta",
+        "ferramenta": "consultar_estoque",
+        "argumentos": {
+            "ibge6": "351300",
+            "tipo_produto": "dipirona",
+            "campo_inventado": "ignorar",
+        },
+    })}}
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *_args, **_kwargs: FakeResponse(json.dumps(corpo).encode()),
+    )
+
+    plano = LocalSusBotLLM().planejar(
+        "risco de faltar dipirona",
+        {"ibge6": "351300"},
+        ["consultar_estoque"],
+    )
+
+    assert plano == {
+        "acao": "ferramenta",
+        "ferramenta": "consultar_estoque",
+        "argumentos": {"item": "dipirona"},
+    }
+
+
 def test_resposta_repassa_chunks_sem_bufferizar(monkeypatch):
     linhas = [
         b'data: {"choices":[{"delta":{"content":"Ola"}}]}\n',

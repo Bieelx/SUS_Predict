@@ -39,6 +39,20 @@ const SUGESTOES = [
 const ERRO_SUSBOT_PADRAO ='Não consegui consultar o SusBot agora. Tente novamente em instantes.';
 const SUSBOT_IBGE6_PADRAO = '351300';
 
+function mensagemErroSusbot(error) {
+  const detalhe = String(error?.detail || error?.responseText || error?.message || '');
+  if (/chave do susbot inv[aá]lida/i.test(detalhe)) {
+    return 'A chave de acesso deste dispositivo não foi configurada ou não é válida. Configure uma chave individual do SusBot e reinicie o frontend.';
+  }
+  if (error?.status === 429 || /limite do susbot/i.test(detalhe)) {
+    return 'O limite de consultas deste acesso foi atingido. Aguarde um minuto e tente novamente.';
+  }
+  if (/token ausente|token inv[aá]lido|token expirado|usu[aá]rio autenticado inv[aá]lido/i.test(detalhe)) {
+    return 'Sua sessão expirou ou não é válida. Entre novamente com sua conta.';
+  }
+  return ERRO_SUSBOT_PADRAO;
+}
+
 const SUSBOT_ROUTE_ALIASES = {
   insumos: 'insumos',
   '/insumos': 'insumos',
@@ -1039,9 +1053,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       atualizarMensagemAtual(idResposta, () => ({
         id: uid(),
         autor: 'error',
-        texto: error?.message?.includes('401') || /token|autentic|login/i.test(String(error?.message || ''))
-          ? 'Não consegui autenticar no SusBot. Entre novamente com uma conta válida.'
-          : ERRO_SUSBOT_PADRAO,
+        texto: mensagemErroSusbot(error),
         perguntaOriginal: pergunta,
         onRetry: enviar,
         ts: new Date(),

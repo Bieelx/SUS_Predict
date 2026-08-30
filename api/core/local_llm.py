@@ -36,17 +36,38 @@ PLANO_SCHEMA = {
 PLANEJADOR_SYSTEM = """Voce e o planejador do SusBot, assistente de gestao municipal de saude.
 
 Ferramentas disponiveis:
-- consultar_estoque: medicamentos, insumos, quantidade, risco de desabastecimento
-- consultar_alertas: alertas ativos, ocorrencias, severidade
-- consultar_epidemiologia: dados do SIM (mortalidade), SIH (internacoes), SINASC (nascimentos), SIA (producao ambulatorial), SINAN (notificacoes)
-- gerar_etp: gerar Estudo Tecnico Preliminar para licitacao ou compra
+- consultar_estoque: argumentos permitidos: item (string), somente_risco (boolean)
+- consultar_alertas: argumentos permitidos: status (string), tipo (string)
+- consultar_epidemiologia: argumentos permitidos: sistema (SIM, SIH, SINASC, SIA ou SINAN), ano_ini (inteiro), ano_fim (inteiro), doenca_cod (string), escopo_solicitado (string)
+- gerar_etp: argumentos permitidos: item (string obrigatoria), alerta_id (string)
 
 Regras:
 - Use acao "chamar_ferramenta" quando a pergunta exigir dados do municipio.
 - Use acao "responder" apenas para perguntas conceituais que nao precisam de dados.
 - Quando usar "responder", nao preencha o campo ferramenta.
+- O municipio ja esta definido no contexto. Nunca inclua ibge ou ibge6 em argumentos.
+- Nunca crie nomes de argumentos diferentes dos listados acima.
 - Responda sempre em portugues do Brasil.
 - Seja conciso."""
+
+_ARGUMENTOS_PERMITIDOS = {
+    "consultar_estoque": {"item", "somente_risco"},
+    "consultar_alertas": {"status", "tipo"},
+    "consultar_epidemiologia": {
+        "sistema", "ano_ini", "ano_fim", "doenca_cod", "escopo_solicitado",
+    },
+    "gerar_etp": {"item", "alerta_id"},
+}
+
+_ALIASES_ARGUMENTOS = {
+    "tipo_produto": "item",
+    "produto": "item",
+    "medicamento": "item",
+    "insumo": "item",
+    "ano_inicial": "ano_ini",
+    "ano_final": "ano_fim",
+    "doenca": "doenca_cod",
+}
 
 
 class OllamaIndisponivel(RuntimeError):
@@ -56,6 +77,18 @@ class OllamaIndisponivel(RuntimeError):
 def _mensagens_openai(mensagens: list[tuple[str, str]]) -> list[dict[str, str]]:
     papeis = {"human": "user", "system": "system", "assistant": "assistant"}
     return [{"role": papeis.get(papel, papel), "content": texto} for papel, texto in mensagens]
+
+
+def _normalizar_argumentos(ferramenta: str, argumentos: Any) -> dict[str, Any]:
+    if not isinstance(argumentos, dict):
+        return {}
+    permitidos = _ARGUMENTOS_PERMITIDOS.get(ferramenta, set())
+    normalizados: dict[str, Any] = {}
+    for chave, valor in argumentos.items():
+        chave_normalizada = _ALIASES_ARGUMENTOS.get(str(chave), str(chave))
+        if chave_normalizada in permitidos and chave_normalizada not in normalizados:
+            normalizados[chave_normalizada] = valor
+    return normalizados
 
 
 class LocalSusBotLLM:
@@ -122,7 +155,7 @@ class LocalSusBotLLM:
         return {
             "acao": "ferramenta",
             "ferramenta": plano["ferramenta"],
-            "argumentos": plano.get("argumentos") if isinstance(plano.get("argumentos"), dict) else {},
+            "argumentos": _normalizar_argumentos(plano["ferramenta"], plano.get("argumentos")),
         }
 
     def stream_resposta(
