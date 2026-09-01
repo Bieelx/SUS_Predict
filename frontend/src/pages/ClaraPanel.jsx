@@ -74,8 +74,6 @@ const SUSBOT_ROUTE_ALIASES = {
   '/epidemiologia': 'epidemiologia',
   internacoes: 'internacoes',
   '/internacoes': 'internacoes',
-  superlotacao: 'superlotacao',
-  '/superlotacao': 'superlotacao',
   'visao-geral': 'visao-geral',
   '/visao-geral': 'visao-geral',
 };
@@ -1385,12 +1383,12 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                 <button
                   type="button"
                   onClick={() => setViewMode('channels')}
-                  aria-label="Conectar ao Telegram"
-                  title="Conectar ao Telegram"
+                  aria-label="Conectar canal de mensagens"
+                  title="Conectar canal (Telegram, WhatsApp)"
                   className="susbot-channel-trigger"
                 >
-                  <MIcon m="send" size={16} />
-                  <span>Conectar Telegram</span>
+                  <MIcon m="hub" size={16} />
+                  <span>Conectar canal</span>
                 </button>
                 <button onClick={novaConversa} title="Nova conversa" className="susbot-icon-btn">
                   <MIcon m="edit_square" size={19} />

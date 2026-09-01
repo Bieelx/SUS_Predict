@@ -66,7 +66,7 @@ DataSusScrapper/
 ├── debug.py                   ← script auxiliar de depuração
 ├── Requirements.txt           ← deps do datasus.py (pysus, pandas, openpyxl, tqdm)
 ├── readme.MD                  ← documentação do datasus.py para o usuário final
-├── start_dev.sh               ← sobe backend + frontend juntos
+├── start_dev.sh               ← sobe só o frontend (backend roda no servidor Ubuntu)
 │
 ├── exports/                   ← saída do datasus.py (XLSXs exportados)
 ├── venv/                      ← ambiente virtual Python 3.12 (não modificar)
@@ -93,34 +93,54 @@ DataSusScrapper/
 
 ## Como rodar
 
-```bash
-# Tudo junto (recomendado)
-bash start_dev.sh
+**O backend não roda mais na máquina de desenvolvimento.** Ele é fixo, hospedado no
+servidor Ubuntu do grupo. No dia a dia você sobe apenas o frontend, e o Vite encaminha
+`/backend` para o servidor.
 
-# Separado — Terminal 1: backend
+```bash
+# macOS, Linux ou Windows (Git Bash / MSYS2)
+bash start_dev.sh
+```
+
+O script só precisa de Node.js (>= 18) e `npm` — sem venv, sem Python, sem `lsof`.
+Ele confere o `npm`, roda `npm install` se faltar `node_modules` e sobe o Vite na 3000.
+
+Configuração fica em `frontend/.env.local` (lido pelo próprio Vite via `loadEnv`, não
+pelo script). Copie de `frontend/.env.example` na primeira vez:
+
+| Variável               | Para que serve                                                     |
+|------------------------|--------------------------------------------------------------------|
+| `SUSBOT_PROXY_TARGET`  | URL do backend no Ubuntu — alvo do proxy `/backend` do Vite         |
+| `SUSBOT_API_KEY`       | Uma das chaves de `SUSBOT_API_KEYS` do servidor; injetada pelo proxy em `/api/susbot/perguntar` (sem prefixo `VITE_`, então não entra no bundle) |
+| `VITE_API_BASE`        | Base que o app usa no browser — `/backend` (mesma origem)           |
+
+URLs:
+- Frontend → http://localhost:3000
+- API → o que estiver em `SUSBOT_PROXY_TARGET`
+- Docs da API → `$SUSBOT_PROXY_TARGET/docs`
+
+### Rodar o backend localmente (raro — só pra mexer na API)
+
+```bash
+source venv/bin/activate            # Windows: source venv/Scripts/activate
 cd api
 pip install -r requirements_api.txt
 # Se for rodar testes: pip install -r requirements_dev.txt
 uvicorn main:app --reload --port 8000
-
-# Separado — Terminal 2: frontend
-cd frontend
-npm install
-npm run dev
 ```
 
-URLs:
-- Frontend → http://localhost:3000
-- API → http://localhost:8000
-- Docs da API → http://localhost:8000/docs
+Depois aponte `SUSBOT_PROXY_TARGET=http://127.0.0.1:8000` no `frontend/.env.local`.
 
-Para usar a Clara com Gemini, exporte também `GEMINI_API_KEY` antes de subir a API.
-Sem essa variável, o backend continua subindo, mas o agente fica sem o LLM real.
+Para a Clara com Gemini, o servidor precisa de `GEMINI_API_KEY`. Sem essa variável a API
+continua subindo, mas o agente fica sem o LLM real.
 
-Opcionalmente, exporte `GROQ_API_KEY` (e `GROQ_MODEL`, padrão `llama-3.3-70b-versatile`)
-para fallback automático: se o Gemini falhar (quota, erro de rede), a Clara cai pro Groq
-sem trocar de código (`api/core/susbot_agent.py::FallbackClaraLLM`). Se só `GROQ_API_KEY`
+Opcionalmente, `GROQ_API_KEY` (e `GROQ_MODEL`, padrão `llama-3.3-70b-versatile`) dá
+fallback automático: se o Gemini falhar (quota, erro de rede), a Clara cai pro Groq sem
+trocar de código (`api/core/susbot_agent.py::FallbackClaraLLM`). Se só `GROQ_API_KEY`
 estiver setada (sem Gemini), a Clara roda 100% no Groq.
+
+O túnel Cloudflare + registro de webhook do Telegram que o `start_dev.sh` fazia foi
+removido — isso agora é responsabilidade do servidor Ubuntu.
 
 ---
 

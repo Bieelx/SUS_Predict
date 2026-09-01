@@ -1,0 +1,796 @@
+                                     TELA VISÃO GERAL
+
+   •      Painel consolidado do SusPredict para o estado de São Paulo.
+   •      Integra sinais epidemiológicos (SINAN), pressão hospitalar (SIH) e risco de
+          suprimento de insumos (Ruptura de Insumos) em uma visão executiva única.
+   •      Ela resume indicadores-chave para gestores e permite drill-down municipal.
+
+
+
+MAPEAMENTO PROTÓTIPO x IMPLEMENTAÇÃO
+
+A tabela abaixo relaciona cada bloco do protótipo visual com o card/painel implementado e
+indica substituições acordadas.
+
+
+
+ Bloco do protótipo              Implementação v1               Observação
+ Card 01 — Casos notificados     CARD 01 — Casos notificados    Mantido. Fonte SINAN via
+                                                                resumo municipal.
+ Card 02 — Índice de risco       CARD 02 — Índice de risco      Mantido. Score composto 0–
+ regional                        regional                       100 (3 dimensões).
+ Card 03 — UBS em ruptura ou     CARD 03 — Municípios em        SUBSTITUÍDO. Não há
+ alerta                          alerta de suprimento           ruptura por UBS na base
+ Card 04 — Cobertura vacinal     CARD 04 — Internações SIH      SUBSTITUÍDO. Vacinação em
+ média                                                          pipeline separado; card usa
+                                                                pressão hospitalar.
+ Previsão de casos (Prophet +    Painel Evolução de casos       SUBSTITUÍDO. Histórico real
+ XGBoost)                                                       + tendência linear simples
+                                                                (sem ML).
+ Risco agregado (gauge + 4       Painel Risco agregado          Parcial. 3 dimensões (sem
+ dimensões)                                                     Vacinação).
+ Mapa de risco hexagonal (17     Painel Mapa por mesorregião    Parcial. 15 mesorregiões
+ regiões)                                                       IBGE; desenho hex fica no
+                                                                front.
+ Ruptura por categoria (donut)   Painel Ruptura por categoria   Mantido.
+ Alertas recentes — UTI > 90%    Alerta                         SUBSTITUÍDO. Sem base de
+                                 PRESSAO_HOSPITALAR             leitos; usa internações SIH
+                                                                elevadas.
+ Alertas recentes — Surto /      Alertas SURTO e INSUMO         Mantidos.
+ Insumo
+
+
+CHAVES DE FILTRO PARA O FRONT-END
+
+
+
+ Filtro                          Valores                        Comportamento
+ Território (cidade)             cod_ibge_completo = 'TODOS'    Drill-down municipal. Quase
+                                 (estado) ou código IBGE 7      todas as tabelas trazem linha
+                                 dígitos                        estadual + linhas municipais.
+ Periodicidade comparativa       Mes | Trimestre | Ano          Afeta variação % dos cards via
+                                                                visao_geral_kpis_periodo. Não
+                                                                altera competência de
+                                                                referência.
+ Agravo                          Fixo A90 / Dengue na v1        Coluna id_agravo em todas as
+                                                                tabelas.
+ Semana                          Não implementado               Filtro omitido de propósito.
+Query base recomendada (estado):
+
+SELECT * FROM visao_geral_kpis_atuais WHERE cod_ibge_completo = 'TODOS';
+
+
+
+Query base recomendada (município):
+
+SELECT * FROM visao_geral_kpis_atuais WHERE cod_ibge_completo = :cod_ibge;
+
+
+
+Query comparativa por periodicidade:
+
+SELECT * FROM visao_geral_kpis_periodo WHERE cod_ibge_completo = 'TODOS' AND
+periodo = 'Trimestre';
+
+
+
+GUIA RÁPIDO PARA OS DEVS
+
+A Visão Geral usa TRÊS tabelas diferentes para alimentar cada card. Confundir essas
+tabelas é a causa mais comum de bug visual (ex.: variação +500% com mini-gráfico
+caindo).
+
+
+
+Resumo:
+
+ Elemento do card                 Tabela Supabase               Quando usar
+ Número grande (valor             kpis_atuais OU kpis_periodo   Mes → kpis_atuais;
+ principal)                                                     Trimestre/Ano → kpis_periodo
+ Subtítulo de variação (+X% ou    Mesma linha acima             Colunas variacao_* da linha
+ +Y p.p.)                                                       selecionada
+ Mini-gráfico (sparkline) sob o   kpis_serie SEMPRE             Independente do filtro de
+ card                                                           periodicidade
+ Gauge + barras dimensionais      risco_agregado                Mês ref.; scores NULL no
+                                                                estado TODOS
+
+
+Regra : a sparkline NÃO representa a variação %.
+
+Ela mostra os últimos 12 meses mês a mês.
+
+A variação % compara totais de janelas (ex.: ano 2025 vs ano 2024).
+
+Ambas podem ser verdadeiras ao mesmo tempo.
+FILTROS — COMPORTAMENTO
+
+
+
+1. Filtro de CIDADE (cod_ibge_completo)
+
+ Valor                          Significado                     Efeito na UI
+ 'TODOS'                        Agregação estadual (SP          Cards somam/contam
+                                inteiro)                        municípios; header 'São Paulo
+                                                                (estado)'
+ IBGE 7 dígitos                 Um município                    Cards municipais; Card 03 vira
+                                                                Sim/Não (0 ou 1)
+
+
+Tabelas que DEVEM filtrar por cod_ibge_completo:
+
+• visao_geral_kpis_atuais, kpis_periodo, kpis_serie, risco_agregado, evolucao_casos (se
+houver linha)
+
+
+
+Tabelas SEM filtro municipal (visão estadual fixa):
+
+• mapa_mesorregiao, ruptura_categoria, alertas_recentes, competencia_referencia
+
+
+
+2. Filtro de PERIODICIDADE (Mes | Trimestre | Ano)
+
+
+
+Afeta apenas o NÚMERO GRANDE e a VARIAÇÃO % dos 4 cards. NÃO altera:
+competência ref., sparklines, mapa, donut, alertas, gauge (mês ref.).
+
+ periodo                 Número grande =         Comparado com          Tabela
+ Mes                     Valor do mês de         Mês anterior           kpis_atuais
+                         referência
+ Trimestre               Soma 3 meses até ref.   3 meses anteriores     kpis_periodo
+ Ano                     Soma 12 meses até       12 meses anteriores    kpis_periodo
+                         ref.
+
+
+Exemplo Adamantina + Ano + Card Internações:
+
+• Número: 102 (total 2025) | Variação: +500% (102 vs 17 em 2024) | Sparkline dez/25:
+1/mês
+
+Ano subiu, mas dezembro caiu — front deve explicar via tooltip/legenda.
+
+
+
+Matriz: o que muda com cada filtro
+
+ Componente                     Filtro cidade                   Filtro periodicidade
+ 4 cards — valor + variação     Sim                             Sim
+ 4 cards — sparkline            Sim                             Não (sempre 12 meses)
+ Risco agregado                 Sim                             Não
+ Evolução casos (grande)        Sim                           Não
+ Mapa / Donut / Alertas         Não                           Não
+
+
+MINI-GRÁFICOS (SPARKLINES) DOS 4 CARDS
+
+Tabela: visao_geral_kpis_serie — 12 meses × território.
+
+ Coluna                         Card                          Plot
+ casos_notificados              01                            Sparkline azul
+ indice_risco_regional          02                            Sparkline vermelha
+ municipios_alerta_suprimento   03                            Estado: contagem; Município:
+                                                              0/1
+ internacoes_sih                04                            Sparkline verde
+
+
+A sparkline NÃO reflete o % de variação do subtítulo.
+
+Legenda obrigatória: 'Evolução mensal (12 meses) — não reflete o comparativo do período'.
+
+
+
+Com filtro Mes, número grande e último ponto da sparkline devem coincidir.
+
+
+
+DIFERENÇA: sparkline × gráfico Evolução de casos
+
+                                Sparkline cards               Gráfico Evolução
+ Tabela                         kpis_serie                    evolucao_casos
+ Horizonte                      12 meses                      36 meses + 6 projeção
+ Métrica                        4 KPIs                        Só casos SINAN
+
+
+FLUXO DE IMPLEMENTAÇÃO
+
+Boot: competencia_referencia + kpis_atuais(TODOS) + kpis_serie(TODOS) +
+risco_agregado(TODOS)
+
+Mudar periodicidade → kpis_periodo(ibge, periodo); NÃO mudar query da sparkline
+
+Mudar cidade → refazer kpis_*, serie, risco; mapa/donut/alertas iguais
+
+
+
+BANNER — Competência de referência
+
+Reutiliza a mesma regra coerente da tela de Ruptura (SINAN >= 50% da mediana dos 6
+meses anteriores). O banner contextualiza todos os cards 'atuais'.
+
+
+
+Tabela: visao_geral_competencia_referencia
+
+
+
+Granularidade: 1 registro por carga (singleton).
+ Coluna                        Descrição                      Uso pelo dev
+ id_agravo                     Código do agravo. Fixo: A90.   Exibir no header ou metadado.
+ nome_agravo                   Nome do agravo. Fixo:          Subtítulo da tela.
+                               Dengue.
+ competencia_referencia        Mês oficial da visão geral     Banner principal; filtro implícito
+                               (DATE, 1º dia do mês).         dos cards atuais.
+ competencia_maxima_base       Último mês bruto presente na   Tooltip 'dados disponíveis até'.
+                               base.
+ motivo_referencia             Texto explicando               Tooltip ou linha secundária do
+                               escolha/descarte do mês.       banner.
+ data_processamento            Timestamp da carga.            Indicador 'dados em sincronia
+                                                              há X min'.
+Recomendações para o front-end
+
+• Carregar no boot da tela junto com visao_geral_kpis_atuais (TODOS).
+
+• Não permitir que o usuário altere a competência dos cards atuais.
+
+
+
+Primeiros cards, filtro de mes de referencia e todos municipios
+
+
+
+
+Filtro trimestre e cidade
+                              CARD 01 — Casos notificados
+
+
+
+
+Total de casos de dengue notificados (SINAN) no mês de referência. Exibe valor absoluto,
+variação percentual vs mês anterior e sparkline dos últimos 12 meses.
+
+
+
+Tabelas Supabase
+
+ Tabela                                          Papel no card
+ visao_geral_kpis_atuais                         Valor principal + variação vs mês anterior (visão
+                                                 default).
+ visao_geral_kpis_periodo                        Variação % quando usuário troca periodicidade
+                                                 (Mes/Trimestre/Ano).
+ visao_geral_kpis_serie                          Sparkline (últimos 12 meses).
+
+
+Colunas principais
+
+ Coluna                        Descrição                           Uso pelo dev
+ casos_notificados             Casos SINAN no período/mês          Número grande do card.
+                               analisado.
+ casos_notificados_anterior    Casos no período/mês anterior       Base da variação; não exibir
+                               equivalente.                        diretamente.
+ variacao_casos_pct            ((atual - anterior) / anterior) ×   Subtítulo '+12,4% vs mês
+                               100. NULL se anterior = 0.          anterior'. Exibir '-' se NULL.
+ competencia_referencia        Mês âncora.                         Metadado.
+ competencia                   Mês dos KPIs atuais (=              Metadado.
+                               referência).
+ cod_ibge_completo             'TODOS' ou IBGE 7 dígitos.          Filtro de cidade.
+ municipio / uf                Nome do território.                 Header contextual ('Cotia -
+                                                                   SP').
+
+
+Sparkline (visao_geral_kpis_serie)
+
+ Coluna                        Descrição                           Uso pelo dev
+ competencia                   Mês do ponto.                       Eixo X da sparkline.
+ casos_notificados             Casos no mês.                       Eixo Y da sparkline.
+ cod_ibge_completo            Território.                   Filtrar igual ao card.
+
+
+
+
+Recomendações para o front-end
+
+• Default: kpis_atuais + Mes + TODOS.
+
+• Periodicidade Trimestre/Ano → kpis_periodo; sparkline → kpis_serie sempre.
+
+• Ver seção MINI-GRÁFICOS para tooltip da sparkline.
+CARD 02 — Índice de risco regional
+
+
+
+
+Score composto 0–100 que sintetiza risco epidemiológico, pressão hospitalar e risco de
+suprimento. No estado, é média ponderada pela população municipal.
+
+Tabelas Supabase
+
+ Tabela                           Papel no card
+ visao_geral_kpis_atuais          Valor do card + variação em pontos percentuais (pp).
+ visao_geral_kpis_periodo         Variação comparativa por Mes/Trimestre/Ano.
+ visao_geral_kpis_serie           Sparkline do índice (12 meses).
+ visao_geral_risco_agregado       Medidor lateral + decomposição por dimensão.
+
+
+Colunas do card (visao_geral_kpis_atuais / kpis_periodo)
+
+ Coluna                        Descrição                     Uso pelo dev
+ indice_risco_regional         Score 0–100 do território.    Valor principal (ex.: 72%).
+ indice_risco_anterior         Score no período anterior.    Base da variação.
+ variacao_indice_risco_pp      Diferença em pontos           Subtítulo '+8,0 p.p. vs mês
+                               percentuais (atual -          anterior'.
+                               anterior).
+
+
+Regra de cálculo do índice composto (município)
+
+IMPORTANTE: os scores 0–100 NÃO são probabilidade de surto. São pontos em escala fixa
+atribuídos por regras (degraus). O índice final combina 3 dimensões com pesos.
+
+Fórmula do índice final (município):
+
+indice_risco_regional = 0,40 × score_epidemiologico + 0,30 × score_capacidade + 0,30 ×
+score_estoque_critico
+
+No estado (TODOS): média ponderada pelo POPULACAO de cada município (scores
+dimensionais ficam NULL).
+
+
+
+Faixas do índice (faixa_risco):
+
+ Faixa                         Condição                      Cor sugerida
+ ALTO                            indice >= 70                 Vermelho
+ MODERADO                        45 <= indice < 70            Âmbar
+ BAIXO                           indice < 45                  Azul claro
+
+
+
+
+DIMENSÃO 1 — score_epidemiologico (peso 40%)
+
+
+
+Passo 1: ratio_casos = casos do mês ÷ mediana dos casos dos 6 meses anteriores (mesmo
+município).
+
+Passo 2: score base por faixa:
+
+ ratio_casos / mediana 6m                       Score base
+ >= 1,5 (50% acima da mediana)                  90
+ >= 1,2                                         75
+ >= 1,0                                         60
+ >= 0,5                                         40
+ < 0,5 (inclui 0 casos)                         20
+
+
+Passo 3: bônus incidência: + min(incidencia_dengue_100k / 10 , 25). Teto final: 100.
+
+Exemplo: Adamantina dez/25 — 0 casos, ratio ≈ 0 → base 20 → score_epidemiologico = 20
+(pressão baixa).
+
+DIMENSÃO 2 — score_capacidade (peso 30%)
+
+Passo 1: ratio_internacoes = internações SIH do mês ÷ internações do mês anterior.
+
+Se mês anterior = 0 e mês atual > 0: tratar ratio como 1,5.
+
+Passo 2: score por faixa:
+
+ ratio_internacoes       Score             Interpretação
+ >= 1,5               85               Internações subiram >= 50%
+ >= 1,2               70               Alta moderada
+ >= 1,0               55               Estável ou leve alta
+ >= 0,8               35               Queda leve
+ < 0,8                20               Queda acentuada
+Exemplo: Adamantina dez/25 — 1 internação vs 1 em nov → ratio 1,0 → score_capacidade
+= 55.
+
+DIMENSÃO 3 — score_estoque_critico (peso 30%)
+
+Derivado da tela Ruptura (faixa por município × insumo). NÃO mede estoque físico.
+
+ Condição no município (mês ref.)      Score
+ Ao menos 1 insumo com                 90
+ ITENS_RISCO_ALTO > 0
+ Ao menos 1 insumo MODERADO ou         60
+ faixa_municipio MODERADO
+ Sem alerta relevante                  15
+Exemplo: Adamantina — alerta MODERADO → score_estoque_critico = 60.
+
+Exemplo completo — Adamantina, índice 42,5:
+
+0,40×20 + 0,30×55 + 0,30×60 = 8 + 16,5 + 18 = 42,5 → faixa BAIXO.
+
+Leitura: epidemia calma (20), hospital estável (55), mas suprimento em alerta (60).
+
+PAINEL RISCO AGREGADO — gauge e barras
+
+O medidorcentral e as barras dimensionais usam a MESMA regra de pontuação descrita
+acima para o Card 02. A diferença é de apresentação: o card mostra o índice + variação
+com sparkline; o painel lateral decompõe o índice nas 3 dimensões (barras horizontais).
+
+Tabela: visao_geral_risco_agregado (mês de referência, não responde a filtro
+Trimestre/Ano).
+
+ Coluna                        Descrição                      Uso pelo dev
+ indice_risco_regional         Score total (gauge central).   Valor grande do painel
+                                                              'Risco agregado'.
+ faixa_risco                   ALTO | MODERADO |              Cor do gauge.
+                               BAIXO.
+ score_epidemiologico          Dimensão epidemiológica        Barra/lista lateral. NULL no
+                               0–100.                         agregado estadual.
+ score_capacidade              Dimensão pressão               Barra/lista lateral. NULL no
+                               hospitalar 0–100.              agregado estadual.
+ score_estoque_critico         Dimensão suprimento 0–         Barra/lista lateral. NULL no
+                               100.                           agregado estadual.
+ cod_ibge_completo             Território.                    Filtrar por cidade.
+
+
+Recomendações para o front-end
+
+• Tooltip em cada barra dimensionais com a regra de pontuação (tabelas acima).
+
+• No estado (TODOS), exibir gauge com indice_risco_regional; omitir barras (scores NULL).
+• No município, exibir gauge + 3 barras com score_epidemiologico, score_capacidade,
+score_estoque_critico.
+
+• Nunca rotular como 'probabilidade de surto'; usar 'Índice composto analítico'.
+
+• Vacinação: dimensão omitida nesta versão (pipeline separado).
+
+
+
+
+CARD 03 — Municípios em alerta de suprimento
+
+
+
+
+SUBSTITUI o card do protótipo 'UBS em ruptura ou alerta'. Conta municípios com ao menos
+um insumo em risco ALTO ou MODERADO (mesma regra da tela Ruptura).
+
+Não representa contagem de UBS nem ruptura confirmada em unidade.
+
+Tabelas Supabase
+
+ Tabela                                         Papel no card
+ visao_geral_kpis_atuais                        Valor principal + variação.
+ visao_geral_kpis_periodo                       Comparativo por Mes/Trimestre/Ano.
+ visao_geral_kpis_serie                         Sparkline (histórico de municípios em
+                                                alerta).
+
+
+Colunas
+
+ Coluna                             Descrição                  Uso pelo dev
+ municipios_alerta_suprimento       Estado: contagem de        Valor do card.
+                                    municípios
+                                     ALTO/MODERADO.
+                                     Município: 0 ou 1.
+ cod_ibge_completo                   Território.                 Com filtro de cidade, card
+                                                                 vira indicador binário.
+
+
+ATENÇÃO: este card NÃO possui coluna variacao_* no schema.
+
+Exibir apenas o valor absoluto (ou Sim/Não no município), sem subtítulo de % ou p.p.
+
+Sparkline (visao_geral_kpis_serie)
+
+ Visão                 Comportamento da linha
+ Estado (TODOS)        Contagem mensal de municípios em alerta (0–645). Linha âmbar.
+ Município             Série binária 0 ou 1 por mês. Linha âmbar (degraus, não curva
+                       suave).
+
+
+Recomendações para o front-end
+
+• Label sugerido: 'Municípios em alerta de suprimento' (não usar 'UBS'.
+
+• Visão estadual: exibir contagem absoluta (ex.: 47 municípios).
+
+• Visão municipal: exibir 'Em alerta: Sim' se valor = 1; 'Não' se 0.
+
+• Link opcional para tela Ruptura de Insumos filtrada no município.
+
+
+
+
+CARD 04 — Internações SIH
+
+
+
+
+SUBSTITUI o card 'Cobertura vacinal média' (fora de escopo nesta versão). Mostra volume
+de internações hospitalares por dengue (SIH) e sua variação.
+
+Tabelas Supabase
+
+ Tabela                                           Papel no card
+ visao_geral_kpis_atuais                          Valor principal + variação vs mês anterior.
+ visao_geral_kpis_periodo                         Comparativo por Mes/Trimestre/Ano.
+ visao_geral_kpis_serie                           Sparkline de internacoes_sih (12 meses).
+Colunas
+
+ Coluna                         Descrição                     Uso pelo dev
+ internacoes_sih                Internações SIH dengue no     Valor principal do card.
+                                período/mês.
+ internacoes_sih_anterior       Internações no período        Base da variação.
+                                anterior.
+ variacao_internacoes_pct       Variação percentual. NULL     Subtítulo comparativo.
+                                se anterior = 0.
+
+
+Recomendações para o front-end
+
+• Ícone/cor distinta dos casos SINAN.
+
+• Com filtro Ano: número = soma anual; sparkline = meses — explicar no tooltip (ver seção
+Sparklines).
+
+• Vacinação: slot reservado para integração futura.
+
+FLUXO DE IMPLEMENTAÇÃO
+
+Ao carregar a tela:
+
+1. SELECT competencia_referencia FROM visao_geral_competencia_referencia;
+
+2. ibge = 'TODOS'; periodo = 'Mes';
+
+3. cards = SELECT * FROM visao_geral_kpis_atuais WHERE cod_ibge_completo = ibge;
+
+4. serie = SELECT * FROM visao_geral_kpis_serie WHERE cod_ibge_completo = ibge
+ORDER BY competencia;
+
+5. gauge = SELECT * FROM visao_geral_risco_agregado WHERE cod_ibge_completo =
+ibge;
+
+Ao mudar periodicidade para Trimestre ou Ano:
+
+cards = SELECT * FROM visao_geral_kpis_periodo WHERE cod_ibge_completo = ibge
+AND periodo = :periodo;
+
+// NÃO alterar query da sparkline
+
+Ao mudar cidade:
+
+// Refazer passos 3–5 com novo ibge; mapa/donut/alertas permanecem iguais
+
+TABELA AUXILIAR — KPIs comparativos por período
+
+Centraliza as variações quando o usuário alterna Mes / Trimestre / Ano. Estrutura espelha
+visao_geral_kpis_atuais, acrescida de colunas de janela temporal.
+
+Tabela: visao_geral_kpis_periodo
+
+Granularidade: 1 registro = 1 território × 1 período (3 períodos × (645 municípios + 1
+estado)).
+
+Períodos disponíveis
+ Valor periodo      Janela atual                    Janela anterior
+ Mes                Competência de referência       Mês imediatamente anterior
+ Trimestre          3 meses até a referência        3 meses imediatamente anteriores
+ Ano                12 meses até a referência       12 meses imediatamente anteriores
+
+
+ Coluna                           Descrição                         Uso pelo dev
+ periodo                          Mes | Trimestre | Ano.            Filtro do seletor de
+                                                                    periodicidade.
+ periodo_inicio / periodo_fim     Limites do período atual.         Subtítulo do painel.
+ periodo_inicio_anterior /        Limites do período anterior.      Tooltip de comparação.
+ periodo_fim_anterior
+ casos_notificados /              Mesmas métricas dos               Alimentam cards ao trocar
+ indice_risco_regional /          cards.                            periodicidade.
+ municipios_alerta_suprimento
+ / internacoes_sih
+ variacao_casos_pct /             Variações.                        Subtítulos dos cards.
+ variacao_indice_risco_pp /
+ variacao_internacoes_pct
+ cod_ibge_completo                Território.                       Filtro de cidade.
+
+
+
+
+Recomendações para o front-end
+
+• Ao trocar periodicidade, atualizar os 4 cards a partir desta tabela (mesmas colunas).
+
+• Mes no seletor equivale ao mês de referência vs mês anterior (não 'últimos 30 dias').
+
+PAINEL — Evolução de casos (substitui Prophet/XGBoost)
+
+
+
+
+Gráfico grande abaixo dos cards. Histórico real + linha de tendência (média móvel 3 meses
+no histórico; projeção simples +6 meses). NÃO usa Prophet/XGBoost.
+
+Tabela: visao_geral_evolucao_casos
+
+Granularidade: 1 registro = 1 território × 1 mês × tipo de série.
+Cobertura publicada: estado (TODOS) + top 20 municípios por casos no mês ref.
+
+ Coluna                        Descrição                      Uso pelo dev
+ competencia                   Mês do ponto.                  Eixo X.
+ casos_notificados             Casos reais (SINAN).           Linha sólida.
+                               Preenchido apenas em
+                               HISTORICO.
+ casos_tendencia               Tendência/ projeção linear.    Linha tracejada.
+ tipo_serie                    HISTORICO | PROJECAO.          Separar passado vs futuro
+                                                              no gráfico.
+ cod_ibge_completo             Território.                    Default 'TODOS'; filtrar ao
+                                                              selecionar cidade.
+ municipio                     Nome.                          Título do gráfico.
+
+
+Como montar o gráfico
+
+• Linha sólida (azul): casos_notificados WHERE tipo_serie = 'HISTORICO' — dados reais
+SINAN.
+
+• Linha tracejada (cinza ou azul claro): casos_tendencia — tendência suavizada (média
+móvel 3 meses no passado; extrapolação linear +6 meses no futuro).
+
+• Onde HISTORICO termina e PROJECAO começa: marcar divisão vertical no mês
+seguinte à competência de referência.
+
+• Rótulo: 'Tendência estimada' — nunca 'Prophet' ou 'XGBoost'.
+
+• Este gráfico NÃO responde ao filtro de periodicidade (Mes/Trimestre/Ano).
+
+Recomendações para o front-end
+
+• Se município selecionado não estiver nos top 20, fallback: visao_geral_kpis_serie (12
+meses, sem projeção).
+
+
+
+
+PAINEL — Mapa de risco por mesorregião
+Agregação territorial para mapa coroplético/hexagonal. Usa mesorregiões IBGE (15 regiões
+em SP), não as 17 regiões de saúde do protótipo.
+
+Tabela: visao_geral_mapa_mesorregiao
+
+Granularidade: 1 registro = 1 mesorregião × competência de referência.
+
+ Coluna                       Descrição                          Uso pelo dev
+ nome_mesorregiao             Nome IBGE da                       Chave do mapa / tooltip.
+                              mesorregião.
+ total_casos                  Casos SINAN somados na             Label numérico no tile.
+                              região.
+ total_internacoes            Internações SIH somadas.           Tooltip secundário.
+ municipios_monitorados       Municípios na região.              Tooltip.
+ municipios_alerta_suprimento Municípios                         Cor auxiliar ou badge.
+                              ALTO/MODERADO.
+ indice_risco_regional        Média do índice municipal.         Principal driver de cor.
+ faixa_risco                  ALTO | MODERADO |                  Paleta fixa de cores.
+                              BAIXO.
+ competencia_referencia       Mês ref.                           Metadado.
+
+
+Recomendações para o front-end
+
+• Mapear nome_mesorregiao → geometria/hex no layer estático do front.
+
+• Cor principal por faixa_risco ou gradiente por indice_risco_regional.
+
+
+
+PAINEL — Ruptura por categoria (donut)
+Distribuição percentual dos alertas de suprimento por categoria de insumo na competência
+de referência.
+
+Tabela: visao_geral_ruptura_categoria
+
+Granularidade: 1 registro = 1 categoria_insumo.
+
+ Coluna                         Descrição                    Uso pelo dev
+ categoria_insumo               Categoria                    Label do donut.
+                                clínica/farmacêutica.
+ itens_monitorados              Alertas (município ×         Valor absoluto tooltip.
+                                insumo) na categoria.
+ itens_risco_alto /             Contagem por faixa.          Detalhe tooltip.
+ itens_risco_moderado
+ municipios_afetados            Municípios distintos.        Detalhe tooltip.
+ pct_distribuicao               Percentual da categoria      Tamanho/fatia do donut.
+                                sobre total de alertas.
+ competencia_referencia         Mês ref.                     Metadado.
+
+
+Recomendações para o front-end
+
+• Somar pct_distribuicao deve ≈ 100% (arredondamentos podem dar 99,9–100,1).
+
+• Link para tela Ruptura com filtro de categoria opcional.
+
+
+
+
+PAINEL — Alertas recentes
+Feed unificado ranqueado de eventos críticos. Substituímos alerta de UTI > 90% por
+pressão hospitalar (internações SIH acima do mês anterior).
+
+Tabela: visao_geral_alertas_recentes
+
+Granularidade: até ~24 alertas por carga (8 surto + 8 insumo + 8 pressão).
+
+ Coluna                           Descrição                    Uso pelo dev
+ ordem                            Posição no feed (1 = mais    Ordenação fixa.
+                                  prioritário).
+ tipo_alerta                      SURTO | INSUMO |             Ícone/cor do card de alerta.
+                                  PRESSAO_HOSPITALAR.
+ severidade                       ALTA | MEDIA.                Badge.
+ titulo                           Título curto.                Headline do alerta.
+ mensagem                         Detalhe explicativo.         Corpo ou subtítulo.
+ cod_ibge_completo /              Território afetado.          Link para drill-down.
+ municipio
+ metrica_valor                    Casos, pontos de risco ou    Valor auxiliar opcional.
+                                  internações.
+ competencia_referencia           Mês ref.                     Timestamp relativo
+                                                               simulado no front.
+
+
+Regras de geração
+
+• SURTO: municípios com casos ≥ 150% da mediana 6 meses (top 8 por casos).
+
+• INSUMO: alertas ALTO da ruptura (top 8 por pontuação).
+
+• PRESSAO_HOSPITALAR: internações ≥ 130% do mês anterior (top 8).
+
+Recomendações para o front-end
+
+• Renderizar lista lateral ordenada por ordem ASC.
+
+• Ao clicar, aplicar filtro de cidade no restante do painel.
+
+
+
+TABELA AUXILIAR — Sparklines (visao_geral_kpis_serie)
+Ver seção dedicada 'MINI-GRÁFICOS (SPARKLINES) DOS 4 CARDS' no início deste
+documento. Resumo: 12 meses fixos; não segue filtro de periodicidade; não igual à variação
+%.
+
+ Coluna                          Card                              Sparkline
+ casos_notificados               01 Casos                          Linha azul
+ indice_risco_regional           02 Risco                          Linha vermelha
+ municipios_alerta_suprimento    03 Suprimento                     Linha âmbar
+ internacoes_sih                 04 Internações                    Linha verde
+
+
+COLUNAS COMUNS (todas as tabelas analíticas)
+
+ Coluna                                          Descrição
+ id_agravo                                       Fixo A90.
+ data_processamento                              Timestamp da carga; usar no indicador de
+                                                 sincronia.
+ cod_ibge_completo                               'TODOS' = visão estadual; caso contrário
+                                                 IBGE 7 dígitos.
+
+
+MAPA COMPLETO CARD → TABELA → COLUNA
+
+ Card / Painel          Tabela(s)                                 Coluna principal
+ Banner                 visao_geral_competencia_referencia        competencia_referencia,
+                                                                  motivo_referencia
+ Card 01 Casos          kpis_atuais / kpis_periodo / kpis_serie   casos_notificados,
+                                                                  variacao_casos_pct
+ Card 02 Risco          kpis_atuais / kpis_periodo / kpis_serie   indice_risco_regional,
+                        / risco_agregado                          variacao_indice_risco_pp
+ Card 03 Suprimento     kpis_atuais / kpis_periodo / kpis_serie   municipios_alerta_suprimento
+ Card 04 Internações    kpis_atuais / kpis_periodo / kpis_serie   internacoes_sih,
+                                                                  variacao_internacoes_pct
+ Gráfico evolução       evolucao_casos                            casos_notificados,
+                                                                  casos_tendencia, tipo_serie
+ Gauge risco            risco_agregado                            indice_risco_regional, score_*
+ Mapa                   mapa_mesorregiao                          indice_risco_regional,
+                                                                  faixa_risco
+ Donut categorias       ruptura_categoria                         pct_distribuicao,
+                                                                  categoria_insumo
+ Alertas                alertas_recentes                          ordem, tipo_alerta, titulo,
+                                                                  mensagem
+

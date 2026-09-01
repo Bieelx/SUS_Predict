@@ -3,6 +3,7 @@ import { authenticatedFetch } from './auth.js';
 import { assinarCacheSessao, lerCacheSessao, obterComCacheSessao } from './sessionCache.js';
 
 const CONSULTAS_INICIAIS = [
+  ['visao-geral', { ibge: 'TODOS', periodo: 'Mes' }],
   ['ruptura', { ibge: '351300', periodo: '12 Meses' }],
   ['epidemiologia', { ibge: '351300', periodo: '12 Meses' }],
   ['internacoes', { periodo: '12 Meses' }],

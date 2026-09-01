@@ -170,9 +170,73 @@ def epidemiologia(
     }
 
 
+@router.get("/visao-geral")
+def visao_geral(
+    ibge: str = Query(...),
+    periodo: str = Query("Mes"),
+    _user: dict = Depends(require_user),
+) -> dict[str, Any]:
+    periodos = {"Mes", "Trimestre", "Ano"}
+    if periodo not in periodos:
+        raise HTTPException(400, f"período inválido. Use um de: {sorted(periodos)}")
+    visao_estadual = str(ibge).upper() == "TODOS"
+    if visao_estadual:
+        codigo = "TODOS"
+        codigo7 = "TODOS"
+        municipio = {"cod_ibge_completo": "TODOS", "nome_municipio": "São Paulo (estado)"}
+    else:
+        codigo = _ibge6(ibge)
+        municipio = _municipio(codigo)
+        codigo7 = str(municipio.get("cod_ibge_completo") or "")
+
+    filtro_territorio = {"cod_ibge_completo": codigo7}
+    if periodo == "Mes":
+        kpis = _select("visao_geral_kpis_atuais", filtro_territorio)
+    else:
+        kpis = _select("visao_geral_kpis_periodo", {**filtro_territorio, "periodo": periodo})
+    serie = _select("visao_geral_kpis_serie", filtro_territorio, order="competencia.asc")
+    risco = _select("visao_geral_risco_agregado", filtro_territorio)
+    evolucao = _select("visao_geral_evolucao_casos", filtro_territorio, order="competencia.asc")
+    if not evolucao:
+        evolucao = [
+            {**item, "tipo_serie": "HISTORICO", "casos_tendencia": None}
+            for item in serie
+        ]
+    competencia = _select("visao_geral_competencia_referencia", limit=1)
+    mapa = _select("visao_geral_mapa_mesorregiao", order="indice_risco_regional.desc")
+    categorias = _select("visao_geral_ruptura_categoria", order="pct_distribuicao.desc")
+    alertas = _select("visao_geral_alertas_recentes", order="ordem.asc", limit=24)
+    grupos = (kpis, serie, risco, evolucao, competencia, mapa, categorias, alertas)
+    referencias = [
+        item.get("data_processamento") or item.get("competencia_referencia")
+        for grupo in grupos for item in grupo
+    ]
+    tabelas = [
+        "visao_geral_kpis_atuais" if periodo == "Mes" else "visao_geral_kpis_periodo",
+        "visao_geral_kpis_serie", "visao_geral_risco_agregado",
+        "visao_geral_evolucao_casos", "visao_geral_competencia_referencia",
+        "visao_geral_mapa_mesorregiao", "visao_geral_ruptura_categoria",
+        "visao_geral_alertas_recentes",
+    ]
+    return {
+        "meta": _meta(tabelas, referencias),
+        "municipio": {"ibge6": codigo, "ibge7": codigo7, "nome": municipio.get("nome_municipio"), "uf": "SP"},
+        "periodo": periodo,
+        "competencia": competencia[0] if competencia else None,
+        "kpis": kpis[0] if kpis else None,
+        "serie": serie,
+        "risco": risco[0] if risco else None,
+        "evolucao": evolucao,
+        "mapa_mesorregiao": mapa,
+        "ruptura_categorias": categorias,
+        "alertas": alertas,
+    }
+
+
 @router.get("/internacoes")
 def internacoes(
     periodo: str = Query("12 Meses"),
+    cnes: str = Query("TODOS"),
     _user: dict = Depends(require_user),
 ) -> dict[str, Any]:
     janela = _periodo(periodo)
@@ -184,9 +248,20 @@ def internacoes(
     top_municipios = _select("sih_dengue_top_municipios", filtros, order="ranking.asc")
     faixa = _select("sih_dengue_internacoes_faixa_etaria", filtros, order="ordem_faixa.asc")
 
-    consolidado = next((item for item in volume if item.get("cnes") == "TODOS"), None)
-    permanencia_total = next((item for item in permanencia if item.get("cnes") == "TODOS"), None)
-    mortalidade_total = next((item for item in mortalidade if item.get("cnes") == "TODOS"), None)
+    estabelecimentos = sorted(
+        (
+            {"cnes": str(item.get("cnes")), "razao_social": item.get("razao_social") or item.get("nome_hospital") or str(item.get("cnes"))}
+            for item in volume
+            if item.get("cnes") and item.get("cnes") != "TODOS"
+        ),
+        key=lambda item: item["razao_social"],
+    )
+    cnes_selecionado = str(cnes or "TODOS")
+    if cnes_selecionado != "TODOS" and not any(item["cnes"] == cnes_selecionado for item in estabelecimentos):
+        raise HTTPException(404, "Estabelecimento não encontrado na base SIH para o período selecionado")
+    consolidado = next((item for item in volume if str(item.get("cnes")) == cnes_selecionado), None)
+    permanencia_total = next((item for item in permanencia if str(item.get("cnes")) == cnes_selecionado), None)
+    mortalidade_total = next((item for item in mortalidade if str(item.get("cnes")) == cnes_selecionado), None)
     referencias = [
         item.get("data_referencia")
         for grupo in (volume, permanencia, mortalidade, top_hospitais, top_municipios, faixa)
@@ -203,6 +278,8 @@ def internacoes(
     return {
         "meta": _meta(tabelas, referencias),
         "periodo": janela,
+        "cnes": cnes_selecionado,
+        "estabelecimentos": estabelecimentos,
         "consolidado": consolidado,
         "permanencia": permanencia_total,
         "mortalidade": mortalidade_total,

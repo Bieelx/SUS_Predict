@@ -7,18 +7,17 @@ import { Badge, Card, MIcon, SectionTitle } from '../shared/ui.jsx';
 import { EstadoConsulta, FonteReal, Kpi, SeletorPeriodo, botao } from '../shared/dataUi.jsx';
 import { useDadosOperacionais } from '../shared/operationalClient.js';
 
-const IBGE_PADRAO = '351300';
 const numero = valor => Number(valor || 0);
 const inteiro = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 const decimal = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 const mes = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '');
 const mesLongo = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-export default function Epidemiologia({ demoState, onOpenClara }) {
+export default function Epidemiologia({ municipio, demoState, onOpenClara }) {
   const [periodo, setPeriodo] = useState('12 Meses');
   const { dados, carregando, erro, recarregar } = useDadosOperacionais(
     'epidemiologia',
-    { ibge: IBGE_PADRAO, periodo },
+    { ibge: municipio.ibge6, periodo },
     !demoState?.enabled,
   );
 
@@ -64,7 +63,7 @@ export default function Epidemiologia({ demoState, onOpenClara }) {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
           <h1 style={titulo}>Epidemiologia <span style={subtitulo}>— SINAN</span></h1>
-          <p style={descricao}>Casos de dengue em Cotia, SP.</p>
+          <p style={descricao}>Casos de dengue em {municipio.nome}, {municipio.uf}.</p>
         </div>
         <SeletorPeriodo value={periodo} onChange={setPeriodo} carregando={carregando} />
       </header>

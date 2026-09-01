@@ -1,51 +1,50 @@
 import { useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Badge, Card, MIcon, SectionTitle } from './ui.jsx';
 import { EstadoConsulta, FonteReal, Kpi, SeletorPeriodo, botao } from './dataUi.jsx';
 import { useDadosOperacionais } from './operationalClient.js';
 
-const IBGE_PADRAO = '351300';
 const n = valor => Number(valor || 0);
 const inteiro = valor => n(valor).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 const decimal = valor => n(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 const moeda = valor => n(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const riscoCor = risco => String(risco).toUpperCase() === 'ALTO' ? 'var(--risk-alto)' : String(risco).toUpperCase() === 'MODERADO' ? 'var(--risk-medio)' : 'var(--risk-baixo)';
 
-function useRuptura(periodo) {
-  return useDadosOperacionais('ruptura', { ibge: IBGE_PADRAO, periodo });
+function useRuptura(periodo, ibge) {
+  return useDadosOperacionais('ruptura', { ibge, periodo });
 }
 
-export function VisaoGeralReal({ onNavigate, onOpenClara, onDemo }) {
-  const periodo = '12 Meses';
-  const estado = useRuptura(periodo);
+export function VisaoGeralReal({ municipio, onNavigate, onDemo }) {
+  const [periodo, setPeriodo] = useState('Mes');
+  const [territorio, setTerritorio] = useState('TODOS');
+  const estado = useDadosOperacionais('visao-geral', { ibge: territorio, periodo });
   const dados = estado.dados;
-  const alertas = dados?.alertas || [];
-  const resumo = dados?.resumo;
-  if (!dados) return <div className="rise"><header style={header}><div><h1 style={titulo}>Visão Geral <span style={subtitulo}>— Cotia, SP</span></h1><p style={descricao}>O que exige atenção no planejamento de aquisições.</p></div><button onClick={onDemo} style={botao}>Abrir demo histórica</button></header><EstadoConsulta carregando={estado.carregando} erro={estado.erro} onRetry={estado.recarregar} /></div>;
-  const altos = alertas.filter(item => String(item.faixa_risco_aquisicao).toUpperCase() === 'ALTO');
-  const prioritario = alertas[0];
+  if (!dados) return <div className="rise"><header style={header}><div><h1 style={titulo}>Visão Geral</h1><p style={descricao}>Síntese executiva de dengue, pressão hospitalar e suprimento.</p></div><button onClick={onDemo} style={botao}>Abrir demo histórica</button></header><EstadoConsulta carregando={estado.carregando} erro={estado.erro} onRetry={estado.recarregar} /></div>;
+  const kpi = dados.kpis || {};
+  const serie = dados.serie || [];
+  const risco = dados.risco || {};
+  const periodoLabel = periodo === 'Mes' ? 'mês anterior' : periodo === 'Trimestre' ? 'trimestre anterior' : 'ano anterior';
+  const delta = (valor, unidade = '%') => valor == null ? 'Comparativo indisponível' : `${n(valor) >= 0 ? '+' : ''}${decimal(valor)}${unidade} vs. ${periodoLabel}`;
+  const cards = [
+    { label: 'Casos notificados', value: inteiro(kpi.casos_notificados), detail: delta(kpi.variacao_casos_pct), key: 'casos_notificados', color: 'var(--primary)' },
+    { label: 'Índice de risco regional', value: `${decimal(kpi.indice_risco_regional)}%`, detail: delta(kpi.variacao_indice_risco_pp, ' p.p.'), key: 'indice_risco_regional', color: 'var(--risk-alto)' },
+    { label: territorio === 'TODOS' ? 'Municípios em alerta de suprimento' : 'Em alerta de suprimento', value: territorio === 'TODOS' ? inteiro(kpi.municipios_alerta_suprimento) : (kpi.municipios_alerta_suprimento ? 'Sim' : 'Não'), detail: territorio === 'TODOS' ? 'Contagem estadual, sem variação percentual' : 'Indicador municipal, sem variação percentual', key: 'municipios_alerta_suprimento', color: 'var(--risk-medio)' },
+    { label: 'Internações SIH', value: inteiro(kpi.internacoes_sih), detail: delta(kpi.variacao_internacoes_pct), key: 'internacoes_sih', color: 'var(--good)' },
+  ];
+  const evolucao = (dados.evolucao || []).map(item => ({ ...item, competencia: String(item.competencia).slice(0, 7) }));
+  const categorias = dados.ruptura_categorias || [];
   return <div className="rise">
-    <header style={header}><div><h1 style={titulo}>Visão Geral <span style={subtitulo}>— {dados.municipio.nome}, {dados.municipio.uf}</span></h1><p style={descricao}>O que exige atenção no planejamento de aquisições.</p></div><button onClick={onDemo} style={botao}>Abrir demo histórica</button></header>
-    <FonteReal meta={dados.meta} detalhe={`Competência ${dados.competencia?.competencia_referencia || 'não informada'}`} />
+    <header style={header}><div><h1 style={titulo}>Visão Geral <span style={subtitulo}>— {dados.municipio.nome}, {dados.municipio.uf}</span></h1><p style={descricao}>Síntese executiva de dengue, pressão hospitalar e suprimento.</p></div><div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}><label><span className="eyebrow" style={{ display: 'block', marginBottom: 5 }}>Território</span><select value={territorio} onChange={e => setTerritorio(e.target.value)} style={selectCompacto}><option value="TODOS">São Paulo (estado)</option><option value={municipio.ibge6}>{municipio.nome}, {municipio.uf}</option></select></label><label><span className="eyebrow" style={{ display: 'block', marginBottom: 5 }}>Comparativo</span><select value={periodo} onChange={e => setPeriodo(e.target.value)} style={selectCompacto}><option>Mes</option><option>Trimestre</option><option>Ano</option></select></label><button onClick={onDemo} style={botao}>Abrir demo histórica</button></div></header>
+    <FonteReal meta={dados.meta} detalhe={`Competência ${dados.competencia?.competencia_referencia || 'não informada'} · A90 Dengue`} />
     <div className="responsive-grid-4" style={grid4}>
-      <Kpi rotulo="Itens em risco alto" valor={inteiro(resumo?.itens_risco_alto_atual ?? altos.length)} detalhe="Indicador de aquisição, não estoque físico" tom="var(--risk-alto)" />
-      <Kpi rotulo="Risco moderado" valor={inteiro(resumo?.itens_risco_moderado_atual)} detalhe="Itens que pedem acompanhamento" tom="var(--risk-medio)" />
-      <Kpi rotulo="Casos de dengue" valor={inteiro(resumo?.casos_atual)} detalhe={`${decimal(resumo?.variacao_casos_pct)}% vs. período anterior`} />
-      <Kpi rotulo="Valor adquirido" valor={moeda(resumo?.valor_adquirido_atual)} detalhe="Compras públicas identificadas" />
+      {cards.map(card => <Card key={card.key} className="p-5"><p className="eyebrow">{card.label}</p><strong style={{ display: 'block', color: card.color, font: '800 27px JetBrains Mono, monospace', margin: '8px 0 4px' }}>{card.value}</strong><p style={{ ...texto, margin: 0 }}>{card.detail}</p><ResponsiveContainer width="100%" height={48}><LineChart data={serie}><Line type="linear" dataKey={card.key} stroke={card.color} strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer><small style={microcopy}>Evolução mensal, 12 meses; independente do comparativo</small></Card>)}
     </div>
     <div className="responsive-grid-2" style={grid2}>
-      <Card className="p-5">
-        <p className="eyebrow">Situação prioritária</p>
-        <h2 style={{ fontSize: 19, margin: '8px 0' }}>{prioritario?.insumo_padronizado || 'Nenhum item crítico identificado'}</h2>
-        <p style={texto}>{prioritario?.mensagem_analitica || 'A fonte real não retornou alerta de aquisição para o município.'}</p>
-        {prioritario && <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}><button onClick={() => onNavigate?.('alertas')} style={primario}>Ver alertas</button><button onClick={() => onOpenClara?.(`Analise o risco de aquisição de ${prioritario.insumo_padronizado} em ${dados.municipio.nome}. Use apenas as fontes disponíveis e explique as limitações.`)} style={botao}>Analisar com Clara</button></div>}
-      </Card>
-      <Card className="p-5">
-        <SectionTitle>Leitura correta do indicador</SectionTitle>
-        <p style={texto}>As tabelas reais medem <strong>risco de aquisição</strong> a partir de dengue, internações e compras públicas. Elas não informam quantidade atual em almoxarifado nem dias de cobertura.</p>
-        <button onClick={() => onNavigate?.('insumos')} style={{ ...botao, marginTop: 14 }}>Explorar insumos monitorados</button>
-      </Card>
+      <Card className="p-5"><SectionTitle>Evolução de casos</SectionTitle><p style={texto}>Histórico SINAN e tendência estimada. O gráfico não muda com o comparativo dos cards.</p><ResponsiveContainer width="100%" height={270}><ComposedChart data={evolucao}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="competencia" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip /><Area dataKey="casos_notificados" fill="var(--primary)" fillOpacity={0.08} stroke="var(--primary)" /><Line dataKey="casos_tendencia" name="Tendência estimada" stroke="var(--ink-400)" strokeDasharray="6 4" dot={false} /></ComposedChart></ResponsiveContainer></Card>
+      <Card className="p-5"><SectionTitle>Índice composto analítico</SectionTitle><div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '18px 0' }}><strong style={{ font: '800 42px JetBrains Mono, monospace', color: riscoCor(risco.faixa_risco) }}>{decimal(risco.indice_risco_regional)}</strong><Badge label={risco.faixa_risco || 'SEM FAIXA'} color={riscoCor(risco.faixa_risco)} /></div><p style={texto}>Escala fixa de 0 a 100. Não representa probabilidade de surto.</p>{[['Epidemiológico', risco.score_epidemiologico], ['Pressão hospitalar', risco.score_capacidade], ['Suprimento', risco.score_estoque_critico]].filter(([, value]) => value != null).map(([label, value]) => <div key={label} style={{ marginTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}><span>{label}</span><strong>{decimal(value)}</strong></div><div style={track}><span style={{ ...fill, width: `${Math.min(100, n(value))}%` }} /></div></div>)}</Card>
     </div>
+    <div className="responsive-grid-2" style={grid2}><Card className="p-5"><SectionTitle>Risco por mesorregião</SectionTitle><div style={{ marginTop: 12 }}>{(dados.mapa_mesorregiao || []).slice(0, 8).map(item => <div key={item.nome_mesorregiao} style={linhaRanking}><span><strong>{item.nome_mesorregiao}</strong><small>{inteiro(item.total_casos)} casos · {inteiro(item.total_internacoes)} internações</small></span><Badge label={`${decimal(item.indice_risco_regional)} · ${item.faixa_risco}`} color={riscoCor(item.faixa_risco)} /></div>)}</div></Card><Card className="p-5"><SectionTitle>Alertas de suprimento por categoria</SectionTitle>{categorias.length ? <ResponsiveContainer width="100%" height={250}><PieChart><Pie data={categorias} dataKey="pct_distribuicao" nameKey="categoria_insumo" innerRadius={58} outerRadius={88}>{categorias.map((item, index) => <Cell key={item.categoria_insumo} fill={['var(--primary)', 'var(--risk-medio)', 'var(--risk-alto)', 'var(--good)', 'var(--info)'][index % 5]} />)}</Pie><Tooltip formatter={value => `${decimal(value)}%`} /></PieChart></ResponsiveContainer> : <Vazio texto="Distribuição por categoria indisponível." />}<button onClick={() => onNavigate?.('insumos')} style={botao}>Explorar insumos</button></Card></div>
+    <Card style={{ marginTop: 18, overflow: 'hidden' }}><div style={{ padding: '18px 20px 8px' }}><SectionTitle>Alertas recentes</SectionTitle></div>{(dados.alertas || []).slice(0, 8).map((item, index) => <article key={`${item.ordem}-${item.titulo}`} style={{ padding: '13px 20px', borderTop: '1px solid var(--ink-100)', display: 'flex', justifyContent: 'space-between', gap: 16 }}><span><strong style={{ fontSize: 13 }}>{item.titulo}</strong><small style={{ display: 'block', color: 'var(--ink-400)', marginTop: 3 }}>{item.mensagem}</small></span><Badge label={item.tipo_alerta} color={item.severidade === 'ALTA' ? 'var(--risk-alto)' : 'var(--risk-medio)'} /></article>)}</Card>
   </div>;
 }
 
@@ -72,9 +71,9 @@ export function AlertasReais({ onOpenClara, deepLinkAlertaId }) {
   </div>;
 }
 
-export function InsumosReais() {
+export function InsumosReais({ municipio }) {
   const [periodo, setPeriodo] = useState('12 Meses');
-  const estado = useRuptura(periodo);
+  const estado = useRuptura(periodo, municipio.ibge6);
   const dados = estado.dados;
   const serie = useMemo(() => {
     const mapa = new Map();
@@ -108,3 +107,8 @@ const grid2 = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))
 const primario = { ...botao, background: 'var(--primary)', borderColor: 'var(--primary)', color: 'white' };
 const th = { padding: '10px 16px', textAlign: 'left', fontSize: 10.5, color: 'var(--ink-400)', borderBottom: '1px solid var(--ink-100)', textTransform: 'uppercase', letterSpacing: '.04em' };
 const td = { padding: '13px 16px', fontSize: 12.5, color: 'var(--ink-700)', borderBottom: '1px solid var(--ink-100)' };
+const selectCompacto = { height: 36, border: '1px solid var(--ink-100)', borderRadius: 8, background: 'var(--elev)', color: 'var(--ink-700)', padding: '0 32px 0 10px' };
+const microcopy = { display: 'block', color: 'var(--ink-400)', fontSize: 9.5, marginTop: 3 };
+const track = { height: 6, marginTop: 5, borderRadius: 99, background: 'var(--ink-100)', overflow: 'hidden' };
+const fill = { display: 'block', height: '100%', borderRadius: 99, background: 'var(--primary)' };
+const linhaRanking = { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--ink-100)', fontSize: 12 };

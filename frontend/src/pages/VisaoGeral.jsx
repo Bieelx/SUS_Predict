@@ -629,7 +629,7 @@ function useAlertasNovosDesdeUltimoAcesso(alertas) {
 
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-export default function VisaoGeral({ onNavigate, onGerarEtp, onOpenClara, demoState }) {
+export default function VisaoGeral({ municipio: municipioSelecionado, onNavigate, onGerarEtp, onOpenClara, demoState }) {
   const demoAtiva = demoState?.enabled && demoState.payload;
   const municipio = obterMunicipioDemo(demoState, MUNICIPIO);
   const statusDemo = demoAtiva ? construirStatusDemo(demoState.payload) : STATUS;
@@ -642,7 +642,7 @@ export default function VisaoGeral({ onNavigate, onGerarEtp, onOpenClara, demoSt
   );
 
   if (!demoState?.enabled) {
-    return <VisaoGeralReal onNavigate={onNavigate} onOpenClara={onOpenClara} onDemo={() => demoState?.iniciarDemo?.()} />;
+    return <VisaoGeralReal municipio={municipioSelecionado} onNavigate={onNavigate} onOpenClara={onOpenClara} onDemo={() => demoState?.iniciarDemo?.()} />;
   }
 
   return (

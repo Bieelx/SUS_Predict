@@ -77,22 +77,30 @@ npm install
 
 ## Rodar o projeto
 
-### Opção A) Tudo junto (recomendado)
+### Opção A) Frontend + backend do servidor (recomendado)
+
+O backend é fixo, hospedado no servidor Ubuntu do grupo. No dia a dia você sobe só o
+frontend, e o Vite encaminha `/backend` para lá.
 
 ```bash
 bash start_dev.sh
 ```
 
-O script:
+O script (macOS, Linux e Windows via Git Bash / MSYS2):
 
-- Ativa `venv/` automaticamente.
-- Carrega variáveis do `.env` (se existir) e exporta para o processo.
-- Instala dependências do backend se necessário.
-- Sobe FastAPI em `http://localhost:8000`.
-- Sobe frontend em `http://localhost:3000`.
-- Mata processos antigos nas portas `8000`, `3000` e `3001` antes de subir.
+- Confere se há `npm` (Node.js >= 18).
+- Mostra o `SUSBOT_PROXY_TARGET` configurado em `frontend/.env.local`.
+- Roda `npm install` se `node_modules` não existir.
+- Sobe o Vite em `http://localhost:3000`.
 
-### Opção B) Separado
+Configure `frontend/.env.local` (copie de `frontend/.env.example`) com
+`SUSBOT_PROXY_TARGET` (URL do backend) e `SUSBOT_API_KEY` (uma das chaves de
+`SUSBOT_API_KEYS` do servidor). Quem lê esse arquivo é o Vite, não o script.
+
+### Opção B) Backend local (só pra mexer na API)
+
+Rode o backend você mesmo e aponte `SUSBOT_PROXY_TARGET=http://127.0.0.1:8000` no
+`frontend/.env.local`.
 
 Backend:
 
@@ -242,9 +250,9 @@ O frontend mostra o botão `Exportar XLSX` quando a análise está carregada.
 
 ## Dicas de desenvolvimento
 
-- Use `bash start_dev.sh` para evitar “esquecer” de ativar venv ou carregar `.env`.
+- `bash start_dev.sh` sobe apenas o frontend; o backend vem do servidor Ubuntu via `SUSBOT_PROXY_TARGET`.
 - A memória pessoal pode ser consultada com `/memoria` e apagada com `/esquecer`. A API autenticada também oferece `GET/DELETE /api/susbot/memoria`; ela nunca recebe um identificador de outro usuário como parâmetro.
-- Com as quatro variáveis do Telegram preenchidas, `start_dev.sh` instala ou reutiliza `cloudflared`, cria um Quick Tunnel HTTPS para a API e registra o webhook automaticamente. Use `ENABLE_TELEGRAM_TUNNEL=false` para desativar.
-- Se o frontend abrir em outra porta, pare os processos antigos e rode `bash start_dev.sh` de novo.
+- O Quick Tunnel do Cloudflare e o registro do webhook do Telegram saíram do `start_dev.sh` — hoje são responsabilidade do servidor Ubuntu, que tem URL pública fixa.
+- O Vite usa `--strictPort`: se a 3000 estiver ocupada ele falha em vez de mudar de porta. Encerre o processo antigo e rode de novo.
 - Para forçar re-download (ignorando cache), envie `usar_cache=false` no `POST /api/download`.
 - Para manter o projeto seguro, nunca exponha `SUPABASE_SERVICE_ROLE_KEY`.

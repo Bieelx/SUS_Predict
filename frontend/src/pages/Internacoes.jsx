@@ -10,7 +10,8 @@ const decimal = valor => numero(valor).toLocaleString('pt-BR', { maximumFraction
 
 export default function Internacoes({ demoState }) {
   const [periodo, setPeriodo] = useState('12 Meses');
-  const { dados, carregando, erro, recarregar } = useDadosOperacionais('internacoes', { periodo }, !demoState?.enabled);
+  const [cnes, setCnes] = useState('TODOS');
+  const { dados, carregando, erro, recarregar } = useDadosOperacionais('internacoes', { periodo, cnes }, !demoState?.enabled);
   const hospitais = (dados?.hospitais || []).map(item => ({ nome: item.nome_hospital || item.razao_social || item.cnes, internacoes: numero(item.internacoes) }));
   const municipios = dados?.municipios || [];
   const faixas = (dados?.faixa_etaria || []).map(item => ({ faixa: item.faixa_etaria, internacoes: numero(item.internacoes) }));
@@ -22,11 +23,19 @@ export default function Internacoes({ demoState }) {
           <h1 style={titulo}>Internações <span style={subtitulo}>— SIH</span></h1>
           <p style={descricao}>Pressão hospitalar por dengue no Estado de São Paulo, sem simulação de ocupação em tempo real.</p>
         </div>
-        <SeletorPeriodo value={periodo} onChange={setPeriodo} carregando={carregando} />
+        <div style={filtros}>
+          <label style={rotuloFiltro}>Estabelecimento
+            <select value={cnes} onChange={event => setCnes(event.target.value)} disabled={carregando} style={seletor}>
+              <option value="TODOS">Todos os estabelecimentos</option>
+              {(dados?.estabelecimentos || []).map(item => <option key={item.cnes} value={item.cnes}>{item.razao_social}</option>)}
+            </select>
+          </label>
+          <SeletorPeriodo value={periodo} onChange={value => { setPeriodo(value); setCnes('TODOS'); }} carregando={carregando} />
+        </div>
       </header>
       <EstadoConsulta carregando={carregando} erro={erro} onRetry={recarregar} />
       {dados && <>
-        <FonteReal meta={dados.meta} detalhe={`Consolidado estadual · ${periodo}`} />
+        <FonteReal meta={dados.meta} detalhe={`${cnes === 'TODOS' ? 'Todos os estabelecimentos' : dados.estabelecimentos?.find(item => item.cnes === cnes)?.razao_social || cnes} · ${periodo}`} />
         <div className="responsive-grid-3" style={grid3}>
           <Kpi rotulo="Internações" valor={inteiro(dados.consolidado?.internacoes_atual)} detalhe={dados.consolidado?.possui_base_comparacao ? `${decimal(dados.consolidado.variacao_percentual)}% vs. período anterior` : 'Consolidado SIH'} />
           <Kpi rotulo="Permanência média" valor={`${decimal(dados.permanencia?.permanencia_media_atual)} dias`} detalhe={dados.permanencia?.possui_base_comparacao ? `${decimal(dados.permanencia.diferenca_dias)} dias de diferença` : 'Sem base comparável'} />
@@ -78,3 +87,6 @@ const tabela = { width: '100%', borderCollapse: 'collapse' };
 const th = { padding: '10px 18px', textAlign: 'left', fontSize: 11, color: 'var(--ink-400)', borderBottom: '1px solid var(--ink-100)' };
 const td = { padding: '12px 18px', fontSize: 13, color: 'var(--ink-700)', borderBottom: '1px solid var(--ink-100)' };
 const nota = { fontSize: 11.5, lineHeight: 1.5, color: 'var(--ink-400)', margin: '14px 2px 0' };
+const filtros = { display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' };
+const rotuloFiltro = { display: 'grid', gap: 5, color: 'var(--ink-400)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' };
+const seletor = { minWidth: 260, maxWidth: 420, height: 36, border: '1px solid var(--ink-100)', borderRadius: 8, background: 'var(--elev)', color: 'var(--ink-700)', padding: '0 34px 0 10px', fontSize: 12.5 };

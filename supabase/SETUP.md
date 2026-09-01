@@ -21,5 +21,8 @@ Isso cria tabelas pequenas (agregadas) para não estourar os `0.5 GB` do Free Pl
 - `SUPABASE_SERVICE_ROLE_KEY`
 
 ### 5) Rodar
-Use `bash start_dev.sh`. Ele carrega `.env` automaticamente se existir.
+O `.env` da raiz é lido pelo backend, que roda no servidor Ubuntu — é lá que estas
+variáveis precisam estar. Para rodar o backend localmente:
+`source venv/bin/activate && cd api && uvicorn main:app --reload --port 8000`
+(o `start_dev.sh` sobe apenas o frontend).
 

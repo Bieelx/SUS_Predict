@@ -1,0 +1,99 @@
+                MODELO DIMENSIONAL STAR SCHEMA
+O diagrama abaixo ilustra o nosso modelo Star Schema, desenhado para centralizar
+as métricas de saúde e custos em uma única Tabela Fato. Essa estrutura conecta as
+notificações e as internações a cinco Dimensões: Período, Região, Estabelecimento,
+Paciente e Doença.
+                                    DICIONÁRIO DE DADOS
+O dicionário de dados abaixo apresenta a estrutura detalhada do nosso modelo Star
+Schema, desenvolvido para monitorar a pressão assistencial de arboviroses em São
+Paulo. Ele serve como um mapa para entender os dados e as métricas de custo e
+notificações.
+
+
+
+FATO_PRESSAO_ASSISTENCIAL
+
+Nome do Campo                      Tipo de Dado          Descrição
+id_fato                            Integer                Chave primária incremental da tabela fato.
+id_tempo                           Integer                Chave estrangeira para DIM_PERIODO.
+                                                          Chave estrangeira para DIM_REGIAO (Local
+id_localidade                      Varchar                de ocorrência).
+                                                          Chave estrangeira para
+id_estabelecimento                 Varchar                DIM_ESTABELECIMENTO (CNES).
+id_doenca                          Varchar                Chave estrangeira para DIM_DOENCA (CID).
+id_paciente                        Integer                Chave estrangeira para DIM_PACIENTE.
+valor_total_internacao             Decimal(12,2)          Valor total pago pela internação.
+                                                          Parcela do valor destinada a serviços
+valor_servico_hospitalar           Decimal(12,2)          hospitalares.
+                                                          Parcela do valor destinada a serviços
+val_sp                             Decimal(12,2)          profissionais.
+dias_permanencia                   Integer                Total de dias de internação do paciente.
+                                                          Quantidade de registros de notificação de
+qtd_notificacoes                   Integer                agravo.
+                                                          Quantidade de registros que evoluíram para
+qtd_obitos                         Integer                óbito.
+                                                          Indicador binário: 1 se houve uso de UTI, 0
+flag_uti                           Integer                caso contrário.
+                                                          Indicador binário: 1 se houve internação
+flag_hospitalizacao                Integer                hospitalar.
+                                                          Indicador binário: 1 se o paciente possuía
+flag_comorbidade                   Integer                comorbidade.
+
+
+DIM_PERIODO
+
+Nome do Campo Tipo de Dado                         Descrição
+period_id                Integer                   Chave primária da dimensão tempo.
+data                     Date                      Data completa do registro.
+trimestre                Varchar                   Identificação do trimestre (Ex: 1º Trimestre).
+semestre                 Varchar                   Identificação do semestre (Ex: 1º Semestre).
+sazonalidade         Varchar            Identificação de épocas.
+
+DIM_REGIAO
+
+Nome do Campo         Tipo de Dado         Descrição
+localidade_id         Varchar               Chave primária (Código IBGE do município).
+nome_municipio        Varchar               Nome oficial do município.
+                                            Nome da microrregião à qual o município
+microrregiao          Varchar               pertence.
+                                            Nome da mesorregião à qual o município
+mesorregiao           Varchar               pertence.
+uf                    Varchar               Sigla da Unidade Federativa.
+
+
+
+DIM_ESTABELECIMENTO
+
+Nome do Campo         Tipo de Dado Descrição
+                                       Chave primária (Código Cadastro Nac. Estabel. de
+cnes                  Varchar          Saúde).
+nome_hospital         Varchar          Nome fantasia da unidade de saúde.
+natureza_juridica     Varchar          Classificação jurídica do estabelecimento.
+tipo_gestao           Varchar          Tipo de gestão (Municipal, Estadual ou Federal).
+qtd_leitos_uti        Integer          Quantidade total de leitos de UTI disponíveis.
+                                       Indica se o hospital possui pronto-atendimento de
+indicador_urgencia    Varchar          urgência.
+
+
+
+DIM_PACIENTE
+
+Nome do Campo          Tipo de Dado        Descrição
+id_paciente            Integer             Chave primária da dimensão paciente.
+faixa_etaria           Varchar             Agrupamento de idade (Ex: 0-14 anos).
+sexo                   Varchar             Gênero do paciente (Masculino/Feminino).
+raca_cor               Varchar             Autodeclaração de raça/cor do paciente.
+escolaridade           Varchar             Nível de instrução formal do paciente.
+
+
+
+DIM_DOENCA
+
+Nome do Campo           Tipo de Dado      Descrição
+                                           Chave primária (Código Internacional de
+cid                     Varchar            Doenças).
+descricao_cid         Varchar   Nome oficial da doença segundo o CID-10.
+grupo_agravo          Varchar   Categoria do agravo (Ex: Arboviroses).
+                                Severidade da doença (Ex: Dengue com Sinais de
+classificacao_final   Varchar   Alarme).
+

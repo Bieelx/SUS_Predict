@@ -9,7 +9,6 @@ const Documentos = lazy(() => import('./pages/Documentos.jsx'));
 const Epidemiologia = lazy(() => import('./pages/Epidemiologia.jsx'));
 const Internacoes = lazy(() => import('./pages/Internacoes.jsx'));
 const Vacinacao = lazy(() => import('./pages/Vacinacao.jsx'));
-const Superlotacao = lazy(() => import('./pages/Superlotacao.jsx'));
 const PageConfiguracoes = lazy(() => import('./pages/Configuracoes.jsx'));
 const PagePerfil = lazy(() => import('./pages/Perfil.jsx'));
 const GeradorEtp = lazy(() => import('./pages/GeradorEtp.jsx'));
@@ -25,7 +24,7 @@ import { preCarregarDadosOperacionais } from './shared/operationalClient.js';
 // UX pedido pelo grupo: Configurações e Perfil saem do corpo principal e vão para
 // o footer da sidebar.
 //   OPERACIONAL (nível 1, uso diário)  → Visão Geral, Alertas, Insumos
-//   ANÁLISES    (nível 2, sob demanda) → Epidemiologia, Internações, Superlotação
+//   ANÁLISES    (nível 2, sob demanda) → Epidemiologia, Internações, Vacinação
 //   Documentos  (item isolado, discreto — histórico de ETPs)
 // Clara não é item de menu (flutuante). Cobertura Vacinal e Visão Estadual
 // ficam fora do menu no MVP (nem grayed-out) — ver seção "O que fica fora" do doc.
@@ -49,7 +48,6 @@ const NAV_ANALISES = [
   { id: 'epidemiologia', label: 'Epidemiologia', icon: 'coronavirus' },
   { id: 'internacoes',   label: 'Internações',   icon: 'bed' },
   { id: 'vacinacao',     label: 'Vacinação',     icon: 'vaccines' },
-  { id: 'superlotacao',  label: 'Superlotação',  icon: 'emergency' },
 ];
 
 const NAV_MOBILE_PRINCIPAL = [
@@ -73,7 +71,6 @@ const PAGE_PATHS = {
   epidemiologia: '/epidemiologia',
   internacoes: '/internacoes',
   vacinacao: '/vacinacao',
-  superlotacao: '/superlotacao',
   configuracoes: '/configuracoes',
   perfil: '/perfil',
 };
@@ -393,7 +390,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
           <LogoIcon size={42} />
           <div>
             <p>{tituloPagina}</p>
-            <span>{municipio.nome} · {municipio.uf}</span>
+            <span>{page === 'internacoes' ? 'Estado de São Paulo' : `${municipio.nome} · ${municipio.uf}`}</span>
           </div>
         </div>
 
@@ -409,6 +406,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
           </div>
         )}
 
+        {page !== 'internacoes' && <>
         <span className="eyebrow app-topbar-eyebrow" style={{ color: SB_SECTION }}>Município</span>
         <div className="app-municipio-picker" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <select
@@ -426,6 +424,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
             <MIcon m="expand_more" size={16} />
           </span>
         </div>
+        </>}
       </div>
 
       {/* Sino navega para a Central de Alertas. O badge de contagem vive só na
@@ -572,7 +571,6 @@ function DemoForaDoEscopo({ page, onNavigate }) {
   const titulo = {
     epidemiologia: 'Epidemiologia fora do replay',
     internacoes: 'Internações fora do replay',
-    superlotacao: 'Superlotação fora do replay',
     configuracoes: 'Configurações fora do replay',
     perfil: 'Perfil fora do replay',
   }[page] || 'Página fora do replay';
@@ -580,7 +578,6 @@ function DemoForaDoEscopo({ page, onNavigate }) {
   const subtitulo = {
     epidemiologia: 'A demo histórica cobre Visão Geral, Alertas e Insumos. As análises ficam bloqueadas neste modo.',
     internacoes: 'A demo histórica cobre Visão Geral, Alertas e Insumos. As análises ficam bloqueadas neste modo.',
-    superlotacao: 'A demo histórica cobre Visão Geral, Alertas e Insumos. As análises ficam bloqueadas neste modo.',
     configuracoes: 'A demo histórica não altera as configurações durante o replay.',
     perfil: 'O perfil real fica fora do replay histórico.',
   }[page] || 'Esta página não faz parte do replay histórico.';
@@ -740,7 +737,6 @@ export default function App() {
       import('./pages/Epidemiologia.jsx'),
       import('./pages/Internacoes.jsx'),
       import('./pages/Vacinacao.jsx'),
-      import('./pages/Superlotacao.jsx'),
       import('./pages/Documentos.jsx'),
     ]);
   }, [authStatus, demoEnabled]);
@@ -988,23 +984,22 @@ export default function App() {
   }
 
   function render() {
-    const foraDoEscopoDemo = demoEnabled && ['epidemiologia', 'internacoes', 'vacinacao', 'superlotacao', 'configuracoes', 'perfil'].includes(page);
+    const foraDoEscopoDemo = demoEnabled && ['epidemiologia', 'internacoes', 'vacinacao', 'configuracoes', 'perfil'].includes(page);
     if (foraDoEscopoDemo) {
       return <DemoForaDoEscopo page={page} onNavigate={navegar} />;
     }
 
     switch (page) {
-      case 'visao-geral':   return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
+      case 'visao-geral':   return <VisaoGeral municipio={municipioAtual} onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
       case 'alertas':       return <Alertas onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} deepLinkAlertaId={rota.alertaId} filtroInicial={rota.alertaTipo} onFiltroChange={alertaTipo => navegar({ page: 'alertas', alertaId: rota.alertaId, alertaTipo }, { replace: true })} onDeepLinkClose={() => navegar({ page: 'alertas', alertaTipo: rota.alertaTipo }, { replace: true })} />;
-      case 'insumos':       return <Insumos onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
+      case 'insumos':       return <Insumos municipio={municipioAtual} onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
       case 'documentos':    return <Documentos onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} documentos={documentosVisiveis} demoState={demoState} />;
-      case 'epidemiologia': return <Epidemiologia onNavigate={navegar} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
+      case 'epidemiologia': return <Epidemiologia municipio={municipioAtual} onNavigate={navegar} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
       case 'internacoes':   return <Internacoes onNavigate={navegar} demoState={demoState} />;
       case 'vacinacao':     return <Vacinacao onNavigate={navegar} demoState={demoState} />;
-      case 'superlotacao':  return <Superlotacao onNavigate={navegar} demoState={demoState} />;
       case 'configuracoes': return <PageConfiguracoes onNavigate={navegar} demoState={demoState} />;
       case 'perfil':        return <PagePerfil onNavigate={navegar} onLogout={handleLogout} demoState={demoState} />;
-      default:              return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
+      default:              return <VisaoGeral municipio={municipioAtual} onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
     }
   }
 

@@ -774,7 +774,7 @@ function GestaoEstoque({
 
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-export default function Insumos({ onNavigate, onGerarEtp, demoState }) {
+export default function Insumos({ municipio: municipioSelecionado, onNavigate, onGerarEtp, demoState }) {
   const demoAtiva = demoState?.enabled && demoState.payload;
   const municipio = obterMunicipioDemo(demoState, MUNICIPIO);
   const estoqueBase = demoAtiva && Array.isArray(demoState.payload?.insumos)
@@ -864,7 +864,7 @@ export default function Insumos({ onNavigate, onGerarEtp, demoState }) {
     setUploadPreview(false);
   };
 
-  if (!demoState?.enabled) return <InsumosReais />;
+  if (!demoState?.enabled) return <InsumosReais municipio={municipioSelecionado} />;
 
   if (view === 'crud') {
     return (

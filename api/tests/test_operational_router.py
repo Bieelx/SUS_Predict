@@ -38,6 +38,22 @@ def test_epidemiologia_consolida_tabelas_reais_sem_escrita(monkeypatch):
     assert all(chamada["table"].startswith("sinan_") or chamada["table"] == "ibge_sp" for chamada in chamadas)
 
 
+def test_visao_geral_estadual_usa_tabelas_documentadas(monkeypatch):
+    fake_select, chamadas = _fake_select_factory({
+        "visao_geral_kpis_atuais": [{"cod_ibge_completo": "TODOS", "casos_notificados": 3847}],
+        "visao_geral_kpis_serie": [{"competencia": "2025-12-01", "casos_notificados": 3847}],
+        "visao_geral_risco_agregado": [{"indice_risco_regional": 38.2}],
+    })
+    monkeypatch.setattr(operational, "_select", fake_select)
+
+    resposta = operational.visao_geral("TODOS", "Mes", {})
+
+    assert resposta["municipio"]["ibge7"] == "TODOS"
+    assert resposta["kpis"]["casos_notificados"] == 3847
+    assert resposta["risco"]["indice_risco_regional"] == 38.2
+    assert any(chamada["table"] == "visao_geral_kpis_atuais" for chamada in chamadas)
+
+
 def test_vacinacao_explica_escopo_estadual_e_nao_causal(monkeypatch):
     fake_select, _ = _fake_select_factory({
         "vacinacao_dengue_municipios": [{"doses_aplicadas": 156}],
@@ -51,6 +67,26 @@ def test_vacinacao_explica_escopo_estadual_e_nao_causal(monkeypatch):
     assert resposta["hospitalar_estadual"]["possui_amostragem_suficiente"] is False
     assert any("estadual" in texto for texto in resposta["limitacoes"])
     assert any("causalidade" in texto for texto in resposta["limitacoes"])
+
+
+def test_internacoes_filtra_indicadores_por_estabelecimento(monkeypatch):
+    fake_select, _ = _fake_select_factory({
+        "sih_dengue_interacoes_periodo": [
+            {"cnes": "TODOS", "internacoes_atual": 30},
+            {"cnes": "123", "razao_social": "Hospital Teste", "internacoes_atual": 7},
+        ],
+        "sih_dengue_permanencia_media_periodo": [{"cnes": "123", "permanencia_media_atual": 2.5}],
+        "sih_dengue_taxa_mortalidade_periodo": [{"cnes": "123", "taxa_mortalidade": 1.2}],
+    })
+    monkeypatch.setattr(operational, "_select", fake_select)
+
+    resposta = operational.internacoes("12 Meses", "123", {})
+
+    assert resposta["cnes"] == "123"
+    assert resposta["consolidado"]["internacoes_atual"] == 7
+    assert resposta["permanencia"]["permanencia_media_atual"] == 2.5
+    assert resposta["mortalidade"]["taxa_mortalidade"] == 1.2
+    assert resposta["estabelecimentos"] == [{"cnes": "123", "razao_social": "Hospital Teste"}]
 
 
 def test_epidemiologia_inclui_previsao_mensal_de_90_dias(monkeypatch):

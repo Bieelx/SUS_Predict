@@ -41,7 +41,6 @@ O provedor suportado nesta versão é `telegram`. A implementação inclui:
 | `api/core/susbot_memory.py` | Aprendizado, consulta e exclusão da memória pessoal criptografada |
 | `frontend/src/shared/susbotClient.js` | Cliente HTTP usado pela interface de conexão |
 | `frontend/src/pages/ClaraPanel.jsx` | Fluxo visual de conectar, confirmar e desconectar o Telegram |
-| `start_dev.sh` | Túnel HTTPS temporário e registro automático do webhook em desenvolvimento |
 
 Todas as rotas descritas abaixo usam o prefixo:
 
@@ -133,32 +132,15 @@ Execute o comando separadamente para `TELEGRAM_WEBHOOK_SECRET` e
 
 ### 5.4 Desenvolvimento local
 
-Com as quatro variáveis do Telegram preenchidas:
+A API roda fixa no servidor Ubuntu do grupo, com URL HTTPS estável, e o webhook fica
+registrado nela permanentemente (ver 5.5). O `start_dev.sh` sobe apenas o frontend e
+**não** cria mais túnel nem mexe no webhook — o Quick Tunnel do Cloudflare e o
+`setWebhook` automático foram removidos junto com o backend local.
 
-```bash
-bash start_dev.sh
-```
-
-O script:
-
-1. inicia a API em `http://localhost:8000`;
-2. instala ou reutiliza o `cloudflared` local;
-3. abre um Quick Tunnel HTTPS para a API;
-4. registra automaticamente o endpoint abaixo com `setWebhook`;
-5. limita os updates solicitados ao tipo `message`;
-6. remove o webhook temporário quando o script é encerrado normalmente.
-
-```text
-https://<subdominio-temporario>.trycloudflare.com/api/susbot/telegram/webhook
-```
-
-O túnel automático pode ser desativado:
-
-```dotenv
-ENABLE_TELEGRAM_TUNNEL=false
-```
-
-O Quick Tunnel é adequado apenas para desenvolvimento. Sua URL muda a cada execução.
+Para testar o Telegram contra uma API rodando na sua máquina, exponha-a você mesmo
+(por exemplo `cloudflared tunnel --url http://localhost:8000`) e registre o webhook na
+mão com `setWebhook`. Lembre de restaurar a URL do servidor depois — só um webhook
+pode estar ativo por bot.
 
 ### 5.5 Produção
 
@@ -584,7 +566,7 @@ curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
 
 4. confira `url`, `pending_update_count` e `last_error_message`;
 5. verifique os logs da API por `Falha ao processar mensagem do Telegram`;
-6. reinicie `start_dev.sh` se a URL temporária do túnel mudou.
+6. confirme que a `url` registrada é a do servidor Ubuntu (um túnel de teste local sobrescreve o webhook do bot inteiro).
 
 ### O webhook responde `403`
 
@@ -678,4 +660,3 @@ pytest -q api/tests
 - `frontend/src/shared/susbotClient.js`
 - `frontend/src/shared/susbotContract.js`
 - `frontend/src/pages/ClaraPanel.jsx`
-- `start_dev.sh`
