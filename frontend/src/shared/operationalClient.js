@@ -51,7 +51,11 @@ export function useDadosOperacionais(recurso, params, ativo = true) {
   const recarregar = useCallback(async (forcar = true) => {
     if (!ativo) return;
     const emCache = lerCacheSessao(chaveCache);
-    setEstado(anterior => ({ ...anterior, dados: anterior.dados || emCache || null, carregando: !anterior.dados && !emCache, erro: null }));
+    setEstado({
+      dados: forcar ? null : (emCache || null),
+      carregando: forcar || !emCache,
+      erro: null,
+    });
     try {
       const dados = await obterDadosOperacionais(recurso, params, { forcar });
       setEstado({ dados, carregando: false, erro: null });

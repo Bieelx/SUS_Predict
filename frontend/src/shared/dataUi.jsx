@@ -2,12 +2,17 @@ import { Card, MIcon } from './ui.jsx';
 
 export const PERIODOS_REAIS = ['Trimestre', 'Semestre', '12 Meses', '3 Anos', '5 Anos'];
 
-export function EstadoConsulta({ carregando, erro, onRetry }) {
+export function EstadoConsulta({ carregando, erro, onRetry, quantidadeCards = 4 }) {
   if (carregando) {
     return (
-      <div role="status" aria-live="polite" style={{ display: 'grid', gap: 12 }}>
-        <div className="skeleton" style={{ height: 112, borderRadius: 14 }} />
-        <div className="skeleton" style={{ height: 260, borderRadius: 14 }} />
+      <div role="status" aria-live="polite" aria-busy="true" className="loading-layout">
+        <div className={`loading-kpi-grid loading-kpi-grid--${quantidadeCards}`}>
+          {Array.from({ length: quantidadeCards }, (_, indice) => <KpiSkeleton key={indice} />)}
+        </div>
+        <div className="loading-panel-grid">
+          <PainelSkeleton />
+          <PainelSkeleton />
+        </div>
         <span className="sr-only">Consultando dados reais…</span>
       </div>
     );
@@ -23,6 +28,26 @@ export function EstadoConsulta({ carregando, erro, onRetry }) {
         </div>
         {onRetry && <button className="touch-target" onClick={onRetry} style={botao}>Tentar novamente</button>}
       </div>
+    </Card>
+  );
+}
+
+export function KpiSkeleton() {
+  return (
+    <Card className="p-5 loading-card" aria-hidden="true">
+      <span className="skeleton skeleton--label" />
+      <span className="skeleton skeleton--value" />
+      <span className="skeleton skeleton--detail" />
+      <span className="skeleton skeleton--sparkline" />
+    </Card>
+  );
+}
+
+export function PainelSkeleton() {
+  return (
+    <Card className="p-5 loading-card loading-card--panel" aria-hidden="true">
+      <span className="skeleton skeleton--heading" />
+      <span className="skeleton skeleton--chart" />
     </Card>
   );
 }

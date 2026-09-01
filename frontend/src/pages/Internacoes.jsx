@@ -33,7 +33,7 @@ export default function Internacoes({ demoState }) {
           <SeletorPeriodo value={periodo} onChange={value => { setPeriodo(value); setCnes('TODOS'); }} carregando={carregando} />
         </div>
       </header>
-      <EstadoConsulta carregando={carregando} erro={erro} onRetry={recarregar} />
+      <EstadoConsulta carregando={carregando} erro={erro} onRetry={recarregar} quantidadeCards={3} />
       {dados && <>
         <FonteReal meta={dados.meta} detalhe={`${cnes === 'TODOS' ? 'Todos os estabelecimentos' : dados.estabelecimentos?.find(item => item.cnes === cnes)?.razao_social || cnes} · ${periodo}`} />
         <div className="responsive-grid-3" style={grid3}>

@@ -4,7 +4,10 @@ import urllib.error
 
 import pytest
 
-from api.core.local_llm import LocalClaraLLM, OllamaIndisponivel, PLANO_SCHEMA
+from api.core.local_llm import (
+    LocalClaraLLM, OllamaIndisponivel, PLANEJADOR_SYSTEM,
+    PLANO_SCHEMA, RESPOSTA_SYSTEM,
+)
 
 
 class FakeResponse:
@@ -46,6 +49,7 @@ def test_planejamento_usa_api_nativa_schema_e_normaliza_responder(monkeypatch):
     assert requisicao["url"] == "http://127.0.0.1:11434/api/chat"
     assert requisicao["payload"]["format"] == PLANO_SCHEMA
     assert requisicao["payload"]["stream"] is False
+    assert requisicao["payload"]["options"] == {"temperature": 0, "num_predict": 192}
     assert requisicao["timeout"] == 91
     assert plano == {"acao": "resposta", "resposta": ""}
 
@@ -89,14 +93,33 @@ def test_planejamento_normaliza_alias_e_remove_ibge_dos_argumentos(monkeypatch):
 
 
 def test_resposta_repassa_chunks_sem_bufferizar(monkeypatch):
+    requisicao = {}
     linhas = [
         b'data: {"choices":[{"delta":{"content":"Ola"}}]}\n',
         b'data: {"choices":[{"delta":{"content":" mundo"}}]}\n',
         b'data: [DONE]\n',
     ]
-    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: FakeResponse(lines=linhas))
+    def urlopen(req, **_kwargs):
+        requisicao["payload"] = json.loads(req.data)
+        return FakeResponse(lines=linhas)
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
     llm = LocalClaraLLM()
     assert list(llm.stream_resposta("oi", {}, {}, None)) == ["Ola", " mundo"]
+    assert requisicao["payload"]["messages"][0]["content"] == RESPOSTA_SYSTEM
+    assert requisicao["payload"]["temperature"] == 0.1
+    assert requisicao["payload"]["max_tokens"] == 512
+
+
+def test_prompts_locais_cobrem_regras_criticas_para_modelo_pequeno():
+    assert "JSON" in PLANEJADOR_SYSTEM
+    assert "palavras genéricas" in PLANEJADOR_SYSTEM.lower()
+    assert "confirmação humana" in PLANEJADOR_SYSTEM
+    assert "única fonte" in RESPOSTA_SYSTEM
+    assert "não informa ocupação" in RESPOSTA_SYSTEM
+    assert "não comprovam estoque físico" in RESPOSTA_SYSTEM
+    assert "não probabilidade de surto" in RESPOSTA_SYSTEM
+    assert "dados de outro usuário" in RESPOSTA_SYSTEM
 
 
 def test_conexao_recusada_vira_erro_operacional(monkeypatch):
