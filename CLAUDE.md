@@ -114,13 +114,13 @@ URLs:
 - API → http://localhost:8000
 - Docs da API → http://localhost:8000/docs
 
-Para usar o SusBot com Gemini, exporte também `GEMINI_API_KEY` antes de subir a API.
+Para usar a Clara com Gemini, exporte também `GEMINI_API_KEY` antes de subir a API.
 Sem essa variável, o backend continua subindo, mas o agente fica sem o LLM real.
 
 Opcionalmente, exporte `GROQ_API_KEY` (e `GROQ_MODEL`, padrão `llama-3.3-70b-versatile`)
-para fallback automático: se o Gemini falhar (quota, erro de rede), o SusBot cai pro Groq
-sem trocar de código (`api/core/susbot_agent.py::FallbackSusBotLLM`). Se só `GROQ_API_KEY`
-estiver setada (sem Gemini), o SusBot roda 100% no Groq.
+para fallback automático: se o Gemini falhar (quota, erro de rede), a Clara cai pro Groq
+sem trocar de código (`api/core/susbot_agent.py::FallbackClaraLLM`). Se só `GROQ_API_KEY`
+estiver setada (sem Gemini), a Clara roda 100% no Groq.
 
 ---
 
@@ -231,7 +231,7 @@ Estado atual: arquivo único de ~1860 linhas, React 18 + Recharts + Vite (Tailwi
 mais o sistema de estilo predominante — o protótipo atual usa CSS-in-JS inline com
 variáveis de tema). Sidebar fixa com navegação por páginas (`visao-geral`,
 `epidemiologia`, `internacoes`, `vacinal`, `superlotacao`, `insumos`, `alertas`,
-`configuracoes`, `perfil`), chat flutuante do SusBot (`<FloatingChat>`) e gate de login
+`configuracoes`, `perfil`), chat flutuante da Clara (`<FloatingChat>`) e gate de login
 simples (`authed` em `useState`, sem JWT real). **Todos os dados são mock** — nenhuma
 página faz `fetch`/`axios` para a API.
 
@@ -278,6 +278,6 @@ tela). Resumo de alto nível:
    em `docs/telas/`, aguardando implementação
 5. Implementar as telas do redesenho no `App.jsx` (o protótipo mock atual será
    descartado — ver seção de redesenho no topo deste arquivo)
-6. Integrar API do Gemini para geração de insights textuais automáticos (SusBot Fase 1,
+6. Integrar API do Gemini para geração de insights textuais automáticos (Clara Fase 1,
    Camada 2 de [docs/telas/01-visao-geral.md](./docs/telas/01-visao-geral.md))
 7. Autenticação simples para o grupo conseguir usar sem expor a API publicamente

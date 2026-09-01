@@ -10,10 +10,10 @@ export function isSusbotQuestionPath(rawUrl = '') {
 
 function warnProxyConfiguration({ proxyTarget, proxyApiKey }) {
   if (!proxyTarget) {
-    console.warn('[SusBot proxy] SUSBOT_PROXY_TARGET ausente; /backend nao sera encaminhado.')
+    console.warn('[Clara proxy] SUSBOT_PROXY_TARGET ausente; /backend nao sera encaminhado.')
   }
   if (!proxyApiKey) {
-    console.warn('[SusBot proxy] SUSBOT_API_KEY ausente; o endpoint /api/susbot/perguntar retornara 401.')
+    console.warn('[Clara proxy] SUSBOT_API_KEY ausente; o endpoint /api/susbot/perguntar retornara 401.')
   }
 }
 
@@ -25,9 +25,9 @@ async function checkProxyTarget(proxyTarget) {
       method: 'HEAD',
       signal: AbortSignal.timeout(5000),
     })
-    console.info(`[SusBot proxy] target acessivel (HTTP ${response.status}).`)
+    console.info(`[Clara proxy] target acessivel (HTTP ${response.status}).`)
   } catch (error) {
-    console.warn(`[SusBot proxy] target inacessivel: ${error?.message || 'falha de conexao'}. Verifique o Quick Tunnel e reinicie o Vite.`)
+    console.warn(`[Clara proxy] target inacessivel: ${error?.message || 'falha de conexao'}. Verifique o Quick Tunnel e reinicie o Vite.`)
   }
 }
 
@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => {
 
               req.susbotApiKeyInjected = headerInjected
               if (matchesEndpoint) {
-                console.info('[SusBot proxy] proxyReq', {
+                console.info('[Clara proxy] proxyReq', {
                   hasApiKey: Boolean(proxyApiKey),
                   apiKeyLength: proxyApiKey?.length || 0,
                   url: req.url,
@@ -70,7 +70,7 @@ export default defineConfig(({ mode }) => {
               }
             })
             proxyServer.on('error', error => {
-              console.warn(`[SusBot proxy] falha ao acessar o target: ${error?.message || 'erro desconhecido'}.`)
+              console.warn(`[Clara proxy] falha ao acessar o target: ${error?.message || 'erro desconhecido'}.`)
             })
           },
         },

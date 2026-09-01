@@ -1,4 +1,4 @@
-# Implantação local do SusBot para a banca
+# Implantação local da Clara para a banca
 
 Este roteiro ativa o backend no Ubuntu sem expor o Ollama nem abrir portas no roteador. Execute os comandos no servidor, dentro do `venv` Python 3.12 do projeto.
 
@@ -12,6 +12,12 @@ SUSBOT_LOCAL_BASE_URL=http://127.0.0.1:11434/v1
 SUSBOT_LOCAL_MODEL=susbot-3b
 SUSBOT_API_KEYS=uma-chave-por-pessoa-separada-por-virgula
 SUSBOT_CORS_ORIGINS=https://susbot.seudominio.com
+CLARA_STT_PROVIDER=local
+CLARA_STT_MODEL=small
+CLARA_STT_DEVICE=cpu
+CLARA_STT_COMPUTE_TYPE=int8
+CLARA_AUDIO_MAX_SECONDS=120
+CLARA_AUDIO_MAX_BYTES=10485760
 ```
 
 Gere cada chave com o Python 3.12 do `venv`:
@@ -19,6 +25,16 @@ Gere cada chave com o Python 3.12 do `venv`:
 ```bash
 ./venv/bin/python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
+
+Instale a transcrição e baixe o modelo uma vez no servidor, ainda durante a preparação:
+
+```bash
+./venv/bin/pip install -r api/requirements_api.txt
+./venv/bin/python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')"
+```
+
+Depois desse download, defina `CLARA_STT_LOCAL_FILES_ONLY=true` para garantir que a
+demonstração não dependa da internet para carregar o modelo.
 
 Quando `SUSBOT_API_KEYS` estiver vazio, a camada adicional de chave fica desativada para desenvolvimento local. A autenticação normal do SusPredict continua obrigatória. O cliente web aceita a chave na opção `apiKey` de `conversarComSusbot`; não grave chaves no repositório.
 
@@ -48,10 +64,11 @@ Crie o Cloudflare Tunnel seguindo o painel/CLI da conta e adapte `deploy/cloudfl
 
 ## 4. Ensaio antes da banca
 
-- reinicie o servidor e confirme que Ollama, SusBot e cloudflared sobem sozinhos;
+- reinicie o servidor e confirme que Ollama, Clara e cloudflared sobem sozinhos;
 - confirme que `/health` responde sem autenticação, mas `/api/susbot/perguntar` recusa chave inválida;
 - teste duas pessoas e o limite de 10 perguntas por minuto por chave;
 - teste uma pergunta conceitual que usa o modelo e uma consulta de estoque que segue o caminho determinístico;
+- envie um áudio curto pelo Telegram, confira a transcrição exibida e a resposta textual;
 - confira `free -h`, `ollama ps`, `nvidia-smi` e os logs dos dois serviços;
 - mantenha Tailscale apenas para administração e não abra portas no roteador.
 

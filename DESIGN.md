@@ -40,10 +40,10 @@ estrutura própria para toque:
 
 - Cabeçalho fixo de `64px`: marca, nome da página, município ativo e acesso a alertas.
 - Navegação inferior de `72px` mais a safe area do aparelho.
-- Destinos primários ao alcance do polegar: Visão, Alertas, Insumos e SusBot.
+- Destinos primários ao alcance do polegar: Visão, Alertas, Insumos e Clara.
 - O quinto destino, Mais, abre uma folha inferior com Análises, Documentos,
   Configurações e Perfil. Nenhuma função é removida no celular.
-- SusBot ocupa a tela inteira quando aberto, como uma tarefa focada, e esconde seu
+- Clara ocupa a tela inteira quando aberto, como uma tarefa focada, e esconde seu
   FAB porque o acesso já existe na navegação inferior.
 - O azul do shell continua como canvas. O conteúdo ocupa um grande card claro,
   com calha curta e cantos generosos, em vez de tocar as bordas da tela.

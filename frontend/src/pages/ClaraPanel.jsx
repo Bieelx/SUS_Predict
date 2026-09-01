@@ -14,14 +14,14 @@ import {
 } from '../shared/susbotClient.js';
 import { getSusbotPageLabel } from '../shared/susbotContract.js';
 
-// ─── Tela 08 — Painel de Conversa do SusBot ────────────────────────────────────
+// ─── Tela 08 — Painel de Conversa da Clara ────────────────────────────────────
 //
 // Dock lateral direito (não modal, não bolha) — o dashboard segue visível por
 // trás. Conversas são threads discretas (não uma linha do tempo única): fechar
 // o painel [x] apenas esconde, "Nova conversa" arquiva a atual no histórico e
-// abre uma em branco, nada é apagado. Ver docs/telas/08-painel-susbot.md.
+// abre uma em branco, nada é apagado. Ver docs/telas/08-painel-clara.md.
 //
-// Integrado ao backend do SusBot via SSE. O layout continua o mesmo; o que saiu
+// Integrado ao backend da Clara via SSE. O layout continua o mesmo; o que saiu
 // foi o roteamento local de resposta por palavra-chave.
 
 let idSeq = 0;
@@ -36,19 +36,19 @@ const SUGESTOES = [
   'Como está a tendência de dengue no município?',
 ];
 
-const ERRO_SUSBOT_PADRAO ='Não consegui consultar o SusBot agora. Tente novamente em instantes.';
+const ERRO_SUSBOT_PADRAO ='Não consegui consultar a Clara agora. Tente novamente em instantes.';
 const SUSBOT_IBGE6_PADRAO = '351300';
 
 function mensagemErroSusbot(error) {
   const detalhe = String(error?.detail || error?.responseText || error?.message || '');
   if (/chave do susbot inv[aá]lida/i.test(detalhe)) {
     if (error?.proxyApiKeyInjected === false) {
-      return 'O proxy local não enviou a chave do SusBot. Configure SUSBOT_API_KEY no .env.local e reinicie o frontend.';
+      return 'O proxy local não enviou a chave da Clara. Configure SUSBOT_API_KEY no .env.local e reinicie o frontend.';
     }
     if (error?.proxyApiKeyInjected === true) {
       return 'O servidor rejeitou a chave enviada pelo proxy. Confirme se SUSBOT_API_KEY corresponde a uma chave ativa no backend e reinicie o frontend.';
     }
-    return 'O servidor não aceitou a chave do SusBot. Verifique a configuração de acesso do ambiente.';
+    return 'O servidor não aceitou a chave da Clara. Verifique a configuração de acesso do ambiente.';
   }
   if (error?.status === 429 || /limite do susbot/i.test(detalhe)) {
     return 'O limite de consultas deste acesso foi atingido. Aguarde um minuto e tente novamente.';
@@ -236,7 +236,7 @@ function criarThreadVazia() {
 // Marca do bot: monograma tipográfico, não avatar de robô. O produto fala em
 // vozes editoriais (mono para meta, Inter Tight para título) — o assistente segue a
 // mesma gramática em vez do vocabulário genérico de chatbot.
-function SusBotMark({ size = 30 }) {
+function ClaraMark({ size = 30 }) {
   return (
     <span style={{
       width: size, height: size, borderRadius: Math.round(size * 0.3),
@@ -415,7 +415,7 @@ function ConfirmacaoAcao({ msg, onConfirmar, onCancelar }) {
         </p>
       )}
       <p style={{ margin: '5px 0 0', fontSize: 11.5, color: 'var(--ink-500)', lineHeight: 1.45 }}>
-        O SusBot não executa esta ação sem sua autorização. Você pode cancelar sem alterar o alerta.
+        A Clara não executa esta ação sem sua autorização. Você pode cancelar sem alterar o alerta.
       </p>
       {!confirmacao.resolvido ? (
         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -479,7 +479,7 @@ function Bolha({ msg, onNavigate, onConfirmar, onCancelar }) {
     <div style={{ borderLeft: `2px solid ${cor}`, paddingLeft: 13 }}>
       <p style={{ ...ROTULO_META, display: 'flex', alignItems: 'center', gap: 5, color: isErro ? cor : 'var(--ink-400)' }}>
         {isErro && <MIcon m="error" size={12} />}
-        {isErro ? 'não foi possível responder' : 'SusBot'}
+        {isErro ? 'não foi possível responder' : 'Clara'}
       </p>
       <div style={{
         marginTop: 5, fontSize: 13, lineHeight: 1.6,
@@ -709,13 +709,13 @@ function ContinuidadeCanais({ ibge6 }) {
 
           {pareamento?.status === 'emitido' && (
             <div style={{ marginTop: 12, padding: '14px', borderRadius: 10, background: 'var(--primary-soft)' }}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--ink-900)' }}>1. Abra o SusBot no Telegram</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--ink-900)' }}>1. Abra a Clara no Telegram</p>
               <p style={{ margin: '5px 0 12px', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-500)' }}>
                 No celular, toque no botão. Em outro dispositivo, escaneie o QR Code. Este convite expira em 10 minutos e funciona uma vez.
               </p>
               {pareamento.deep_link ? (
                 <div className="susbot-channel-connect-options">
-                  <div className="susbot-channel-qr" aria-label="QR Code para abrir o SusBot no Telegram">
+                  <div className="susbot-channel-qr" aria-label="QR Code para abrir a Clara no Telegram">
                     <QRCode value={pareamento.deep_link} size={148} bgColor="#fbfaf7" fgColor="#1a1814" />
                   </div>
                   <div className="susbot-channel-connect-actions">
@@ -773,7 +773,7 @@ function ContinuidadeCanais({ ibge6 }) {
 
 // ─── Componente principal ───────────────────────────────────────────────────
 
-export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChange, openRequest = null }) {
+export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChange, openRequest = null }) {
   const [open, setOpen] = useState(false);
   const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history' | 'channels'
   const [threads, setThreads] = useState([]);
@@ -1334,7 +1334,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
         role="dialog"
         aria-modal={open ? 'true' : undefined}
         aria-hidden={!open}
-        aria-label="Painel do SusBot"
+        aria-label="Painel da Clara"
         className="susbot-panel-shell"
         style={{
           // Card destacado: afastado de todas as bordas, na mesma caixa visual
@@ -1364,10 +1364,10 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <SusBotMark size={30} />
+              <ClaraMark size={30} />
               <div>
                 <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', lineHeight: 1.15, fontFamily: 'var(--ff-tight)' }}>
-                  SusBot
+                  Clara
                 </p>
                 <p style={{ ...ROTULO_META, marginTop: 2 }}>
                   {getSusbotPageLabel(page)}
@@ -1482,7 +1482,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                 icone={canalHistorico === 'telegram' ? 'send' : 'forum'}
                 titulo={canalHistorico === 'telegram' ? 'Nenhuma conversa do Telegram' : 'Nenhuma conversa do app'}
                 texto={canalHistorico === 'telegram'
-                  ? 'Depois de conectar o Telegram e conversar com o SusBot, as sessões aparecem aqui.'
+                  ? 'Depois de conectar o Telegram e conversar com a Clara, as sessões aparecem aqui.'
                   : 'Quando você fizer uma pergunta pelo app, a conversa aparece aqui.'}
               />
             ) : (
@@ -1549,7 +1549,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                     }
                   }}
                     placeholder="Pergunte sobre este município…"
-                    aria-label="Mensagem para o SusBot"
+                    aria-label="Mensagem para a Clara"
                   style={{
                     width: '100%', fontSize: 13, border: 'none', outline: 'none', padding: 0,
                     color: 'var(--ink-900)', background: 'transparent', resize: 'none',
@@ -1564,7 +1564,7 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
                     onClick={() => enviar()}
                     disabled={!input.trim() || enviando}
                     title="Enviar"
-                    aria-label="Enviar mensagem ao SusBot"
+                    aria-label="Enviar mensagem à Clara"
                     style={{
                       width: 30, height: 30, borderRadius: 9, border: 'none', flexShrink: 0,
                       cursor: input.trim() && !enviando ? 'pointer' : 'default',
@@ -1591,8 +1591,8 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          title="SusBot — assistente"
-          aria-label="Abrir SusBot"
+          title="Clara — assistente"
+          aria-label="Abrir Clara"
           className="susbot-panel-fab"
           style={{
             position: 'fixed', width: 48, height: 48, borderRadius: '50%',
@@ -1610,4 +1610,4 @@ export function SusBotPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenCha
   );
 }
 
-export default SusBotPanel;
+export default ClaraPanel;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../shared/ui.jsx';
-import { authenticatedFetch } from '../shared/auth.js';
+import { authenticatedFetch, getCurrentUser } from '../shared/auth.js';
 
 // CardHead não é exportado por shared/ui.jsx (é específico de Configurações/Perfil
 // no protótipo original) — declarado localmente para não acoplar os dois módulos.
@@ -33,11 +33,12 @@ function fmtDataHora(iso) {
 }
 
 export default function PagePerfil({ onNavigate, onLogout }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(getCurrentUser);
   const [erro, setErro] = useState('');
-  const [carregando, setCarregando] = useState(true);
+  const [carregando, setCarregando] = useState(() => !getCurrentUser());
 
   useEffect(() => {
+    if (user) return;
     authenticatedFetch('/api/auth/me')
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Falha ao carregar perfil.');
@@ -46,7 +47,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
       .then(setUser)
       .catch((e) => setErro(e.message))
       .finally(() => setCarregando(false));
-  }, []);
+  }, [user]);
 
   const email = user?.email || 'marcia.oliveira@cotia.sp.gov.br';
   const nome = user?.user_metadata?.nome || email.split('@')[0];

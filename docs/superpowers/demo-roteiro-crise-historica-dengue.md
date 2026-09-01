@@ -49,7 +49,7 @@ Fala curta:
 O que mostrar:
 
 - O selo `Demo historica`.
-- O briefing do SusBot.
+- O briefing da Clara.
 - O status atual da cidade.
 - A prova de valor ainda em estado inicial.
 
@@ -139,7 +139,7 @@ O que mostrar:
 - [ ] O link de abertura carrega a demo historica.
 - [ ] A faixa de transparencia aparece na Visao Geral.
 - [ ] O corte temporal e visivel em todas as telas core.
-- [ ] O SusBot mostra briefing curto e orientado a acao.
+- [ ] A Clara mostra briefing curto e orientado a acao.
 - [ ] O alerta muda para `Em andamento` depois do ETP.
 - [ ] Insumos mostra item critico, dias restantes e economia.
 - [ ] O fechamento cabe em no maximo 7 minutos.

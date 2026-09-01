@@ -18,6 +18,9 @@ sqlglot>=25.0.0
 langgraph>=0.2.0
 langchain-google-genai>=2.0.0
 
+# Voz para texto local da Clara (carregado somente quando chega um áudio)
+faster-whisper>=1.1.0,<2.0.0
+
 # Testes
 pytest>=8.0.0
 

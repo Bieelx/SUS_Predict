@@ -13,10 +13,11 @@ const Superlotacao = lazy(() => import('./pages/Superlotacao.jsx'));
 const PageConfiguracoes = lazy(() => import('./pages/Configuracoes.jsx'));
 const PagePerfil = lazy(() => import('./pages/Perfil.jsx'));
 const GeradorEtp = lazy(() => import('./pages/GeradorEtp.jsx'));
-const SusBotPanel = lazy(() => import('./pages/SusBotPanel.jsx').then(modulo => ({ default: modulo.SusBotPanel })));
+const ClaraPanel = lazy(() => import('./pages/ClaraPanel.jsx').then(modulo => ({ default: modulo.ClaraPanel })));
 import { DOCUMENTOS_INICIAIS } from './shared/etp.js';
 import { obterIbgeDemo, obterMunicipioDemo } from './shared/demo.js';
-import { signOut, validateSession } from './shared/auth.js';
+import { getCurrentUser, signOut, validateSession } from './shared/auth.js';
+import { preCarregarDadosOperacionais } from './shared/operationalClient.js';
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 //
@@ -26,7 +27,7 @@ import { signOut, validateSession } from './shared/auth.js';
 //   OPERACIONAL (nível 1, uso diário)  → Visão Geral, Alertas, Insumos
 //   ANÁLISES    (nível 2, sob demanda) → Epidemiologia, Internações, Superlotação
 //   Documentos  (item isolado, discreto — histórico de ETPs)
-// SusBot não é item de menu (flutuante). Cobertura Vacinal e Visão Estadual
+// Clara não é item de menu (flutuante). Cobertura Vacinal e Visão Estadual
 // ficam fora do menu no MVP (nem grayed-out) — ver seção "O que fica fora" do doc.
 
 // Tokens da sidebar — apontam para CSS variables tematizadas (ver THEMES)
@@ -212,12 +213,28 @@ function SidebarFooterAction({ item, active, onClick }) {
   );
 }
 
-function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled }) {
+function nomeDoUsuario(user) {
+  const metadata = user?.user_metadata || {};
+  const nomeInformado = metadata.nome || metadata.full_name || metadata.name;
+  if (nomeInformado?.trim()) return nomeInformado.trim();
+  const identificador = String(user?.email || '').split('@')[0].replace(/[._-]+/g, ' ').trim();
+  if (!identificador) return 'Usuário';
+  return identificador.replace(/\b\p{L}/gu, letra => letra.toLocaleUpperCase('pt-BR'));
+}
+
+function iniciaisDoUsuario(nome) {
+  const partes = String(nome).trim().split(/\s+/).filter(Boolean);
+  return `${partes[0]?.[0] || 'U'}${partes.length > 1 ? partes.at(-1)[0] : ''}`.toLocaleUpperCase('pt-BR');
+}
+
+function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
   // Abre já expandido quando a página ativa é de Análises — chegar em
   // Epidemiologia por um link de card e não ver o item destacado no menu é
   // desorientador. Reabre também quando a navegação vem de fora da sidebar.
   const emAnalises = NAV_ANALISES.some(i => i.id === current);
   const [analisesOpen, setAnalisesOpen] = useState(emAnalises);
+  const nomeUsuario = nomeDoUsuario(user);
+  const iniciaisUsuario = iniciaisDoUsuario(nomeUsuario);
   useEffect(() => { if (emAnalises) setAnalisesOpen(true); }, [emAnalises]);
 
   // Recolhida, a sidebar continua montada e só translada para fora (o menu não
@@ -295,12 +312,12 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled }) {
 
       {/* Footer */}
       <div style={{ padding: '12px 20px 18px', borderTop: '1px solid rgba(44,74,71,0.12)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3DB887', flexShrink: 0, animation: 'dot-pulse 2.4s ease-in-out infinite' }} />
-          <span style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION }}>
-            {demoEnabled ? 'Replay histórico ativo' : 'Dados em sincronia · há 8 min'}
-          </span>
-        </div>
+        {demoEnabled && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3DB887', flexShrink: 0, animation: 'dot-pulse 2.4s ease-in-out infinite' }} />
+            <span style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION }}>Replay histórico ativo</span>
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <SidebarFooterAction
             item={{ id: 'configuracoes', label: 'Configurações', icon: 'settings' }}
@@ -319,10 +336,10 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled }) {
             }}
           >
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--sb-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'white', flexShrink: 0 }}>
-              MO
+              {iniciaisUsuario}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--sb-strong)', lineHeight: 1.2, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Márcia Oliveira</p>
+              <p title={nomeUsuario} style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--sb-strong)', lineHeight: 1.2, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nomeUsuario}</p>
               <p style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION, margin: 0 }}>SMS · ADMIN</p>
             </div>
           </button>
@@ -429,7 +446,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
   );
 }
 
-function MobileBottomNav({ current, alertasBadge, maisAberto, onNav, onOpenSusBot, onToggleMais }) {
+function MobileBottomNav({ current, alertasBadge, maisAberto, onNav, onOpenClara, onToggleMais }) {
   const paginaSecundaria = NAV_MOBILE_SECUNDARIA.some(item => item.id === current);
 
   return (
@@ -461,11 +478,11 @@ function MobileBottomNav({ current, alertasBadge, maisAberto, onNav, onOpenSusBo
         <button
           type="button"
           className="mobile-bottom-nav__item mobile-bottom-nav__susbot"
-          aria-label="Abrir SusBot"
-          onClick={onOpenSusBot}
+          aria-label="Abrir Clara"
+          onClick={onOpenClara}
         >
           <span className="mobile-bottom-nav__icon mobile-bottom-nav__susbot-mark">SB</span>
-          <span>SusBot</span>
+          <span>Clara</span>
         </button>
 
         <button
@@ -540,10 +557,12 @@ function MobileMoreSheet({ current, aberta, demoEnabled, onClose, onNav }) {
           ))}
         </div>
 
-        <p className="mobile-more-sheet__status">
-          <span aria-hidden="true" />
-          {demoEnabled ? 'Replay histórico ativo' : 'Dados em sincronia · há 8 min'}
-        </p>
+        {demoEnabled && (
+          <p className="mobile-more-sheet__status">
+            <span aria-hidden="true" />
+            Replay histórico ativo
+          </p>
+        )}
       </section>
     </>
   );
@@ -609,7 +628,7 @@ function DemoForaDoEscopo({ page, onNavigate }) {
 // ─── App ─────────────────────────────────────────────────────────────────────
 //
 // Shell puro: autenticação, tema, roteamento por página e montagem dos
-// elementos sempre presentes (SusBot flutuante, Gerador de ETP). Nenhuma
+// elementos sempre presentes (Clara flutuante, Gerador de ETP). Nenhuma
 // tela de conteúdo é implementada aqui — cada uma vive em `src/pages/`.
 
 // Tokens semânticos fixos (independentes de tema) — ver DESIGN.md "Color Strategy".
@@ -657,12 +676,13 @@ async function lerJson(response, fallback) {
 
 export default function App() {
   const [authStatus, setAuthStatus] = useState('checking');
+  const [authUser, setAuthUser] = useState(getCurrentUser);
   const [rota, setRota] = useState(lerRotaAtual);
   const page = rota.page;
   const [themeId, setThemeId] = useState('teal');
   const [etpOrigem, setEtpOrigem] = useState(null);
   const [etpAtivado, setEtpAtivado] = useState(false);
-  const [susBotOpenRequest, setSusBotOpenRequest] = useState(null);
+  const [claraOpenRequest, setClaraOpenRequest] = useState(null);
   const [chatAberto, setChatAberto] = useState(false);
   const [mobileMaisAberto, setMobileMaisAberto] = useState(false);
   const [viewportCompacto, setViewportCompacto] = useState(
@@ -685,6 +705,7 @@ export default function App() {
     media.addEventListener('change', sincronizar);
     return () => media.removeEventListener('change', sincronizar);
   }, []);
+
   function alternarSidebar() {
     setSidebarAberta(aberta => {
       const proxima = !aberta;
@@ -710,10 +731,28 @@ export default function App() {
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
 
   useEffect(() => {
+    if (authStatus !== 'authenticated' || demoEnabled) return;
+    void Promise.allSettled([
+      preCarregarDadosOperacionais(),
+      import('./pages/VisaoGeral.jsx'),
+      import('./pages/Alertas.jsx'),
+      import('./pages/Insumos.jsx'),
+      import('./pages/Epidemiologia.jsx'),
+      import('./pages/Internacoes.jsx'),
+      import('./pages/Vacinacao.jsx'),
+      import('./pages/Superlotacao.jsx'),
+      import('./pages/Documentos.jsx'),
+    ]);
+  }, [authStatus, demoEnabled]);
+
+  useEffect(() => {
     let ativo = true;
     async function verificarSessao() {
       const user = await validateSession();
-      if (ativo) setAuthStatus(user ? 'authenticated' : 'unauthenticated');
+      if (ativo) {
+        setAuthUser(user);
+        setAuthStatus(user ? 'authenticated' : 'unauthenticated');
+      }
     }
     void verificarSessao();
     const intervalo = window.setInterval(verificarSessao, 5 * 60 * 1000);
@@ -728,6 +767,7 @@ export default function App() {
 
   async function handleLogout() {
     await signOut();
+    setAuthUser(null);
     setAuthStatus('unauthenticated');
   }
   const municipioDemo = demoEnabled ? obterMunicipioDemo(demo, MUNICIPIOS[0]) : null;
@@ -939,7 +979,10 @@ export default function App() {
   if (authStatus !== 'authenticated') {
     return (
       <Suspense fallback={<CarregandoPagina />}>
-        <LoginScreen onEnter={() => setAuthStatus('authenticated')} />
+        <LoginScreen onEnter={user => {
+          setAuthUser(user || getCurrentUser());
+          setAuthStatus('authenticated');
+        }} />
       </Suspense>
     );
   }
@@ -951,26 +994,26 @@ export default function App() {
     }
 
     switch (page) {
-      case 'visao-geral':   return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
-      case 'alertas':       return <Alertas onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} deepLinkAlertaId={rota.alertaId} filtroInicial={rota.alertaTipo} onFiltroChange={alertaTipo => navegar({ page: 'alertas', alertaId: rota.alertaId, alertaTipo }, { replace: true })} onDeepLinkClose={() => navegar({ page: 'alertas', alertaTipo: rota.alertaTipo }, { replace: true })} />;
+      case 'visao-geral':   return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
+      case 'alertas':       return <Alertas onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} deepLinkAlertaId={rota.alertaId} filtroInicial={rota.alertaTipo} onFiltroChange={alertaTipo => navegar({ page: 'alertas', alertaId: rota.alertaId, alertaTipo }, { replace: true })} onDeepLinkClose={() => navegar({ page: 'alertas', alertaTipo: rota.alertaTipo }, { replace: true })} />;
       case 'insumos':       return <Insumos onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
       case 'documentos':    return <Documentos onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} documentos={documentosVisiveis} demoState={demoState} />;
-      case 'epidemiologia': return <Epidemiologia onNavigate={navegar} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
+      case 'epidemiologia': return <Epidemiologia onNavigate={navegar} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
       case 'internacoes':   return <Internacoes onNavigate={navegar} demoState={demoState} />;
       case 'vacinacao':     return <Vacinacao onNavigate={navegar} demoState={demoState} />;
       case 'superlotacao':  return <Superlotacao onNavigate={navegar} demoState={demoState} />;
       case 'configuracoes': return <PageConfiguracoes onNavigate={navegar} demoState={demoState} />;
       case 'perfil':        return <PagePerfil onNavigate={navegar} onLogout={handleLogout} demoState={demoState} />;
-      default:              return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenSusBot={prompt => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
+      default:              return <VisaoGeral onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
     }
   }
 
   return (
     <ThemeContext.Provider value={{ themeId, setThemeId }}>
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
-          (esquerda da sidebar, gap central, respiro do painel do SusBot). */}
+          (esquerda da sidebar, gap central, respiro do painel da Clara). */}
       <div style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
-        <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} alertasBadge={alertasBadge} demoEnabled={demoEnabled} />
+        <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} alertasBadge={alertasBadge} demoEnabled={demoEnabled} user={authUser} />
         {viewportCompacto && sidebarAberta && (
           <button
             type="button"
@@ -990,7 +1033,7 @@ export default function App() {
           demoEnabled={demoEnabled}
         />
         {/* Uma linguagem visual só: o conteúdo é sempre um card destacado do
-            canvas, com o mesmo respiro do painel do SusBot. Abrir o chat mexe
+            canvas, com o mesmo respiro do painel da Clara. Abrir o chat mexe
             em uma propriedade só (`right`) — o card não muda de identidade, e o
             FAB flutua sobre a calha, não sobre texto rolável. */}
         <main className={`app-main${chatAberto ? ' app-main--chat-open' : ''}`} style={{
@@ -1021,7 +1064,7 @@ export default function App() {
             overflow: 'hidden',
           }}>
             <div className="app-content-scroll" style={{ height: '100%', overflowY: 'auto' }}>
-              {/* Folga extra embaixo: o FAB do SusBot flutua sobre o canto
+              {/* Folga extra embaixo: o FAB da Clara flutua sobre o canto
                   inferior direito do card, e sem isso o último bloco de conteúdo
                   fica embaixo dele quando a página chega ao fim da rolagem. */}
               <div className="app-page-content" style={{ padding: '28px 36px 84px', maxWidth: 1600, margin: '0 auto' }}>
@@ -1044,12 +1087,12 @@ export default function App() {
           alertasBadge={alertasBadge}
           maisAberto={mobileMaisAberto}
           onNav={navegar}
-          onOpenSusBot={() => setSusBotOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt: '' }))}
+          onOpenClara={() => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt: '' }))}
           onToggleMais={() => setMobileMaisAberto(aberto => !aberto)}
         />
         <Suspense fallback={null}>
           {etpAtivado && <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} onEtpGerado={handleEtpGerado} demoState={demoState} />}
-          <SusBotPanel page={page} onNavigate={navegar} ibge6={municipioAtual.ibge6} onOpenChange={setChatAberto} openRequest={susBotOpenRequest} />
+          <ClaraPanel page={page} onNavigate={navegar} ibge6={municipioAtual.ibge6} onOpenChange={setChatAberto} openRequest={claraOpenRequest} />
         </Suspense>
       </div>
     </ThemeContext.Provider>

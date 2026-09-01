@@ -63,6 +63,22 @@ def _update(update_id, texto, user_id="778899", username="marcia", chat_type="pr
     }
 
 
+def _audio_update(update_id, user_id="778899", username="marcia", chat_type="private"):
+    return {
+        "update_id": update_id,
+        "message": {
+            "voice": {
+                "file_id": "arquivo-voz-123",
+                "duration": 8,
+                "file_size": 2048,
+                "mime_type": "audio/ogg",
+            },
+            "from": {"id": int(user_id), "username": username},
+            "chat": {"id": int(user_id), "type": chat_type},
+        },
+    }
+
+
 def _parear(canais):
     router_module, _db, _mensagens = canais
     criado = router_module.criar_pareamento(
@@ -138,6 +154,57 @@ def test_mensagem_telegram_entra_no_mesmo_historico_do_usuario(canais):
     router_module.processar_update_telegram(_update(3, "/nova"))
     router_module.processar_update_telegram(_update(4, "E o estoque?"))
     assert len(db_module.listar_conversas("user-abc")) == 2
+
+
+def test_audio_telegram_e_transcrito_e_processado_como_texto(canais, monkeypatch):
+    router_module, db_module, mensagens = canais
+    _parear(canais)
+    resultado = router_module.ResultadoTranscricao(
+        texto="Como está o estoque de soro fisiológico?",
+        idioma="pt",
+        confianca_idioma=0.99,
+        duracao_segundos=8,
+    )
+    monkeypatch.setattr(router_module, "_transcrever_audio_telegram", lambda _mensagem: resultado)
+
+    router_module.processar_update_telegram(_audio_update(80))
+
+    conversa = db_module.listar_conversas("user-abc")[0]
+    historico = db_module.listar_mensagens(conversa["id"])
+    assert historico[0]["pergunta"] == resultado.texto
+    assert historico[0]["tela_origem"] == "telegram"
+    assert any("Estou transcrevendo" in texto for _chat, texto in mensagens)
+    assert any("Entendi seu áudio" in texto and resultado.texto in texto for _chat, texto in mensagens)
+    assert "Leitura municipal" in mensagens[-1][1]
+
+
+def test_audio_de_usuario_nao_pareado_nao_e_baixado(canais, monkeypatch):
+    router_module, _db, mensagens = canais
+    chamado = False
+
+    def transcrever(_mensagem):
+        nonlocal chamado
+        chamado = True
+
+    monkeypatch.setattr(router_module, "_transcrever_audio_telegram", transcrever)
+    router_module.processar_update_telegram(_audio_update(81, user_id="998877"))
+
+    assert chamado is False
+    assert "ainda nao esta conectado" in mensagens[-1][1]
+
+
+def test_audio_invalido_retorna_orientacao_sem_chamar_agente(canais, monkeypatch):
+    router_module, db_module, mensagens = canais
+    _parear(canais)
+
+    def falhar(_mensagem):
+        raise router_module.AudioInvalido("O áudio ultrapassa o limite de duração permitido.")
+
+    monkeypatch.setattr(router_module, "_transcrever_audio_telegram", falhar)
+    router_module.processar_update_telegram(_audio_update(82))
+
+    assert db_module.listar_conversas("user-abc") == []
+    assert "limite de duração" in mensagens[-1][1]
 
 
 def test_clear_inicia_nova_conversa(canais):

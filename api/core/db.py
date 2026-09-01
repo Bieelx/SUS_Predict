@@ -981,7 +981,7 @@ def registrar_evento_canal(provedor: str, external_id: str) -> bool:
     return cursor.rowcount == 1
 
 
-# ── Memória pessoal criptografada do SusBot ──────────────────────────────────────
+# ── Memória pessoal criptografada da Clara ──────────────────────────────────────
 
 def upsert_memoria_usuario(owner_ref: str, fact_ref: str, payload_encrypted: str) -> dict:
     agora = datetime.now(timezone.utc).isoformat()

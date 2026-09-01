@@ -58,7 +58,7 @@ def _meta(tabelas: list[str], referencias: list[Any]) -> dict[str, Any]:
     valores = sorted(str(valor) for valor in referencias if valor)
     return {
         "dados_reais": True,
-        "fonte": "Supabase - tabelas curadas do SusPredict",
+        "fonte": "Supabase",
         "tabelas": tabelas,
         "data_referencia": valores[-1] if valores else None,
         "consultado_em": datetime.now(timezone.utc).isoformat(),

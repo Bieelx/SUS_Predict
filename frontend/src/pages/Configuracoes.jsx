@@ -67,7 +67,6 @@ function CardHead({ title, hint }) {
 
 const CFG_FONTE_ESTOQUE = {
   fonte: 'Planilha municipal (UBS Cotia Centro + Vila Bela)',
-  atualizado: 'última carga há 8 min',
   qualidade: 'Sem validação automática de unidade/duplicados no MVP — conferência manual recomendada antes de decisões de compra.',
 };
 
@@ -115,9 +114,7 @@ export default function PageConfiguracoes({ demoState }) {
           {/* Fonte do estoque */}
           <Card className="p-5">
             <CardHead title="Fonte e atualização do estoque" hint="insumos" />
-            <SettingRow title="Fonte atual" desc={CFG_FONTE_ESTOQUE.fonte}>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--ink-400)' }}>{CFG_FONTE_ESTOQUE.atualizado}</span>
-            </SettingRow>
+            <SettingRow title="Fonte atual" desc={CFG_FONTE_ESTOQUE.fonte} />
             <SettingRow title="Qualidade do dado" desc={CFG_FONTE_ESTOQUE.qualidade} last>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 99, fontSize: 12, fontWeight: 600, color: 'var(--warn)', background: 'color-mix(in srgb, var(--warn) 14%, white)' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} /> manual

@@ -1,9 +1,9 @@
-# API de integração do SusBot com o Telegram
+# API de integração da Clara com o Telegram
 
 ## 1. Objetivo
 
 Esta API conecta uma conta do Telegram a um usuário autenticado do SusPredict. Depois
-do pareamento, as mensagens enviadas ao bot usam o mesmo SusBot, o mesmo município e o
+do pareamento, as mensagens enviadas ao bot usam o mesmo Clara, o mesmo município e o
 mesmo histórico acessível pela interface web.
 
 A integração foi desenhada com quatro propriedades principais:
@@ -26,18 +26,21 @@ O provedor suportado nesta versão é `telegram`. A implementação inclui:
 - continuidade do histórico entre web e Telegram;
 - memória pessoal isolada por usuário;
 - apresentação específica para o Telegram;
+- recebimento de mensagens de voz e arquivos de áudio, com transcrição local;
 - bloqueio de ações que exigem confirmação no aplicativo.
 
 ## 3. Componentes
 
 | Componente | Responsabilidade |
 |---|---|
-| `api/core/channel_router.py` | Rotas REST, webhook, pareamento, adaptação de mensagens e chamada ao SusBot |
+| `api/core/channel_router.py` | Rotas REST, webhook, pareamento, adaptação de mensagens e chamada à Clara |
+| `api/core/channel_media.py` | Download autenticado e limitado de mídia do Telegram |
+| `api/core/audio_transcription.py` | Validação, arquivo temporário e transcrição local com faster-whisper |
 | `api/core/db.py` | Persistência de pareamentos, conexões, eventos, conversas e mensagens |
 | `api/core/susbot_agent.py` | Criação e execução do agente com histórico e contexto |
 | `api/core/susbot_memory.py` | Aprendizado, consulta e exclusão da memória pessoal criptografada |
 | `frontend/src/shared/susbotClient.js` | Cliente HTTP usado pela interface de conexão |
-| `frontend/src/pages/SusBotPanel.jsx` | Fluxo visual de conectar, confirmar e desconectar o Telegram |
+| `frontend/src/pages/ClaraPanel.jsx` | Fluxo visual de conectar, confirmar e desconectar o Telegram |
 | `start_dev.sh` | Túnel HTTPS temporário e registro automático do webhook em desenvolvimento |
 
 Todas as rotas descritas abaixo usam o prefixo:
@@ -58,14 +61,14 @@ Todas as rotas descritas abaixo usam o prefixo:
           │                                            │ conversa e eventos
           │                                  ┌─────────▼─────────┐
 ┌─────────┴─────────────┐    webhook HTTPS     │ SQLite local      │
-│ Telegram / SusBot     │ ─────────────────────▶ │ + agente SusBot   │
+│ Telegram / Clara     │ ─────────────────────▶ │ + agente Clara   │
 │ conversa privada      │ ◀───────────────────── │                   │
 └───────────────────────┘   Bot API sendMessage └───────────────────┘
 ```
 
 O Telegram entrega mensagens para a API por webhook. A API localiza a conexão pelo
 identificador do remetente, carrega a conversa e a memória pertencentes ao usuário
-interno, executa o SusBot e envia a resposta pela Bot API.
+interno, executa a Clara e envia a resposta pela Bot API.
 
 ## 5. Configuração
 
@@ -85,7 +88,7 @@ CHANNEL_PAIRING_SECRET=outro_segredo_independente_com_32_ou_mais_caracteres
 | `TELEGRAM_WEBHOOK_SECRET` | Autentica requests recebidos do Telegram | Em desenvolvimento, apenas letras, números, `_` e `-`; máximo de 256 caracteres |
 | `CHANNEL_PAIRING_SECRET` | Gera o HMAC dos códigos de pareamento | Deve ser independente e ter pelo menos 32 caracteres |
 
-Para a memória pessoal do SusBot em produção, também é recomendado configurar:
+Para a memória pessoal da Clara em produção, também é recomendado configurar:
 
 ```dotenv
 SUSBOT_MEMORY_KEY=<chave-fernet>
@@ -95,7 +98,29 @@ Em desenvolvimento, o projeto pode criar uma chave local em `api/.secrets/`. Em
 produção, a chave deve vir de um gerenciador de segredos e permanecer estável; sua
 perda impede a leitura das memórias já criptografadas.
 
-### 5.2 Gerando segredos
+### 5.2 Transcrição local de áudio
+
+Instale as dependências da API e configure:
+
+```dotenv
+CLARA_STT_PROVIDER=local
+CLARA_STT_MODEL=small
+CLARA_STT_DEVICE=cpu
+CLARA_STT_COMPUTE_TYPE=int8
+CLARA_STT_LOCAL_FILES_ONLY=false
+CLARA_AUDIO_MAX_SECONDS=120
+CLARA_AUDIO_MAX_BYTES=10485760
+```
+
+O modelo é carregado somente na primeira mensagem de áudio. Nessa primeira execução,
+o `faster-whisper` pode baixar o modelo selecionado. Depois que ele estiver armazenado
+no servidor, use `CLARA_STT_LOCAL_FILES_ONLY=true` para impedir downloads automáticos.
+
+O áudio é salvo em arquivo temporário apenas durante a transcrição e removido mesmo
+quando ocorre erro. O banco recebe somente o texto transcrito; o binário não é
+persistido e a transcrição não deve ser escrita nos logs.
+
+### 5.3 Gerando segredos
 
 Exemplo para gerar segredos sem reutilizar o token do bot:
 
@@ -106,7 +131,7 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 Execute o comando separadamente para `TELEGRAM_WEBHOOK_SECRET` e
 `CHANNEL_PAIRING_SECRET`.
 
-### 5.3 Desenvolvimento local
+### 5.4 Desenvolvimento local
 
 Com as quatro variáveis do Telegram preenchidas:
 
@@ -135,7 +160,7 @@ ENABLE_TELEGRAM_TUNNEL=false
 
 O Quick Tunnel é adequado apenas para desenvolvimento. Sua URL muda a cada execução.
 
-### 5.4 Produção
+### 5.5 Produção
 
 Em produção, publique a API em um domínio HTTPS estável e registre o webhook uma
 única vez:
@@ -379,8 +404,8 @@ Resposta imediata `200`:
 ```
 
 O processamento da mensagem é colocado em uma `BackgroundTask` do FastAPI para que o
-webhook responda rapidamente. Updates sem texto ou sem identificadores de remetente e
-chat são ignorados.
+webhook responda rapidamente. Updates sem texto/áudio ou sem identificadores de
+remetente e chat são ignorados.
 
 ## 9. Processamento de uma mensagem
 
@@ -407,11 +432,17 @@ Depois que a conexão está ativa, o fluxo é:
 4. obter a conversa atual ou criar uma nova;
 5. carregar as oito mensagens recentes da conversa;
 6. aprender somente fatos pessoais permitidos da nova mensagem;
-7. fornecer histórico, memória pessoal, município e origem `telegram` ao SusBot;
+7. fornecer histórico, memória pessoal, município e origem `telegram` à Clara;
 8. executar as ferramentas de consulta do agente;
 9. persistir pergunta e resposta em `susbot_mensagens`;
 10. adaptar a apresentação ao Telegram;
 11. enviar a resposta por `sendMessage`.
+
+Quando o update contém `voice` ou `audio`, antes de criar a conversa a API valida
+duração, tamanho e MIME, obtém o `file_path` por `getFile`, baixa o binário com limite
+estrito, transcreve em português e apaga o temporário. A Clara mostra ao usuário o texto
+que entendeu antes de analisá-lo. Usuários não pareados não provocam download nem
+transcrição.
 
 O `ibge6` usado pelo bot vem da conexão confirmada, não de um código livre enviado
 na mensagem.
@@ -435,7 +466,7 @@ enquanto `/esquecer` remove fatos pessoais memorizados.
 
 ## 11. Apresentação das respostas
 
-O texto armazenado no histórico continua sendo a resposta completa do SusBot. Antes
+O texto armazenado no histórico continua sendo a resposta completa da Clara. Antes
 de enviá-lo ao Telegram, a API cria uma versão apropriada para telas pequenas:
 
 - estoque vira uma lista vertical com estado, cobertura e metadados consolidados;
@@ -528,7 +559,7 @@ Boas práticas operacionais:
 
 ## 14. Ações com confirmação
 
-O Telegram pode consultar dados e conversar com o SusBot. Quando o agente planeja uma
+O Telegram pode consultar dados e conversar com a Clara. Quando o agente planeja uma
 ferramenta de escrita, como a geração de um ETP, a integração **não executa a
 ação**. Ela responde:
 
@@ -568,7 +599,7 @@ reinicie a aplicação.
 
 ### O bot pede uma nova conexão
 
-A identidade externa não possui conexão ativa. No SusPredict, abra **SusBot → Canais**,
+A identidade externa não possui conexão ativa. No SusPredict, abra **Clara → Canais**,
 gere outro link, envie `/start <codigo>` no privado e confirme a conta encontrada.
 
 ### O link é inválido ou expirou
@@ -620,8 +651,9 @@ pytest -q api/tests
 
 - pareamentos, conexões e eventos ficam no SQLite local nesta implementação;
 - a tarefa de processamento roda no mesmo processo da API e não possui fila durável;
-- somente mensagens de texto comuns são processadas;
-- grupos, arquivos, fotos, áudio, mensagens editadas e callbacks não são suportados;
+- texto, mensagens de voz e arquivos de áudio são processados;
+- imagem, vídeo, documento, mensagens editadas e callbacks ainda não são suportados;
+- a transcrição compartilha CPU e memória com a API e ainda não possui fila dedicada;
 - a resposta enviada ao Telegram não inclui os artefatos visuais interativos da web;
 - ações de escrita precisam ser concluídas no SusPredict;
 - o formatador genérico cobre apenas um subconjunto de Markdown.
@@ -645,5 +677,5 @@ pytest -q api/tests
 - `api/tests/test_channel_router.py`
 - `frontend/src/shared/susbotClient.js`
 - `frontend/src/shared/susbotContract.js`
-- `frontend/src/pages/SusBotPanel.jsx`
+- `frontend/src/pages/ClaraPanel.jsx`
 - `start_dev.sh`

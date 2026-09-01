@@ -71,7 +71,7 @@ def test_perguntar_cria_reutiliza_e_persiste_historico(router):
         "tela_origem": "insumos",
     }
 
-    resposta = router_module.perguntar(router_module.PerguntaSusBotRequest(**payload), user=user)
+    resposta = router_module.perguntar(router_module.PerguntaClaraRequest(**payload), user=user)
     texto = asyncio.run(_ler_streaming_response(resposta))
     assert resposta.headers["x-conversa-id"]
     assert "event: fim" in texto
@@ -79,7 +79,7 @@ def test_perguntar_cria_reutiliza_e_persiste_historico(router):
     conversa_id = resposta.headers["x-conversa-id"]
 
     resposta_reuso = router_module.perguntar(
-        router_module.PerguntaSusBotRequest(**{**payload, "conversa_id": conversa_id, "pergunta": "E agora, quanto sobra?"}),
+        router_module.PerguntaClaraRequest(**{**payload, "conversa_id": conversa_id, "pergunta": "E agora, quanto sobra?"}),
         user=user,
     )
     asyncio.run(_ler_streaming_response(resposta_reuso))
@@ -110,14 +110,14 @@ def test_web_entrega_historico_recente_ao_agente(router, monkeypatch):
     monkeypatch.setattr(router_module, "criar_susbot_agente", criar_agente_fake)
     user = {"id": "user-abc", "email": "user@example.com"}
     primeira = router_module.perguntar(
-        router_module.PerguntaSusBotRequest(pergunta="Primeira pergunta", ibge6="355030"),
+        router_module.PerguntaClaraRequest(pergunta="Primeira pergunta", ibge6="355030"),
         user=user,
     )
     asyncio.run(_ler_streaming_response(primeira))
     conversa_id = primeira.headers["x-conversa-id"]
 
     segunda = router_module.perguntar(
-        router_module.PerguntaSusBotRequest(
+        router_module.PerguntaClaraRequest(
             pergunta="O que perguntei antes?", ibge6="355030", conversa_id=conversa_id,
         ),
         user=user,
@@ -133,11 +133,11 @@ def test_perguntar_cria_outra_conversa_e_lista_paginado(router):
     user = {"id": "user-abc", "email": "user@example.com"}
 
     primeira = router_module.perguntar(
-        router_module.PerguntaSusBotRequest(pergunta="Primeira conversa", ibge6="355030", tela_origem="visao-geral"),
+        router_module.PerguntaClaraRequest(pergunta="Primeira conversa", ibge6="355030", tela_origem="visao-geral"),
         user=user,
     )
     segunda = router_module.perguntar(
-        router_module.PerguntaSusBotRequest(pergunta="Segunda conversa", ibge6="355030", tela_origem="alertas"),
+        router_module.PerguntaClaraRequest(pergunta="Segunda conversa", ibge6="355030", tela_origem="alertas"),
         user=user,
     )
 

@@ -4,7 +4,7 @@ import urllib.error
 
 import pytest
 
-from api.core.local_llm import LocalSusBotLLM, OllamaIndisponivel, PLANO_SCHEMA
+from api.core.local_llm import LocalClaraLLM, OllamaIndisponivel, PLANO_SCHEMA
 
 
 class FakeResponse:
@@ -40,7 +40,7 @@ def test_planejamento_usa_api_nativa_schema_e_normaliza_responder(monkeypatch):
         return FakeResponse(json.dumps(corpo).encode())
 
     monkeypatch.setattr("urllib.request.urlopen", urlopen)
-    llm = LocalSusBotLLM(base_url="http://127.0.0.1:11434/v1", model="susbot-3b", timeout=91)
+    llm = LocalClaraLLM(base_url="http://127.0.0.1:11434/v1", model="susbot-3b", timeout=91)
     plano = llm.planejar("O que e dengue?", {}, ["gerar_etp"])
 
     assert requisicao["url"] == "http://127.0.0.1:11434/api/chat"
@@ -56,7 +56,7 @@ def test_planejamento_json_invalido_faz_fallback_seguro(monkeypatch):
         "urllib.request.urlopen",
         lambda *_args, **_kwargs: FakeResponse(json.dumps(corpo).encode()),
     )
-    llm = LocalSusBotLLM()
+    llm = LocalClaraLLM()
     assert llm.planejar("pergunta", {}, []) == {"acao": "resposta", "resposta": ""}
 
 
@@ -75,7 +75,7 @@ def test_planejamento_normaliza_alias_e_remove_ibge_dos_argumentos(monkeypatch):
         lambda *_args, **_kwargs: FakeResponse(json.dumps(corpo).encode()),
     )
 
-    plano = LocalSusBotLLM().planejar(
+    plano = LocalClaraLLM().planejar(
         "risco de faltar dipirona",
         {"ibge6": "351300"},
         ["consultar_estoque"],
@@ -95,7 +95,7 @@ def test_resposta_repassa_chunks_sem_bufferizar(monkeypatch):
         b'data: [DONE]\n',
     ]
     monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: FakeResponse(lines=linhas))
-    llm = LocalSusBotLLM()
+    llm = LocalClaraLLM()
     assert list(llm.stream_resposta("oi", {}, {}, None)) == ["Ola", " mundo"]
 
 
@@ -105,4 +105,4 @@ def test_conexao_recusada_vira_erro_operacional(monkeypatch):
 
     monkeypatch.setattr("urllib.request.urlopen", falhar)
     with pytest.raises(OllamaIndisponivel, match="Ollama"):
-        LocalSusBotLLM().planejar("oi", {}, [])
+        LocalClaraLLM().planejar("oi", {}, [])

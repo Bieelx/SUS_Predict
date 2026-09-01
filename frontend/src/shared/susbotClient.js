@@ -32,7 +32,7 @@ function mergeAbortSignals(controller, signal) {
 
 function criarErroHttp(response, texto = '') {
   const detalhe = texto ? `: ${texto}` : '';
-  const erro = new Error(`Falha ao consultar SusBot (${response.status} ${response.statusText})${detalhe}`);
+  const erro = new Error(`Falha ao consultar Clara (${response.status} ${response.statusText})${detalhe}`);
   erro.status = response.status;
   erro.responseText = texto;
   const proxyInjection = response.headers.get('x-susbot-api-key-injected');
@@ -58,7 +58,7 @@ async function requisicaoJson(path, {
   baseUrl = '', fetchImpl = globalThis.fetch, method = 'GET', body, signal, headers = {},
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
-  if (typeof fetchFn !== 'function') throw new Error('fetch indisponivel para consultar canais do SusBot');
+  if (typeof fetchFn !== 'function') throw new Error('fetch indisponivel para consultar canais da Clara');
   const response = await fetchFn(resolverUrl(baseUrl, path), {
     method,
     headers: {
@@ -125,7 +125,7 @@ export async function listarConversasSusbot({
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
   if (typeof fetchFn !== 'function') {
-    throw new Error('fetch indisponivel para consultar historico do SusBot');
+    throw new Error('fetch indisponivel para consultar historico da Clara');
   }
 
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
@@ -153,7 +153,7 @@ export async function listarMensagensSusbot({
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
   if (typeof fetchFn !== 'function') {
-    throw new Error('fetch indisponivel para consultar mensagens do SusBot');
+    throw new Error('fetch indisponivel para consultar mensagens da Clara');
   }
 
   if (!conversaId) {
@@ -284,7 +284,7 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
     }
 
     if (evento.event === SUSBOT_SSE_EVENTS.erro) {
-      throw new Error(evento.data?.mensagem || 'Falha ao gerar resposta do SusBot.');
+      throw new Error(evento.data?.mensagem || 'Falha ao gerar resposta da Clara.');
     }
   };
 
@@ -355,7 +355,7 @@ export async function conversarComSusbot({
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
   if (typeof fetchFn !== 'function') {
-    throw new Error('fetch indisponivel para conversar com SusBot');
+    throw new Error('fetch indisponivel para conversar com Clara');
   }
 
   const perguntaNormalizada = normalizarTexto(pergunta);

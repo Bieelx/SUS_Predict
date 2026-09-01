@@ -1,8 +1,8 @@
-# Otimização de custo do SusBot
+# Otimização de custo da Clara
 
 ## Fluxo atual
 
-O SusBot usa uma cascata de decisão compartilhada pela web e pelos canais externos:
+A Clara usa uma cascata de decisão compartilhada pela web e pelos canais externos:
 
 1. O roteador local identifica intenções operacionais de alta confiança.
 2. A ferramenta consulta os dados do município.

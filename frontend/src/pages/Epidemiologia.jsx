@@ -14,7 +14,7 @@ const decimal = valor => numero(valor).toLocaleString('pt-BR', { maximumFraction
 const mes = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '');
 const mesLongo = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-export default function Epidemiologia({ demoState, onOpenSusBot }) {
+export default function Epidemiologia({ demoState, onOpenClara }) {
   const [periodo, setPeriodo] = useState('12 Meses');
   const { dados, carregando, erro, recarregar } = useDadosOperacionais(
     'epidemiologia',
@@ -64,7 +64,7 @@ export default function Epidemiologia({ demoState, onOpenSusBot }) {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
           <h1 style={titulo}>Epidemiologia <span style={subtitulo}>— SINAN</span></h1>
-          <p style={descricao}>Indicadores reais de dengue para Cotia, SP, consultados nas tabelas curadas.</p>
+          <p style={descricao}>Casos de dengue em Cotia, SP.</p>
         </div>
         <SeletorPeriodo value={periodo} onChange={setPeriodo} carregando={carregando} />
       </header>
@@ -121,11 +121,11 @@ export default function Epidemiologia({ demoState, onOpenSusBot }) {
             </div>
             <div style={forecastFooter}>
               <p><strong>{previsao.modelo}</strong> · intervalo empírico de {previsao.intervalo_confianca_pct}% · treino com {inteiro(previsao.diagnostico?.pontos_treino)} meses. Estimativa estatística, não contagem observada.</p>
-              {onOpenSusBot && <button style={botao} onClick={() => onOpenSusBot(
+              {onOpenClara && <button style={botao} onClick={() => onOpenClara(
                 `Analise a previsão de dengue de 30, 60 e 90 dias para ${dados.municipio.nome}. ` +
                 `Modelo: ${previsao.modelo}. Valores: ${previsao.serie.map(item => `${mesLongo(item.mes)} ${item.casos_previstos} casos, intervalo ${item.limite_inferior} a ${item.limite_superior}`).join('; ')}. ` +
                 `${previsao.aviso} Diferencie claramente dados observados de estimativas e explique a incerteza.`
-              )}><MIcon m="smart_toy" size={15} /> Analisar previsão com SusBot</button>}
+              )}><MIcon m="smart_toy" size={15} /> Analisar previsão com Clara</button>}
             </div>
           </> : <p style={forecastUnavailable}>Previsão indisponível: {previsao?.motivo || 'a série histórica não possui dados suficientes.'}</p>}
         </Card>

@@ -1,4 +1,4 @@
-"""Memória pessoal criptografada e isolada por usuário para o SusBot."""
+"""Memória pessoal criptografada e isolada por usuário para a Clara."""
 
 from __future__ import annotations
 

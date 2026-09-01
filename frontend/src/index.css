@@ -72,7 +72,7 @@
     --fs-lg: 20px;   /* título de bloco */
     --fs-xl: 26px;   /* título de página */
 
-    /* Dimensões do shell — a sidebar, a topbar e o painel do SusBot leem daqui.
+    /* Dimensões do shell — a sidebar, a topbar e o painel da Clara leem daqui.
        Mudar a largura da sidebar em um lugar só. */
     --sb-w:      220px;
     --topbar-h:  60px;
@@ -625,7 +625,7 @@ textarea:focus-visible,
   margin-bottom: 26px;
 }
 
-/* Shell responsivo P1: em telas de trabalho amplas, sidebar, conteúdo e SusBot
+/* Shell responsivo P1: em telas de trabalho amplas, sidebar, conteúdo e Clara
    formam colunas coordenadas. Em tablet/celular, menu e assistente viram camadas
    temporárias e o conteúdo preserva toda a largura útil. */
 .app-sidebar-backdrop {

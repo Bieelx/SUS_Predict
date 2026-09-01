@@ -320,7 +320,7 @@ def test_consulta_generica_de_insumos_retorna_estoque_completo(db, pergunta):
 
 
 def test_fallback_llm_cai_pro_fallback_quando_primario_falha():
-    from api.core.susbot_agent import FallbackSusBotLLM
+    from api.core.susbot_agent import FallbackClaraLLM
 
     class LLMQuebrado:
         def planejar(self, pergunta, contexto, ferramentas):
@@ -339,20 +339,20 @@ def test_fallback_llm_cai_pro_fallback_quando_primario_falha():
         def stream_resposta(self, pergunta, contexto, plano, resultado_ferramenta):
             yield "resposta do fallback"
 
-    llm = FallbackSusBotLLM(LLMQuebrado(), LLMReserva())
+    llm = FallbackClaraLLM(LLMQuebrado(), LLMReserva())
 
     assert llm.planejar("pergunta", {}, []) == plano_fallback
     assert list(llm.stream_resposta("pergunta", {}, plano_fallback, None)) == ["resposta do fallback"]
 
 
 def test_fallback_llm_propaga_erro_sem_fallback_configurado():
-    from api.core.susbot_agent import FallbackSusBotLLM
+    from api.core.susbot_agent import FallbackClaraLLM
 
     class LLMQuebrado:
         def planejar(self, pergunta, contexto, ferramentas):
             raise RuntimeError("quota estourada")
 
-    llm = FallbackSusBotLLM(LLMQuebrado(), None)
+    llm = FallbackClaraLLM(LLMQuebrado(), None)
 
     with pytest.raises(RuntimeError):
         llm.planejar("pergunta", {}, [])
@@ -371,3 +371,29 @@ def test_stream_sse_formata_eventos_em_blocos(db):
     assert "event: token" in sse
     assert "event: referencia" in sse
     assert "event: fim" in sse
+
+
+@pytest.mark.parametrize(
+    "pergunta",
+    ["qual o seu nome?", "quem é você", "como você se chama?", "com quem eu estou falando"],
+)
+def test_identidade_responde_clara_sem_llm(db, pergunta):
+    """Nome da Clara não pode depender do LLM nem do histórico da conversa."""
+
+    from api.core.susbot_agent import criar_susbot_agente
+
+    class LLMProibido(LLMMock):
+        def planejar(self, pergunta, contexto, ferramentas):
+            raise AssertionError("pergunta de identidade não deve chamar o LLM")
+
+    agente = criar_susbot_agente(
+        "351300",
+        usuario="user-gabriel",
+        historico=[{"pergunta": "oi", "resposta": "Meu nome é SusBot."}],
+        llm=LLMProibido(),
+    )
+    eventos = list(agente.stream_eventos(pergunta))
+    resposta = next(e for e in eventos if e["event"] == "fim")["data"]["resposta"]
+
+    assert "Clara" in resposta
+    assert "SusBot" not in resposta

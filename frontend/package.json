@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test vite.config.test.js",
+    "test": "node --test vite.config.test.js src/shared/sessionCache.test.js",
     "test:e2e": "playwright test",
     "build": "vite build",
     "preview": "vite preview"

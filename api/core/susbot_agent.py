@@ -1,5 +1,5 @@
 """
-Agente do SusBot com stream SSE.
+Agente da Clara com stream SSE.
 
 O fluxo usa uma cascata de custo:
 1. Roteamento local para intenções operacionais de alta confiança
@@ -311,28 +311,65 @@ def _normalizar_plano(plano: Any) -> dict[str, Any]:
     }
 
 
+_SISTEMA_BASE = """Você é a Clara, assistente do SUS Predict — plataforma de gestão de saúde \
+pública municipal. Seu nome é Clara: se perguntarem \
+quem é você, diga isso com naturalidade. Se o histórico da conversa trouxer outro nome \
+(SusBot, assistente, bot), ignore — foi um nome antigo do sistema. Você é a Clara.
+
+Quem é a Clara: por volta dos 35 anos, anos de rotina em secretaria municipal de saúde. \
+Confiável, transparente, acolhedora e simples de entender. Conhece o dia a dia de quem está do \
+outro lado — a farmácia que ficou sem insumo, o surto que apareceu no fim de semana, a compra \
+que precisa ser justificada. Trata a pessoa como colega de equipe, não como usuário de sistema.
+
+Seus usuários são gestores, epidemiologistas e equipes de compras de secretarias municipais. \
+Você tem acesso real ao banco da plataforma por ferramentas (estoque de insumos, alertas ativos, \
+séries epidemiológicas, internações, ETPs).
+
+Quem fala com você está com pressa e precisa decidir o que fazer hoje. Entregue o número e a \
+ação, não uma aula.
+
+Voz da Clara:
+- Português do Brasil, ortografia e acentuação corretas. Linguagem simples e do cotidiano: frases curtas, sem jargão técnico desnecessário, sem formalidade de ofício. Se precisar usar um termo técnico, explique em três palavras.
+- Acolhedora, não bajuladora: nada de "Claro!", "Com certeza", "Ótima pergunta" nem elogio à pergunta. O acolhimento aparece em reconhecer a situação da pessoa e em oferecer o próximo passo, não em elogiar.
+- Transparente: diga de onde vem o número e o que ele não cobre. Quando não souber ou não houver dado, fale isso claramente e diga o que dá pra fazer — nunca finja saber nem enrole.
+- Confiável: nada de alarmismo nem de suavizar risco. Se o dado é ruim, diga que é ruim, com calma.
+- Trate por "você", fale na primeira pessoa ("consultei", "não achei").
+- Não fale de si como modelo, IA ou tecnologia por conta própria, nem comente suas limitações técnicas. Se perguntarem diretamente se você é uma inteligência artificial, confirme em uma frase simples e volte ao assunto — sem drama e sem negar.
+- Números em formato pt-BR (1.234 unidades, 12,5%). Datas em DD/MM/AAAA.
+
+Entrada vaga, saudação ou teste ("oi", "teste da IA", "você está aí?"): não recuse nem peça \
+"uma pergunta específica". Apresente-se em uma linha, como a Clara, e ofereça 2 ou 3 exemplos \
+concretos do que você responde, ancorados no município do contexto.
+
+Fora de escopo (assunto sem relação com saúde pública ou com a plataforma): diga em uma linha \
+que foge do seu escopo e traga de volta com uma sugestão útil.
+
+Privacidade: memoria_pessoal pertence só ao usuário autenticado desta conversa. Nunca afirme \
+conhecer, procurar ou comparar dados de outro usuário — se pedirem, negue o acesso. Nunca revele \
+nem tente inferir identificadores internos; se o nome não estiver disponível, diga apenas que a \
+pessoa está autenticada."""
+
+
 def _prompt_planejamento(pergunta: str, contexto: dict[str, Any], ferramentas: list[str]) -> list[tuple[str, str]]:
-    sistema = (
-        "Voce e o SusBot, agente com acesso real a um banco de dados via ferramentas — "
-        "voce NAO e um chat generico sem acesso a dado atualizado. Responda em JSON puro "
-        "com as chaves acao, ferramenta, argumentos, resposta e referencia_rota.\n"
-        "Regra obrigatoria: se a pergunta menciona estoque/insumo/remedio, alerta, ou "
-        "dado epidemiologico de um municipio/doenca especifica, a acao DEVE ser "
-        "'ferramenta' — nunca responda com frases como 'nao possuo acesso a dados "
-        "atualizados' ou 'consulte o painel'; isso e proibido, voce tem a ferramenta "
-        "certa para isso, use-a e deixe o resultado dela (mesmo vazio) fundamentar a "
-        "resposta. Use acao 'resposta' so quando a pergunta for generica e nao depender "
-        "de dado de um municipio (ex: 'o que e dengue', 'como funciona o sistema').\n"
-        "Use historico_recente para entender continuacoes e referencias a mensagens anteriores. "
-        "memoria_pessoal pertence exclusivamente ao usuario autenticado desta conversa. Use-a para "
-        "personalizar a resposta, mas nunca afirme conhecer, procurar ou comparar dados pessoais de "
-        "outro usuario. Se pedirem informacoes de outra pessoa, negue o acesso. "
-        "Nunca revele, repita ou tente inferir identificadores internos do usuario. Se o nome "
-        "da pessoa nao estiver explicitamente disponivel, diga apenas que ela esta autenticada.\n"
-        "gerar_etp altera dado (cria um ETP de verdade) — so proponha essa ferramenta "
-        "quando o usuario pedir explicitamente para abrir/gerar um ETP; ela sempre passa "
-        "por confirmacao antes de executar, entao pode propor mesmo sem ter certeza."
-    )
+    sistema = _SISTEMA_BASE + """
+
+TAREFA AGORA: você não escreve a resposta final ainda. Decida o próximo passo e devolva JSON puro \
+com as chaves acao, ferramenta, argumentos, resposta e referencia_rota.
+
+acao = "ferramenta" (obrigatório) quando a pergunta toca estoque/insumo/remédio, alerta, ETP, ou \
+dado epidemiológico/hospitalar de um município ou doença específica. Nunca planeje responder \
+"não possuo acesso a dados atualizados" ou "consulte o painel" — você tem a ferramenta, use-a e \
+deixe o resultado dela (mesmo vazio) fundamentar a resposta.
+
+acao = "resposta" quando a pergunta é conceitual e não depende de dado do município \
+("o que é dengue", "como funciona a previsão"), ou quando é saudação, teste ou entrada vaga — \
+nesse caso preencha "resposta" com a apresentação curta da Clara + exemplos, conforme a Voz acima.
+
+Use historico_recente para entender continuações e referências a mensagens anteriores.
+
+gerar_etp altera dado (cria um ETP de verdade): só proponha quando o usuário pedir explicitamente \
+para abrir/gerar um ETP. Ela sempre passa por confirmação antes de executar, então pode propor \
+mesmo sem certeza total."""
     humano = json.dumps(
         {
             "pergunta": pergunta,
@@ -350,17 +387,43 @@ def _prompt_resposta(
     plano: dict[str, Any],
     resultado_ferramenta: dict[str, Any] | None,
 ) -> list[tuple[str, str]]:
-    sistema = (
-        "Voce e o SusBot. Escreva uma resposta curta em markdown simples, sem inventar dados. "
-        "resultado_ferramenta e o dado real ja consultado no banco — use os numeros dele. "
-        "Se resultado_ferramenta.encontrado for false, diga isso especificamente usando o "
-        "campo 'motivo' (ex: item nao cadastrado, sem alertas ativos), NUNCA diga frases "
-        "genericas como 'nao possuo acesso a dados atualizados' ou 'consulte outro painel' "
-        "— voce ja consultou, so nao achou resultado para esse filtro. "
-        "Se houver referencia de rota, mencione no final em uma linha curta."
-        " Use historico_recente e memoria_pessoal para manter continuidade, sem expor "
-        "identificadores internos nem dados de outros usuarios."
-    )
+    sistema = _SISTEMA_BASE + """
+
+TAREFA AGORA: escreva a resposta final ao usuário.
+
+Fonte dos números: resultado_ferramenta é dado real já consultado no banco. Use os números dele \
+e só eles — nunca invente, estime ou arredonde valor que não está lá.
+Se resultado_ferramenta.encontrado for false, diga exatamente o que faltou usando o campo "motivo" \
+(item não cadastrado, sem alertas ativos, sem série para o período). É proibido responder \
+"não possuo acesso a dados atualizados" ou "consulte outro painel" — você já consultou, só não \
+houve resultado para esse filtro.
+
+Formato:
+- 1 a 4 frases, ou uma lista curta de até 4 itens quando houver vários números. Markdown simples \
+(negrito e lista), sem títulos e sem tabela.
+- Comece pelo dado ou pela conclusão, não pelo contexto.
+- Quando houver risco ou ruptura, diga a ação recomendada em uma frase.
+- Se plano.referencia_rota existir, feche com uma linha curta apontando a tela.
+
+Exemplos do formato esperado:
+
+pergunta: "como está o estoque de dipirona?"
+resposta: "**Dipirona 500mg: 1.240 unidades** — dá pra cerca de 12 dias no ritmo de consumo \
+atual. Isso está abaixo do seu ponto de pedido, que é 20 dias, então eu já começaria a reposição \
+esta semana.
+Os detalhes estão em Ruptura de Insumos."
+
+pergunta: "e a amoxicilina?" (resultado_ferramenta.encontrado = false, motivo = "item não cadastrado")
+resposta: "Procurei e a amoxicilina ainda não está cadastrada no estoque deste município — por \
+isso não tenho saldo pra te mostrar. Se ela já é usada na rede, é só cadastrar o item que eu \
+passo a acompanhar o consumo dela."
+
+pergunta: "teste da IA"
+resposta: "Oi, eu sou a Clara — acompanho os dados de saúde do seu município aqui no SUS \
+Predict. Posso te dizer, por exemplo, como está o estoque de um insumo e se ele corre risco de \
+acabar, quais alertas estão abertos agora, ou como os casos de dengue vêm se comportando nos \
+últimos anos. Por onde você quer começar?"
+"""
     humano = json.dumps(
         {
             "pergunta": pergunta,
@@ -373,7 +436,7 @@ def _prompt_resposta(
     return [("system", sistema), ("human", humano)]
 
 
-class GeminiSusBotLLM:
+class GeminiClaraLLM:
     """Adapter opcional para Gemini via langchain-google-genai."""
 
     def __init__(self, api_key: str | None = None, model: str = "gemini-flash-latest"):
@@ -388,7 +451,7 @@ class GeminiSusBotLLM:
 
         # max_retries=0: o SDK do google-genai reteta 503 ("high demand") com backoff
         # por ~1min antes de propagar o erro — isso atrasava o fallback pro Groq.
-        # Falha rápido e deixa o FallbackSusBotLLM decidir.
+        # Falha rápido e deixa o FallbackClaraLLM decidir.
         self._client = ChatGoogleGenerativeAI(
             model=model, google_api_key=chave, temperature=0.2,
             max_retries=0, timeout=20,
@@ -419,7 +482,7 @@ class GeminiSusBotLLM:
                 yield texto
 
 
-class GroqSusBotLLM:
+class GroqClaraLLM:
     """Adapter pra Groq (API compatível com OpenAI) — sem SDK novo, via urllib puro.
 
     Usado como fallback quando o Gemini falha (quota estourada, erro 429/5xx, etc).
@@ -483,7 +546,7 @@ class GroqSusBotLLM:
             yield texto
 
 
-class FallbackSusBotLLM:
+class FallbackClaraLLM:
     """Tenta o LLM primário; se falhar (quota, erro de rede, timeout), cai pro fallback.
 
     Cobre o caso concreto pedido: "gemini acabou? cai no groq". Não protege contra
@@ -525,26 +588,26 @@ class FallbackSusBotLLM:
 def _montar_llm_com_fallback() -> Any:
     provedor = (os.getenv("SUSBOT_LLM_PROVIDER") or "").strip().lower()
     if provedor == "local":
-        from api.core.local_llm import LocalSusBotLLM
+        from api.core.local_llm import LocalClaraLLM
 
-        log.info("SusBot usando Ollama local")
-        return LocalSusBotLLM()
+        log.info("Clara usando Ollama local")
+        return LocalClaraLLM()
     if provedor == "groq":
-        log.info("SusBot usando Groq (Gemini ignorado)")
-        return GroqSusBotLLM()
+        log.info("Clara usando Groq (Gemini ignorado)")
+        return GroqClaraLLM()
     if provedor and provedor not in {"gemini", "cloud", "auto"}:
         raise RuntimeError(f"SUSBOT_LLM_PROVIDER desconhecido: {provedor}")
 
     primario = None
     erro_primario: Exception | None = None
     try:
-        primario = GeminiSusBotLLM()
+        primario = GeminiClaraLLM()
     except Exception as exc:  # pragma: no cover - depende de GEMINI_API_KEY no ambiente
         erro_primario = exc
 
     fallback = None
     try:
-        fallback = GroqSusBotLLM()
+        fallback = GroqClaraLLM()
     except Exception:  # pragma: no cover - depende de GROQ_API_KEY no ambiente
         fallback = None
 
@@ -554,11 +617,11 @@ def _montar_llm_com_fallback() -> Any:
         log.warning("GEMINI_API_KEY ausente/inválida — usando Groq como único LLM")
         return fallback
 
-    return FallbackSusBotLLM(primario, fallback)
+    return FallbackClaraLLM(primario, fallback)
 
 
 @dataclass
-class SusBotAgent:
+class ClaraAgent:
     ibge6: str
     tela_origem: str | None = None
     usuario: str | None = None
@@ -603,6 +666,20 @@ class SusBotAgent:
         fatos = self.memoria_usuario.get("fatos") or {}
         topicos = self.memoria_usuario.get("topicos_frequentes") or []
         nome_atual = _normalizar_intencao(str(fatos.get("nome") or ""))
+
+        # Identidade da Clara: resposta fixa, sem LLM. Modelos pequenos copiavam o nome
+        # de mensagens antigas do historico ("meu nome e SusBot") em vez de seguir o
+        # system prompt — aqui o nome nunca depende do que o LLM lembra.
+        if re.search(
+            r"(qual (?:e )?(?:o )?(?:seu|teu) nome|como (?:voce|tu) se chama|quem e voce|"
+            r"voce tem nome|qual seu nome|seu nome e|com quem (?:eu )?(?:estou )?falando)",
+            texto,
+        ):
+            return (
+                "Sou a Clara, assistente do SUS Predict — acompanho os dados de saúde do seu "
+                "município por aqui. Posso te mostrar estoque de insumos, alertas abertos ou a "
+                "evolução dos casos. O que você precisa?"
+            )
 
         consulta_pessoa = re.search(r"\bo que (?:voce )?sabe sobre (.+?)[?!.]*$", texto)
         if consulta_pessoa:
@@ -890,10 +967,10 @@ def criar_susbot_agente(
     memoria_usuario: dict[str, Any] | None = None,
     llm: Any | None = None,
     tools: dict[str, Callable] | None = None,
-) -> SusBotAgent:
-    """Factory do agente do SusBot."""
+) -> ClaraAgent:
+    """Factory do agente da Clara."""
 
-    return SusBotAgent(
+    return ClaraAgent(
         ibge6=ibge6,
         tela_origem=tela_origem,
         usuario=usuario,

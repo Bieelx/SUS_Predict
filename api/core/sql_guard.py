@@ -1,5 +1,5 @@
 """
-Valida SQL gerado pelo LLM antes de executar o fallback de consulta livre do SusBot.
+Valida SQL gerado pelo LLM antes de executar o fallback de consulta livre da Clara.
 
 Usa `sqlglot` como parser real para distinguir consultas `SELECT` legítimas de escrita,
 DDL, múltiplos statements e tabelas fora da allowlist.
@@ -56,7 +56,7 @@ def _table_names(tree: exp.Expression) -> set[str]:
 
 
 def validar_sql(query: str) -> tuple[bool, str]:
-    """Valida uma query SQL para uso no fallback do SusBot."""
+    """Valida uma query SQL para uso no fallback da Clara."""
 
     texto = (query or "").strip().rstrip(";")
     if not texto:

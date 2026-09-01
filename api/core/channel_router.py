@@ -1,4 +1,4 @@
-"""Pareamento seguro e adaptador inicial do Telegram para o SusBot."""
+"""Pareamento seguro e adaptador inicial do Telegram para a Clara."""
 
 from __future__ import annotations
 
@@ -19,7 +19,15 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from api.core import db
+from api.core.audio_transcription import (
+    AudioInvalido,
+    ResultadoTranscricao,
+    TranscricaoIndisponivel,
+    transcrever_audio,
+    validar_metadados_audio,
+)
 from api.core.auth import require_user
+from api.core.channel_media import MidiaCanalIndisponivel, baixar_audio_telegram
 from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
     aprender_da_mensagem,
@@ -160,7 +168,7 @@ def _dividir_texto_telegram(texto: str, limite: int = 3500) -> list[str]:
 
 
 def _markdown_para_html_telegram(texto: str) -> str:
-    """Converte o subconjunto de Markdown do SusBot para HTML seguro do Telegram."""
+    """Converte o subconjunto de Markdown da Clara para HTML seguro do Telegram."""
 
     seguro = html.escape(str(texto or ""), quote=False)
     seguro = re.sub(r"(?m)^#{1,6}\s+(.+)$", r"<b>\1</b>", seguro)
@@ -195,6 +203,28 @@ def _telegram_send(chat_id: str, texto: str) -> bool:
             log.warning("Falha ao enviar mensagem ao Telegram: %s", exc)
             return False
     return True
+
+
+def _transcrever_audio_telegram(mensagem: dict[str, Any]) -> ResultadoTranscricao:
+    audio = mensagem.get("voice") or mensagem.get("audio") or {}
+    if not isinstance(audio, dict):
+        raise AudioInvalido("A mensagem de áudio recebida é inválida.")
+
+    file_id = str(audio.get("file_id") or "").strip()
+    mime_type = str(audio.get("mime_type") or "audio/ogg").strip()
+    duracao = audio.get("duration")
+    tamanho = audio.get("file_size")
+    validar_metadados_audio(
+        tamanho_bytes=tamanho,
+        duracao_segundos=duracao,
+        mime_type=mime_type,
+    )
+    conteudo = baixar_audio_telegram(_telegram_bot_token(), file_id)
+    return transcrever_audio(
+        conteudo,
+        mime_type=mime_type,
+        duracao_segundos=duracao,
+    )
 
 
 def _data_curta(valor: str | None) -> str | None:
@@ -350,7 +380,7 @@ def revogar_canal(provedor: str, user: dict = Depends(require_user)):
     if not conexao:
         raise HTTPException(404, "Canal conectado nao encontrado")
     db.revogar_conexao_canal(usuario, provedor)
-    _telegram_send(conexao["external_chat_id"], "A conexao com o SusPredict foi removida. Para usar o SusBot novamente, faca um novo pareamento no aplicativo.")
+    _telegram_send(conexao["external_chat_id"], "A conexao com o SusPredict foi removida. Para usar a Clara novamente, faca um novo pareamento no aplicativo.")
     return None
 
 
@@ -414,18 +444,19 @@ def processar_update_telegram(update: dict) -> None:
     chat = mensagem.get("chat") or {}
     remetente = mensagem.get("from") or {}
     texto = str(mensagem.get("text") or "").strip()
+    tem_audio = isinstance(mensagem.get("voice") or mensagem.get("audio"), dict)
     chat_id = str(chat.get("id") or "").strip()
     external_user_id = str(remetente.get("id") or "").strip()
-    if not texto or not chat_id or not external_user_id:
+    if (not texto and not tem_audio) or not chat_id or not external_user_id:
         return
     if chat.get("type") != "private":
-        _telegram_send(chat_id, "Por seguranca, conecte e use o SusBot apenas em uma conversa privada.")
+        _telegram_send(chat_id, "Por seguranca, conecte e use a Clara apenas em uma conversa privada.")
         return
 
     if texto.startswith("/start"):
         partes = texto.split(maxsplit=1)
         if len(partes) != 2:
-            _telegram_send(chat_id, "Abra SusPredict, entre em SusBot > Canais e gere um novo link de conexao.")
+            _telegram_send(chat_id, "Abra SusPredict, entre em Clara > Canais e gere um novo link de conexao.")
             return
         pareamento = db.reivindicar_pareamento_canal(
             _token_hash(partes[1].strip()),
@@ -442,17 +473,35 @@ def processar_update_telegram(update: dict) -> None:
 
     conexao = db.get_conexao_canal_por_externo("telegram", external_user_id)
     if not conexao:
-        _telegram_send(chat_id, "Este Telegram ainda nao esta conectado. Gere um link em SusBot > Canais no SusPredict.")
+        _telegram_send(chat_id, "Este Telegram ainda nao esta conectado. Gere um link em Clara > Canais no SusPredict.")
         return
     if texto.lower() in {"/nova", "/new", "/clear"}:
         db.atualizar_conversa_canal(conexao["id"], None)
         _telegram_send(chat_id, "Nova conversa pronta. Qual decisao voce precisa tomar agora?")
         return
+    if tem_audio:
+        _telegram_send(chat_id, "🎙️ Recebi seu áudio. Estou transcrevendo com processamento local…")
+        try:
+            transcricao = _transcrever_audio_telegram(mensagem)
+            texto = transcricao.texto
+        except AudioInvalido as exc:
+            _telegram_send(chat_id, f"Não consegui usar este áudio: {exc}")
+            return
+        except (MidiaCanalIndisponivel, TranscricaoIndisponivel) as exc:
+            log.warning("Falha ao preparar áudio do Telegram para transcrição: %s", exc)
+            _telegram_send(
+                chat_id,
+                "Não consegui transcrever este áudio agora. Você pode tentar novamente ou enviar a pergunta em texto.",
+            )
+            return
+
+        resumo = texto if len(texto) <= 600 else f"{texto[:597].rstrip()}…"
+        _telegram_send(chat_id, f"🎙️ Entendi seu áudio como:\n\n“{resumo}”\n\nVou analisar a pergunta.")
     try:
         _resposta_historico, resposta_telegram = _processar_pergunta_telegram(conexao, texto)
     except Exception as exc:  # pragma: no cover - defesa para webhook externo
         log.exception("Falha ao processar mensagem do Telegram: %s", exc)
-        resposta_telegram = "Nao consegui consultar o SusBot agora. Tente novamente em instantes."
+        resposta_telegram = "Nao consegui consultar a Clara agora. Tente novamente em instantes."
     _telegram_send(chat_id, resposta_telegram)
 
 

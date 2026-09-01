@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch } from './auth.js';
+import { assinarCacheSessao, lerCacheSessao, obterComCacheSessao } from './sessionCache.js';
+
+const CONSULTAS_INICIAIS = [
+  ['ruptura', { ibge: '351300', periodo: '12 Meses' }],
+  ['epidemiologia', { ibge: '351300', periodo: '12 Meses' }],
+  ['internacoes', { periodo: '12 Meses' }],
+  ['vacinacao', { ibge: '351300', periodo: '12 Meses' }],
+];
 
 function queryString(params) {
   const query = new URLSearchParams();
@@ -17,21 +25,47 @@ export async function consultarDados(recurso, params = {}) {
   return payload;
 }
 
+export function chaveDadosOperacionais(recurso, params = {}) {
+  return `${recurso}:${queryString(params)}`;
+}
+
+export function obterDadosOperacionais(recurso, params = {}, opcoes = {}) {
+  const chave = chaveDadosOperacionais(recurso, params);
+  return obterComCacheSessao(chave, () => consultarDados(recurso, params), opcoes);
+}
+
+export async function preCarregarDadosOperacionais() {
+  const resultados = await Promise.allSettled(
+    CONSULTAS_INICIAIS.map(([recurso, params]) => obterDadosOperacionais(recurso, params)),
+  );
+  return resultados;
+}
+
 export function useDadosOperacionais(recurso, params, ativo = true) {
   const chave = JSON.stringify(params || {});
-  const [estado, setEstado] = useState({ dados: null, carregando: ativo, erro: null });
+  const chaveCache = chaveDadosOperacionais(recurso, params);
+  const inicial = ativo ? lerCacheSessao(chaveCache) : null;
+  const [estado, setEstado] = useState({ dados: inicial || null, carregando: ativo && !inicial, erro: null });
 
-  const recarregar = useCallback(async () => {
+  const recarregar = useCallback(async (forcar = true) => {
     if (!ativo) return;
-    setEstado(anterior => ({ ...anterior, carregando: true, erro: null }));
+    const emCache = lerCacheSessao(chaveCache);
+    setEstado(anterior => ({ ...anterior, dados: anterior.dados || emCache || null, carregando: !anterior.dados && !emCache, erro: null }));
     try {
-      const dados = await consultarDados(recurso, params);
+      const dados = await obterDadosOperacionais(recurso, params, { forcar });
       setEstado({ dados, carregando: false, erro: null });
     } catch (erro) {
-      setEstado({ dados: null, carregando: false, erro: erro.message || 'Fonte indisponível.' });
+      setEstado(anterior => ({ dados: anterior.dados, carregando: false, erro: erro.message || 'Fonte indisponível.' }));
     }
-  }, [ativo, recurso, chave]);
+  }, [ativo, recurso, chave, chaveCache]);
 
-  useEffect(() => { void recarregar(); }, [recarregar]);
+  useEffect(() => {
+    if (!ativo) return undefined;
+    const cancelar = assinarCacheSessao(chaveCache, dados => {
+      if (dados !== undefined) setEstado({ dados, carregando: false, erro: null });
+    });
+    void recarregar(false);
+    return cancelar;
+  }, [ativo, chaveCache, recarregar]);
   return { ...estado, recarregar };
 }

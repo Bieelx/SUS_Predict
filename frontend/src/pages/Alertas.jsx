@@ -569,7 +569,7 @@ function Timeline({ passos }) {
 export default function Alertas({
   onNavigate,
   onGerarEtp,
-  onOpenSusBot,
+  onOpenClara,
   demoState,
   deepLinkAlertaId = null,
   filtroInicial = 'todos',
@@ -679,7 +679,7 @@ export default function Alertas({
     if (deepLinkAlertaId) onDeepLinkClose?.();
   }
 
-  function analisarComSusBot(alerta) {
+  function analisarComClara(alerta) {
     const prompt = [
       `Analise o alerta "${alerta.titulo}" de ${municipio.nome}/${municipio.uf}.`,
       `Evidência exibida: ${alerta.evidencia}.`,
@@ -689,7 +689,7 @@ export default function Alertas({
         : 'Não execute nenhuma ação operacional sem minha confirmação explícita.',
     ].join(' ');
     fecharDrawer();
-    onOpenSusBot?.(prompt);
+    onOpenClara?.(prompt);
   }
 
   const alertaAtivoDrawer = drawer?.kind === 'ativo' ? alertasVisiveis.find(a => a.id === drawer.data.id) : null;
@@ -735,7 +735,7 @@ export default function Alertas({
   }, [drawer]);
 
   if (!demoState?.enabled) {
-    return <AlertasReais onOpenSusBot={onOpenSusBot} deepLinkAlertaId={deepLinkAlertaId} />;
+    return <AlertasReais onOpenClara={onOpenClara} deepLinkAlertaId={deepLinkAlertaId} />;
   }
 
   return (
@@ -901,7 +901,7 @@ export default function Alertas({
                   <BotaoAcao alerta={alertaAtivoDrawer} onAcao={handleAcao} />
                   <button
                     type="button"
-                    onClick={() => analisarComSusBot(alertaAtivoDrawer)}
+                    onClick={() => analisarComClara(alertaAtivoDrawer)}
                     style={{
                       minHeight: 44, padding: '8px 13px', borderRadius: 8,
                       border: '1px solid var(--primary-soft-border)', background: 'var(--primary-soft)',
@@ -910,7 +910,7 @@ export default function Alertas({
                     }}
                   >
                     <MIcon m="smart_toy" size={16} />
-                    Analisar com SusBot
+                    Analisar com Clara
                   </button>
                 </div>
               </>

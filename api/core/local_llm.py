@@ -1,4 +1,4 @@
-"""Adaptador do SusBot para um Ollama local.
+"""Adaptador da Clara para um Ollama local.
 
 O planejamento usa a API nativa do Ollama para garantir JSON estruturado.
 A resposta final usa o endpoint OpenAI-compatible e repassa o stream sem
@@ -33,7 +33,7 @@ PLANO_SCHEMA = {
     "required": ["acao"],
 }
 
-PLANEJADOR_SYSTEM = """Voce e o planejador do SusBot, assistente de gestao municipal de saude.
+PLANEJADOR_SYSTEM = """Voce e o planejador da Clara, assistente de gestao municipal de saude.
 
 Ferramentas disponiveis:
 - consultar_estoque: argumentos permitidos: item (string), somente_risco (boolean)
@@ -91,7 +91,7 @@ def _normalizar_argumentos(ferramenta: str, argumentos: Any) -> dict[str, Any]:
     return normalizados
 
 
-class LocalSusBotLLM:
+class LocalClaraLLM:
     def __init__(
         self,
         base_url: str | None = None,
@@ -166,7 +166,7 @@ class LocalSusBotLLM:
         resultado_ferramenta: dict[str, Any] | None,
     ) -> Iterable[str]:
         mensagens = [
-            ("system", "Voce e o SusBot. Responda em portugues do Brasil, de forma concisa, sem inventar dados."),
+            ("system", "Voce e a Clara. Responda em portugues do Brasil, de forma concisa, sem inventar dados."),
             (
                 "human",
                 json.dumps(

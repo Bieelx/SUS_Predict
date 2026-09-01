@@ -1,4 +1,4 @@
-"""Métricas locais e anônimas do roteamento do SusBot."""
+"""Métricas locais e anônimas do roteamento da Clara."""
 
 from __future__ import annotations
 

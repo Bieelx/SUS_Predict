@@ -1,4 +1,4 @@
-"""Protecao adicional para a exposicao publica do endpoint do SusBot."""
+"""Protecao adicional para a exposicao publica do endpoint da Clara."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def avisar_se_protecao_desativada() -> None:
     if _chaves_configuradas() or _aviso_protecao_desativada_emitido:
         return
     log.warning(
-        "ATENCAO: protecao por chave do SusBot DESATIVADA porque "
+        "ATENCAO: protecao por chave da Clara DESATIVADA porque "
         "SUSBOT_API_KEYS esta vazia. Use apenas em desenvolvimento local."
     )
     _aviso_protecao_desativada_emitido = True
@@ -67,7 +67,7 @@ def verificar_acesso_susbot(
     chaves = _chaves_configuradas()
     chave_recebida = _chave_recebida(request, x_api_key)
     if chaves and not any(_comparar_chaves(chave_recebida, chave) for chave in chaves):
-        raise HTTPException(status_code=401, detail="Chave do SusBot invalida")
+        raise HTTPException(status_code=401, detail="Chave da Clara invalida")
 
     identidade = chave_recebida or (request.client.host if request.client else "local")
     limite = max(1, int(os.getenv("SUSBOT_RATE_LIMIT_PER_MINUTE") or "10"))
@@ -77,6 +77,6 @@ def verificar_acesso_susbot(
         while janela and agora - janela[0] >= 60:
             janela.popleft()
         if len(janela) >= limite:
-            raise HTTPException(status_code=429, detail="Limite do SusBot atingido. Aguarde um minuto.")
+            raise HTTPException(status_code=429, detail="Limite da Clara atingido. Aguarde um minuto.")
         janela.append(agora)
     return identidade

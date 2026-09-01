@@ -1,4 +1,4 @@
-"""Roteamento local de intenções operacionais do SusBot.
+"""Roteamento local de intenções operacionais da Clara.
 
 Esta camada é deliberadamente pequena e explicável: resolve consultas de alta
 confiança sem rede e deixa ambiguidades para o planejador generativo. Os exemplos

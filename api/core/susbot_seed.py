@@ -1,5 +1,5 @@
 """
-Seed sintético determinístico do SusBot.
+Seed sintético determinístico da Clara.
 
 Gera estoque e alertas por município para a demo permanecer estável entre
 execuções. O seed é idempotente por `ibge6`.

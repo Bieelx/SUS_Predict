@@ -1,6 +1,6 @@
 # 🏥 SUS Predict — FIAP TCC 2025/2026
 
-Aplicação web para **extrair dados públicos do DATASUS (via PySUS)**, **tratar/agregar**, **publicar no Supabase** quando configurado e oferecer um **dashboard React** com análises, previsão e o **SusBot** (chat contextual).
+Aplicação web para **extrair dados públicos do DATASUS (via PySUS)**, **tratar/agregar**, **publicar no Supabase** quando configurado e oferecer um **dashboard React** com análises, previsão e o **Clara** (chat contextual).
 
 O foco atual do projeto é **São Paulo/SP** (município: **São Paulo**, IBGE **3550308**), mas a arquitetura já suporta evoluir para mais cidades.
 
@@ -9,7 +9,7 @@ O foco atual do projeto é **São Paulo/SP** (município: **São Paulo**, IBGE *
 - Você escolhe **categoria (SIM/SIH/SINASC/SIA/SINAN)**, localização e período.
 - O backend baixa os dados reais via **FTP do DATASUS** usando **PySUS** (Python 3.12).
 - O backend calcula agregações e previsão e retorna um `resultado.json`.
-- O backend também expõe o SusBot, que consulta conversas, estoque e alertas no banco local/Supabase quando disponíveis.
+- O backend também expõe a Clara, que consulta conversas, estoque e alertas no banco local/Supabase quando disponíveis.
 - Se configurado, o backend sincroniza no **Supabase**:
 - Tabelas tratadas (pequenas): séries, distribuições, top causas.
 - Bruto compacto (opcional): CSV `.csv.gz` com colunas mínimas no **Storage**, respeitando um budget para caber no plano Free.
@@ -33,11 +33,11 @@ Necessário para rodar o frontend (Vite).
 
 ### 3) Chaves opcionais/necessárias por recurso
 
-- `GEMINI_API_KEY`: necessária para o SusBot responder com LLM real.
+- `GEMINI_API_KEY`: necessária para a Clara responder com LLM real.
 - `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`: opcionais, só se quiser sincronizar cache/persistência com Supabase.
 - `SUSBOT_DEV_AUTH_SECRET`: opcional, usado para assinar o login de desenvolvimento quando Supabase não estiver configurado.
-- `SUSBOT_MEMORY_KEY`: chave Fernet opcional para criptografar a memória pessoal do SusBot. Em desenvolvimento, uma chave local com permissão `0600` é criada em `api/.secrets/`; em produção, configure-a pelo gerenciador de segredos da infraestrutura.
-- Telegram: `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` e `CHANNEL_PAIRING_SECRET`. Veja [INTEGRACAO_CANAIS_SUSBOT.md](./INTEGRACAO_CANAIS_SUSBOT.md).
+- `SUSBOT_MEMORY_KEY`: chave Fernet opcional para criptografar a memória pessoal da Clara. Em desenvolvimento, uma chave local com permissão `0600` é criada em `api/.secrets/`; em produção, configure-a pelo gerenciador de segredos da infraestrutura.
+- Telegram: `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` e `CHANNEL_PAIRING_SECRET`. Veja [INTEGRACAO_CANAIS_CLARA.md](./INTEGRACAO_CANAIS_CLARA.md).
 
 ## Instalação (local)
 
@@ -115,11 +115,11 @@ npm run dev
 
 ## Auth de desenvolvimento
 
-Para testar o SusBot sem Supabase, use o botão **Entrar como dev** na tela de login.
+Para testar a Clara sem Supabase, use o botão **Entrar como dev** na tela de login.
 
 - Ele chama `POST /api/auth/dev-login`.
 - O backend gera um token local assinado.
-- Esse token é aceito em `GET /api/auth/me` e nas rotas do SusBot.
+- Esse token é aceito em `GET /api/auth/me` e nas rotas da Clara.
 
 ## Supabase (cache + organização)
 
@@ -205,7 +205,7 @@ real do frontend e a especificação de telas em vigor.**
 Hoje o frontend monta:
 - Login/cadastro.
 - Dashboard das telas do redesenho.
-- Painel flutuante do SusBot.
+- Painel flutuante da Clara.
 - Gerador de ETP.
 
 O texto abaixo descreve uma versão anterior do dashboard (wizard + mapa de pins), mantido aqui

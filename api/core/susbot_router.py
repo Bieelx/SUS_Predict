@@ -1,5 +1,5 @@
 """
-Router HTTP do SusBot.
+Router HTTP da Clara.
 
 Expõe o endpoint de pergunta via SSE e os endpoints de historico paginado por usuario.
 """
@@ -39,7 +39,7 @@ class ConfirmarFerramentaRequest(BaseModel):
     argumentos: dict[str, Any] = {}
 
 
-class PerguntaSusBotRequest(BaseModel):
+class PerguntaClaraRequest(BaseModel):
     pergunta: str
     conversa_id: str | None = None
     ibge6: str | None = None
@@ -61,7 +61,7 @@ def metricas_uso(user: dict = Depends(require_user)):
     return obter_metricas()
 
 
-def _ibge6(req: PerguntaSusBotRequest) -> str:
+def _ibge6(req: PerguntaClaraRequest) -> str:
     valor = str(req.ibge6 or req.ibge or "").strip()[:6]
     if not valor:
         raise HTTPException(400, "ibge6 ausente")
@@ -119,7 +119,7 @@ def _sse(evento: str, dados: dict[str, Any]) -> str:
 
 @router.post("/perguntar")
 def perguntar(
-    req: PerguntaSusBotRequest,
+    req: PerguntaClaraRequest,
     _acesso: str = Depends(verificar_acesso_susbot),
     user: dict = Depends(require_user),
 ):
@@ -198,13 +198,13 @@ def perguntar(
                     referencia_rota=referencia_rota,
                 )
             except Exception as exc:  # pragma: no cover - não deve falhar nos testes
-                log.warning("Falha ao persistir mensagem do SusBot: %s", exc)
+                log.warning("Falha ao persistir mensagem da Clara: %s", exc)
 
         except HTTPException:
             raise
         except Exception as exc:  # pragma: no cover - defesa contra falha do LLM/tool
-            log.warning("Falha no stream do SusBot: %s", exc)
-            yield _sse("erro", {"mensagem": "Falha ao gerar resposta do SusBot. Tente novamente."})
+            log.warning("Falha no stream da Clara: %s", exc)
+            yield _sse("erro", {"mensagem": "Falha ao gerar resposta da Clara. Tente novamente."})
 
     headers = {
         "X-Conversa-Id": conversa["id"],

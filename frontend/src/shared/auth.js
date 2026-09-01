@@ -1,19 +1,25 @@
 import { API_BASE } from './ui.jsx';
+import { limparCacheSessao } from './sessionCache.js';
 
 const ACCESS_TOKEN_KEY = 'sus_predict_token';
 const REFRESH_TOKEN_KEY = 'sus_predict_refresh_token';
+let usuarioAtual = null;
 
 export function getAccessToken() {
   return localStorage.getItem(ACCESS_TOKEN_KEY) || '';
 }
 
-export function saveSession(session) {
+export function saveSession(session, { preservarCache = false } = {}) {
   if (!session?.access_token) throw new Error('A autenticação não retornou uma sessão válida.');
+  if (!preservarCache && getAccessToken() !== session.access_token) limparCacheSessao();
   localStorage.setItem(ACCESS_TOKEN_KEY, session.access_token);
   if (session.refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, session.refresh_token);
+  if (session.user) usuarioAtual = session.user;
 }
 
 export function clearSession() {
+  usuarioAtual = null;
+  limparCacheSessao();
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
@@ -28,7 +34,7 @@ async function refreshSession() {
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
   if (!response.ok) return false;
-  saveSession(await response.json());
+  saveSession(await response.json(), { preservarCache: true });
   return true;
 }
 
@@ -52,10 +58,15 @@ export async function validateSession() {
   try {
     const response = await authenticatedFetch('/api/auth/me');
     if (!response.ok) return null;
-    return await response.json();
+    usuarioAtual = await response.json();
+    return usuarioAtual;
   } catch {
     return null;
   }
+}
+
+export function getCurrentUser() {
+  return usuarioAtual;
 }
 
 export async function signOut() {

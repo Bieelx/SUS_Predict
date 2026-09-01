@@ -43,7 +43,7 @@ Use o replay apenas para provar a progressao:
 **Clique/acao**
 
 1. Clicar em `Avancar mes` para ir a `fev/2024`.
-2. Ler o banner e o SusBot.
+2. Ler o banner e a Clara.
 
 **Fala**
 

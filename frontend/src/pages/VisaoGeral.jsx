@@ -2,7 +2,7 @@
 //
 // Briefing de risco do município, não um dashboard de BI descritivo: a tela responde
 // "eu preciso agir hoje, e em quê" em camadas verticais, da mais crítica para a mais
-// acessória (situação e evidência → acesso contextual ao SusBot → fila de ações → impacto). Zero gráfico e
+// acessória (situação e evidência → acesso contextual à Clara → fila de ações → impacto). Zero gráfico e
 // zero ranking aqui por decisão de produto (07/08/2026) — a série de dengue e o
 // comparativo regional já existem em Epidemiologia (nível 2), esta tela é só a fila.
 // Todos os dados abaixo são mock estático — nenhum fetch/axios nesta tela.
@@ -227,7 +227,7 @@ function FaixaTransparenciaDemo({ demoState }) {
   );
 }
 
-function CardSusBotContextual({ municipio, alertas, onOpen }) {
+function CardClaraContextual({ municipio, alertas, onOpen }) {
   const prioridade = alertas.find(alerta => (alerta.status || 'novo') !== 'resolvido') || null;
   const prompt = prioridade
     ? `Explique por que o alerta "${prioridade.titulo}" exige atenção e quais dados sustentam essa leitura.`
@@ -241,7 +241,7 @@ function CardSusBotContextual({ municipio, alertas, onOpen }) {
             <MIcon m="smart_toy" size={20} />
           </span>
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>SusBot · leitura rápida</p>
+            <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--ink-900)', margin: 0 }}>Clara · leitura rápida</p>
             <p style={{ fontSize: 11.5, color: 'var(--ink-500)', margin: '3px 0 0' }}>IA integrada ao contexto operacional</p>
           </div>
           <span style={{ marginLeft: 'auto' }}><Badge label="Contexto ativo" color="var(--primary)" /></span>
@@ -262,7 +262,7 @@ function CardSusBotContextual({ municipio, alertas, onOpen }) {
 
         <button
           onClick={() => onOpen?.(prompt)}
-          aria-label="Abrir SusBot com uma pergunta sobre a situação atual"
+          aria-label="Abrir Clara com uma pergunta sobre a situação atual"
           style={{ alignSelf: 'flex-start', minHeight: 44, marginTop: 18, padding: '9px 15px', borderRadius: 9, border: '1px solid var(--primary)', cursor: 'pointer', background: 'var(--elev)', color: 'var(--primary)', fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0 }}
         >
           Conversar sobre esta situação
@@ -594,7 +594,7 @@ function CardJanelaDecisao({ demoState, status, alertas = [] }) {
         competencia={cutoff ? formatarCutoffDemo(cutoff) : 'não disponível (mock estático, sem corte associado)'}
         calculo="Antecedência = data de ruptura prevista − data de ação recomendada; economia estimada = custo emergencial − custo planejado."
         premissas={prova ? 'Baseado no cenário demo de estoque e preços — fictício, não é o estoque real do município.' : 'não disponível (dados de exemplo estáticos, sem prova de valor calculada)'}
-        limitacoes="Combina sinal epidemiológico (SINAN) e estoque cadastrado (Insumos); a decisão de ruptura e a quantidade recomendada vêm de cálculo determinístico, não do SusBot."
+        limitacoes="Combina sinal epidemiológico (SINAN) e estoque cadastrado (Insumos); a decisão de ruptura e a quantidade recomendada vêm de cálculo determinístico, não da Clara."
         versaoModelo="Cascade Holt → OLS (epidemiologia) + cálculo determinístico (insumos)"
       />
     </Card>
@@ -629,7 +629,7 @@ function useAlertasNovosDesdeUltimoAcesso(alertas) {
 
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-export default function VisaoGeral({ onNavigate, onGerarEtp, onOpenSusBot, demoState }) {
+export default function VisaoGeral({ onNavigate, onGerarEtp, onOpenClara, demoState }) {
   const demoAtiva = demoState?.enabled && demoState.payload;
   const municipio = obterMunicipioDemo(demoState, MUNICIPIO);
   const statusDemo = demoAtiva ? construirStatusDemo(demoState.payload) : STATUS;
@@ -642,7 +642,7 @@ export default function VisaoGeral({ onNavigate, onGerarEtp, onOpenSusBot, demoS
   );
 
   if (!demoState?.enabled) {
-    return <VisaoGeralReal onNavigate={onNavigate} onOpenSusBot={onOpenSusBot} onDemo={() => demoState?.iniciarDemo?.()} />;
+    return <VisaoGeralReal onNavigate={onNavigate} onOpenClara={onOpenClara} onDemo={() => demoState?.iniciarDemo?.()} />;
   }
 
   return (
@@ -701,7 +701,7 @@ export default function VisaoGeral({ onNavigate, onGerarEtp, onOpenSusBot, demoS
 
       <div className="visao-resumo-grid">
         <BannerStatus onNavigate={onNavigate} status={statusDemo} acao="alertas" rotuloAcao="Ver plano" demoState={demoState} />
-        <CardSusBotContextual municipio={municipio} alertas={alertasDemo} onOpen={onOpenSusBot} />
+        <CardClaraContextual municipio={municipio} alertas={alertasDemo} onOpen={onOpenClara} />
       </div>
       <AlertasPrioritarios onNavigate={onNavigate} onGerarEtp={onGerarEtp} alertas={alertasDemo} />
       <ProvaValorDemo demoState={demoState} />

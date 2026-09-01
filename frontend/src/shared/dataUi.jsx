@@ -32,11 +32,7 @@ export function FonteReal({ meta, detalhe }) {
   const data = meta.data_referencia ? new Date(meta.data_referencia).toLocaleDateString('pt-BR') : 'competência não informada';
   return (
     <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--ink-500)', marginBottom: 18 }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--good)', fontWeight: 800 }}>
-        <MIcon m="verified" size={15} /> Dados reais
-      </span>
-      <span aria-hidden="true">·</span>
-      <span>{meta.fonte}</span>
+      <span>Fonte: {meta.fonte}</span>
       <span aria-hidden="true">·</span>
       <span>Referência: {data}</span>
       {detalhe && <><span aria-hidden="true">·</span><span>{detalhe}</span></>}

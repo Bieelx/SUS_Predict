@@ -15,7 +15,7 @@ function useRuptura(periodo) {
   return useDadosOperacionais('ruptura', { ibge: IBGE_PADRAO, periodo });
 }
 
-export function VisaoGeralReal({ onNavigate, onOpenSusBot, onDemo }) {
+export function VisaoGeralReal({ onNavigate, onOpenClara, onDemo }) {
   const periodo = '12 Meses';
   const estado = useRuptura(periodo);
   const dados = estado.dados;
@@ -38,7 +38,7 @@ export function VisaoGeralReal({ onNavigate, onOpenSusBot, onDemo }) {
         <p className="eyebrow">Situação prioritária</p>
         <h2 style={{ fontSize: 19, margin: '8px 0' }}>{prioritario?.insumo_padronizado || 'Nenhum item crítico identificado'}</h2>
         <p style={texto}>{prioritario?.mensagem_analitica || 'A fonte real não retornou alerta de aquisição para o município.'}</p>
-        {prioritario && <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}><button onClick={() => onNavigate?.('alertas')} style={primario}>Ver alertas</button><button onClick={() => onOpenSusBot?.(`Analise o risco de aquisição de ${prioritario.insumo_padronizado} em ${dados.municipio.nome}. Use apenas as fontes disponíveis e explique as limitações.`)} style={botao}>Analisar com SusBot</button></div>}
+        {prioritario && <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}><button onClick={() => onNavigate?.('alertas')} style={primario}>Ver alertas</button><button onClick={() => onOpenClara?.(`Analise o risco de aquisição de ${prioritario.insumo_padronizado} em ${dados.municipio.nome}. Use apenas as fontes disponíveis e explique as limitações.`)} style={botao}>Analisar com Clara</button></div>}
       </Card>
       <Card className="p-5">
         <SectionTitle>Leitura correta do indicador</SectionTitle>
@@ -49,7 +49,7 @@ export function VisaoGeralReal({ onNavigate, onOpenSusBot, onDemo }) {
   </div>;
 }
 
-export function AlertasReais({ onOpenSusBot, deepLinkAlertaId }) {
+export function AlertasReais({ onOpenClara, deepLinkAlertaId }) {
   const [periodo, setPeriodo] = useState('12 Meses');
   const estado = useRuptura(periodo);
   const dados = estado.dados;
@@ -66,7 +66,7 @@ export function AlertasReais({ onOpenSusBot, deepLinkAlertaId }) {
           <div style={{ textAlign: 'right' }}><strong style={{ fontFamily: 'JetBrains Mono, monospace', color: riscoCor(item.faixa_risco_aquisicao), fontSize: 22 }}>{inteiro(item.pontos_risco_aquisicao)}</strong><p style={{ fontSize: 10.5, color: 'var(--ink-400)', margin: 0 }}>pontos de risco</p></div>
         </div>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 12, fontSize: 11.5, color: 'var(--ink-500)' }}><span>{inteiro(item.quantidade_adquirida)} {item.unidade_fornecimento || 'un.'} adquiridas</span><span>{inteiro(item.total_fornecedores)} fornecedores</span><span>{item.flag_sem_aquisicao_3m ? 'Sem aquisição nos últimos 3 meses' : 'Aquisição recente identificada'}</span></div>
-        <button onClick={() => onOpenSusBot?.(`Explique o alerta real de aquisição para ${item.insumo_padronizado} em ${dados.municipio.nome}: ${item.mensagem_analitica}. Não trate isso como estoque físico.`)} style={{ ...botao, marginTop: 12 }}><MIcon m="smart_toy" size={15} /> Analisar com SusBot</button>
+        <button onClick={() => onOpenClara?.(`Explique o alerta real de aquisição para ${item.insumo_padronizado} em ${dados.municipio.nome}: ${item.mensagem_analitica}. Não trate isso como estoque físico.`)} style={{ ...botao, marginTop: 12 }}><MIcon m="smart_toy" size={15} /> Analisar com Clara</button>
       </article>) : <Vazio texto="Nenhum alerta real retornado para o município." />}
     </Card>
   </div>;

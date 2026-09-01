@@ -1,5 +1,5 @@
 """
-Tools parametrizadas do SusBot.
+Tools parametrizadas da Clara.
 
 Cada factory fixa o `ibge6` por closure e devolve funções que retornam sempre `dict`.
 """
@@ -112,7 +112,7 @@ def _resposta_vazia(motivo: str, **extra) -> dict:
 
 
 def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
-    """Cria as tools do SusBot com o município fixado por closure."""
+    """Cria as tools da Clara com o município fixado por closure."""
 
     ibge = _normalizar_ibge6(ibge6)
 
@@ -361,6 +361,6 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
 
 
 # Ferramentas que alteram estado — exigem confirmação humana explícita antes de
-# executar (docs/06-agente-susbot.md, requisito inegociável do briefing de
+# executar (docs/06-agente-clara.md, requisito inegociável do briefing de
 # reposicionamento). Todo o resto é leitura e roda direto.
 FERRAMENTAS_ESCRITA = {"gerar_etp"}
