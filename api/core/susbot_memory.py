@@ -17,13 +17,25 @@ from cryptography.fernet import Fernet, InvalidToken
 from api.core import db
 
 
-_CHAVES_PUBLICAS = {"nome", "area_atuacao", "cargo", "preferencia_resposta"}
+# Lista fechada de chaves graváveis (docs/09, Fase 0). Nenhuma chave pode ter
+# nome ou semântica de papel, cargo, área, município, nível ou permissão —
+# a autorização é resolvida em outro armazenamento e nunca passa por aqui.
+_CHAVES_PUBLICAS = {"nome", "preferencia_resposta"}
+# Chaves que já existiram e foram removidas; `limpar_chaves_removidas` apaga o
+# que ainda estiver gravado delas.
+_CHAVES_REMOVIDAS = {"cargo", "area_atuacao"}
 _ROTULOS = {
     "nome": "Nome",
-    "area_atuacao": "Área de atuação",
-    "cargo": "Cargo ou função",
     "preferencia_resposta": "Preferência de resposta",
 }
+# Enum fechado de preferencia_resposta: valor -> palavras-chave que o disparam.
+# Texto fora deste mapa é descartado, nunca gravado como texto livre.
+_PREFERENCIAS = {
+    "curta": {"curta", "curtas", "breve", "breves", "resumida", "resumidas", "direta", "diretas", "objetiva", "objetivas", "rapida", "rapidas"},
+    "detalhada": {"detalhada", "detalhadas", "completa", "completas", "longa", "longas", "explicada", "explicadas", "aprofundada", "aprofundadas"},
+    "com_numeros": {"numeros", "numericas", "dados", "percentuais", "valores", "estatisticas"},
+}
+_RE_NOME_VALIDO = re.compile(r"^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'\-]*(?:\s+[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'\-]*){0,2}$")
 _TOPICOS = {
     "estoque": {"estoque", "insumo", "medicamento", "remedio", "abastecimento", "ruptura"},
     "epidemiologia": {"epidemiologia", "dengue", "notific", "caso", "surto"},
@@ -114,8 +126,50 @@ def _contem_dado_sensivel(texto: str) -> bool:
         r"\b(?:eu tenho|fui diagnosticad\w*|meu diagnostico|minha doenca|minha saude)\b",
         r"\b(?:minha religiao|minha orientacao sexual|meu partido|voto em)\b",
         r"\b(?:paciente|prontuario)\s+[a-z0-9]",
+        # Delimitadores e rótulos dos prompts da Clara: um valor de memória nunca
+        # pode abrir, fechar ou imitar um bloco do prompt.
+        r"={3,}",
+        r"\bdados da ferramenta\b",
+        r"\bmemoria do usuario\b",
+        r"\bmemoria pessoal\b",
+        r"\bpergunta do usuario\b",
+        r"\bsystem prompt\b",
+        r"\((?:inicio|fim)\)",
     ]
     return any(re.search(padrao, normalizado, flags=re.IGNORECASE) for padrao in padroes)
+
+
+def mapear_preferencia(texto: str) -> str | None:
+    """Reduz texto livre ao enum de preferência; None quando nada casa."""
+
+    palavras = set(_normalizar(texto).replace(",", " ").split())
+    for valor, termos in _PREFERENCIAS.items():
+        if palavras & termos:
+            return valor
+    return None
+
+
+def _validar_valor(chave: str, valor: Any) -> str | int:
+    """Validação por chave. Levanta ValueError para qualquer valor fora do formato."""
+
+    if chave == "nome":
+        texto = _limpar_valor(valor, limite=200)
+        if len(texto) > 60 or not _RE_NOME_VALIDO.match(texto):
+            raise ValueError("nome fora do formato permitido")
+        return texto.title()
+    if chave == "preferencia_resposta":
+        texto = str(valor or "").strip().lower()
+        if texto not in _PREFERENCIAS:
+            raise ValueError("preferencia_resposta fora do enum")
+        return texto
+    if chave.startswith("topico:"):
+        if chave.removeprefix("topico:") not in _TOPICOS:
+            raise ValueError("tópico desconhecido")
+        try:
+            return max(0, int(valor))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("tópico exige inteiro") from exc
+    raise ValueError("Categoria de memória não permitida")
 
 
 def salvar_fato(
@@ -130,6 +184,9 @@ def salvar_fato(
     chave = str(chave or "").strip().lower()
     if chave not in _CHAVES_PUBLICAS and not chave.startswith("topico:"):
         raise ValueError("Categoria de memória não permitida")
+    valor = _validar_valor(chave, valor)
+    if isinstance(valor, str) and _contem_dado_sensivel(valor):
+        raise ValueError("valor contém termo bloqueado")
     owner = _owner_ref(usuario)
     payload = {
         "chave": chave,
@@ -204,37 +261,6 @@ def aprender_da_mensagem(usuario: str, texto: str, origem: str) -> list[dict[str
             ),
         ),
         (
-            "area_atuacao",
-            "profissional",
-            re.compile(
-                r"\b(?:trabalho|atuo)\s+(?:na area de|na|no|com|em)\s+(.+?)"
-                r"(?=\s+(?:e|mas)\b|[,.!?]|$)",
-                re.IGNORECASE,
-            ),
-        ),
-        (
-            "area_atuacao",
-            "profissional",
-            re.compile(r"\bminha area (?:é|e)\s+(.+?)(?=\s+(?:e|mas)\b|[,.!?]|$)", re.IGNORECASE),
-        ),
-        (
-            "cargo",
-            "profissional",
-            re.compile(
-                r"\b(?:meu cargo|minha funcao) (?:é|e)\s+(.+?)(?=\s+(?:e|mas)\b|[,.!?]|$)",
-                re.IGNORECASE,
-            ),
-        ),
-        (
-            "cargo",
-            "profissional",
-            re.compile(
-                r"\bsou\s+((?:gestor|gestora|analista|coordenador|coordenadora|diretor|diretora|"
-                r"enfermeiro|enfermeira|medico|medica)(?:\s+de\s+.+?)?)(?=\s+(?:e|mas)\b|[,.!?]|$)",
-                re.IGNORECASE,
-            ),
-        ),
-        (
             "preferencia_resposta",
             "preferencia",
             re.compile(r"\b(?:prefiro|gosto de) respostas?\s+(.+?)(?=[.!?]|$)", re.IGNORECASE),
@@ -245,20 +271,17 @@ def aprender_da_mensagem(usuario: str, texto: str, origem: str) -> list[dict[str
         if not match:
             continue
         valor = _limpar_valor(match.group(1))
-        if len(valor) < 2 or _contem_dado_sensivel(valor):
+        if chave == "preferencia_resposta":
+            valor = mapear_preferencia(valor)
+        if not valor or len(str(valor)) < 2:
             continue
-        if chave == "nome":
-            valor = valor.title()
-        aprendidos.append(
-            salvar_fato(
-                usuario,
-                chave,
-                valor,
-                categoria=categoria,
-                origem=origem,
-                confianca=1.0,
+        try:
+            aprendidos.append(
+                salvar_fato(usuario, chave, valor, categoria=categoria, origem=origem, confianca=1.0)
             )
-        )
+        except ValueError:
+            # Fora do formato/enum: descarta em silêncio, nunca grava texto livre.
+            continue
 
     normalizado = _normalizar(texto)
     for topico, termos in _TOPICOS.items():
@@ -274,8 +297,12 @@ def aprender_do_usuario_autenticado(usuario: str, auth_user: dict[str, Any], ori
     metadata = auth_user.get("user_metadata") or {}
     nome = metadata.get("nome") or metadata.get("name") or metadata.get("full_name")
     nome = _limpar_valor(str(nome or "").replace(".", " "))
-    if nome and not _contem_dado_sensivel(nome):
-        salvar_fato(usuario, "nome", nome.title(), categoria="identidade", origem=origem, confianca=1.0)
+    if not nome:
+        return
+    try:
+        salvar_fato(usuario, "nome", nome, categoria="identidade", origem=origem, confianca=1.0)
+    except ValueError:
+        return
 
 
 def contexto_para_agente(usuario: str) -> dict[str, Any]:
@@ -335,10 +362,6 @@ def executar_comando_memoria(usuario: str, texto: str) -> str | None:
     aliases = {
         "nome": "nome",
         "meu nome": "nome",
-        "area": "area_atuacao",
-        "minha area": "area_atuacao",
-        "cargo": "cargo",
-        "meu cargo": "cargo",
         "preferencia": "preferencia_resposta",
         "preferencias": "preferencia_resposta",
     }
@@ -352,3 +375,61 @@ def executar_comando_memoria(usuario: str, texto: str) -> str | None:
         removidos = apagar_memorias(usuario, chave)
         return "Informação esquecida." if removidos else "Essa informação não estava na minha memória."
     return None
+
+
+def limpar_chaves_removidas() -> dict[str, int]:
+    """Rotina de limpeza da Fase 0 (docs/09): apaga registros de chaves que saíram
+    da lista permitida, no SQLite e, por espelho, no Supabase.
+
+    Percorre todas as linhas, decifra cada payload e deleta as que pertencem a
+    `_CHAVES_REMOVIDAS`. Linhas que não decifram (chave Fernet de outro servidor)
+    são contadas em `ilegiveis` e mantidas.
+    """
+
+    def _remover(chave: str) -> bool:
+        return chave in _CHAVES_REMOVIDAS
+
+    removidos = 0
+    ilegiveis = 0
+    for row in db.listar_todas_memorias_usuario():
+        payload = _decrypt(row["payload_encrypted"])
+        if payload is None:
+            ilegiveis += 1
+            continue
+        if _remover(str(payload.get("chave") or "")):
+            removidos += db.deletar_memoria_usuario(row["owner_ref"], row["fact_ref"])
+
+    # Supabase pode ter linhas espelhadas de outro servidor (que não estão neste
+    # SQLite). Varre direto, mesma chave Fernet; o que não decifra fica.
+    removidos_supabase = 0
+    ilegiveis_supabase = 0
+    linhas_supabase: list[dict[str, Any]] = []
+    supabase_erro = None
+    if db.supabase_configured():
+        try:
+            linhas_supabase = db.sb_select("susbot_memorias")
+        except Exception as exc:  # tabela ausente, rede, credencial
+            supabase_erro = str(exc)[:200]
+    for row in linhas_supabase:
+        payload = _decrypt(row.get("payload_encrypted") or "")
+        if payload is None:
+            ilegiveis_supabase += 1
+            continue
+        if _remover(str(payload.get("chave") or "")):
+            db._sync_delete("susbot_memorias", {"owner_ref": row["owner_ref"], "fact_ref": row["fact_ref"]})
+            removidos_supabase += 1
+    return {
+        "removidos": removidos,
+        "ilegiveis": ilegiveis,
+        "removidos_supabase": removidos_supabase,
+        "ilegiveis_supabase": ilegiveis_supabase,
+        "supabase_erro": supabase_erro,
+    }
+
+
+if __name__ == "__main__":  # pragma: no cover - uso operacional
+    from pathlib import Path as _Path
+    from dotenv import load_dotenv
+    load_dotenv(_Path(__file__).resolve().parents[2] / ".env")
+    db.init_db()
+    print(limpar_chaves_removidas())

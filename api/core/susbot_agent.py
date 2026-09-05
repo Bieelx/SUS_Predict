@@ -573,13 +573,38 @@ class ClaraAgent:
         return builder.compile()
 
     def _contexto(self) -> dict[str, Any]:
+        """Contexto do planejador: sem memória (nome/preferência não mudam a ferramenta)."""
+
         return {
             "ibge6": self.ibge6,
             "tela_origem": self.tela_origem,
             "usuario_autenticado": bool(self.usuario),
             "historico_recente": self.historico[-8:],
-            "memoria_pessoal": self.memoria_usuario,
         }
+
+    def _memoria_para_prompt(self) -> dict[str, Any]:
+        """Só chaves fixas e valores já validados; vai para o bloco MEMORIA DO USUARIO."""
+
+        fatos = self.memoria_usuario.get("fatos") or {}
+        memoria: dict[str, Any] = {}
+        if fatos.get("nome"):
+            memoria["nome"] = str(fatos["nome"])
+        if fatos.get("preferencia_resposta"):
+            memoria["preferencia_resposta"] = str(fatos["preferencia_resposta"])
+        topicos = [str(t) for t in (self.memoria_usuario.get("topicos_frequentes") or [])[:3]]
+        if topicos:
+            memoria["assuntos_frequentes"] = topicos
+        return memoria
+
+    def _contexto_resposta(self) -> dict[str, Any]:
+        """Contexto da geração final: contexto do planejador + memória em chave própria,
+        que `montar_mensagem_resposta` retira do JSON e renderiza em bloco delimitado."""
+
+        contexto = self._contexto()
+        memoria = self._memoria_para_prompt()
+        if memoria:
+            contexto["memoria_usuario"] = memoria
+        return contexto
 
     def _resposta_contextual(self, pergunta: str) -> str | None:
         texto = _normalizar_intencao(pergunta)
@@ -626,10 +651,6 @@ class ClaraAgent:
                 partes.append(f"Seu nome é **{fatos['nome']}**")
             else:
                 partes.append("Você está autenticado no SusPredict")
-            if fatos.get("cargo"):
-                partes.append(f"sua função é **{fatos['cargo']}**")
-            if fatos.get("area_atuacao"):
-                partes.append(f"você atua em **{fatos['area_atuacao']}**")
             if fatos.get("preferencia_resposta"):
                 partes.append(f"você prefere respostas **{fatos['preferencia_resposta']}**")
             resposta = "; ".join(partes) + "."
@@ -696,7 +717,7 @@ class ClaraAgent:
         ferramenta_executada: str | None = None,
         execucao: dict[str, Any] | None = None,
     ) -> Iterable[dict[str, Any]]:
-        contexto = self._contexto()
+        contexto = self._contexto_resposta()
         execucao_final = dict(execucao or {})
 
         if referencia_rota:

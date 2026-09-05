@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from api.core.auth import require_user
+from api.core.identidade import usuario_referencia
 from api.core import db
 from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
@@ -47,15 +48,11 @@ class PerguntaClaraRequest(BaseModel):
     confirmar: ConfirmarFerramentaRequest | None = None
 
 
-def _usuario_referencia(user: dict[str, Any]) -> str:
-    return str(user.get("id") or user.get("email") or user.get("sub") or "").strip()
-
-
 @router.get("/metricas-uso")
 def metricas_uso(user: dict = Depends(require_user)):
     """Contagens anônimas do processo atual para acompanhar economia de LLM."""
 
-    if not _usuario_referencia(user):
+    if not usuario_referencia(user):
         raise HTTPException(401, "Usuario autenticado invalido")
     return obter_metricas()
 
@@ -122,7 +119,7 @@ def perguntar(
     _acesso: str = Depends(verificar_acesso_susbot),
     user: dict = Depends(require_user),
 ):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
 
@@ -215,7 +212,7 @@ def perguntar(
 
 @router.get("/memoria")
 def consultar_memoria(user: dict = Depends(require_user)):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
     return resumo_transparente(usuario)
@@ -223,7 +220,7 @@ def consultar_memoria(user: dict = Depends(require_user)):
 
 @router.delete("/memoria")
 def excluir_memoria(user: dict = Depends(require_user)):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
     return {"removidos": apagar_memorias(usuario)}
@@ -231,7 +228,7 @@ def excluir_memoria(user: dict = Depends(require_user)):
 
 @router.delete("/memoria/{chave}")
 def excluir_fato_da_memoria(chave: str, user: dict = Depends(require_user)):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
     return {"removidos": apagar_memorias(usuario, chave)}
@@ -244,7 +241,7 @@ def listar_conversas(
     canal: str | None = None,
     user: dict = Depends(require_user),
 ):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
     canal_normalizado = str(canal or "").strip().lower() or None
@@ -266,7 +263,7 @@ def listar_mensagens(
     page_size: int = 30,
     user: dict = Depends(require_user),
 ):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
 

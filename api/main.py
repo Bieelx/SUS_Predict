@@ -276,7 +276,6 @@ class AuthRequest(BaseModel):
     email:    str
     password: str
     nome:     str = ""
-    cargo:    str = ""
 
 
 class RefreshRequest(BaseModel):
@@ -317,7 +316,9 @@ def health():
 
 @app.post("/api/auth/signup")
 def auth_signup(req: AuthRequest):
-    metadata = {k: v for k, v in {"nome": req.nome, "cargo": req.cargo}.items() if v}
+    # Só o nome. Cargo/papel nunca é auto-declarado: perfil de acesso vem do
+    # armazenamento de permissões (docs/09), não de user_metadata.
+    metadata = {"nome": req.nome} if req.nome else {}
     return auth_core.signup(req.email, req.password, metadata or None)
 
 

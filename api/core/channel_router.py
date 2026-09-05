@@ -27,6 +27,7 @@ from api.core.audio_transcription import (
     validar_metadados_audio,
 )
 from api.core.auth import require_user
+from api.core.identidade import usuario_referencia
 from api.core.channel_media import MidiaCanalIndisponivel, baixar_audio_telegram
 from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
@@ -47,10 +48,6 @@ TELEGRAM_SESSAO_INATIVIDADE_MINUTOS_PADRAO = 30
 class CriarPareamentoRequest(BaseModel):
     provedor: str = "telegram"
     ibge6: str
-
-
-def _usuario_referencia(user: dict[str, Any]) -> str:
-    return str(user.get("id") or user.get("email") or user.get("sub") or "").strip()
 
 
 def _token_hash(token: str) -> str:
@@ -307,7 +304,7 @@ def _formatar_resposta_telegram(resposta: str, dados_fim: dict[str, Any] | None)
 
 @router.get("/canais")
 def listar_canais(user: dict = Depends(require_user)):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
     return {"itens": [_resumo_conexao(item) for item in db.listar_conexoes_canal(usuario)]}
@@ -315,7 +312,7 @@ def listar_canais(user: dict = Depends(require_user)):
 
 @router.post("/canais/pareamentos", status_code=201)
 def criar_pareamento(req: CriarPareamentoRequest, user: dict = Depends(require_user)):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     provedor = req.provedor.strip().lower()
     ibge6 = str(req.ibge6 or "").strip()[:6]
     if not usuario:
@@ -341,13 +338,13 @@ def criar_pareamento(req: CriarPareamentoRequest, user: dict = Depends(require_u
 
 @router.get("/canais/pareamentos/{pareamento_id}")
 def consultar_pareamento(pareamento_id: str, user: dict = Depends(require_user)):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     return _resumo_pareamento(_obter_pareamento_do_usuario(pareamento_id, usuario))
 
 
 @router.post("/canais/pareamentos/{pareamento_id}/confirmar")
 def confirmar_pareamento(pareamento_id: str, user: dict = Depends(require_user)):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     pareamento = _obter_pareamento_do_usuario(pareamento_id, usuario)
     if pareamento["status"] != "reivindicado":
         raise HTTPException(409, "Pareamento ainda nao foi reivindicado no canal")
@@ -364,7 +361,7 @@ def confirmar_pareamento(pareamento_id: str, user: dict = Depends(require_user))
 
 @router.delete("/canais/pareamentos/{pareamento_id}", status_code=204)
 def cancelar_pareamento(pareamento_id: str, user: dict = Depends(require_user)):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     _obter_pareamento_do_usuario(pareamento_id, usuario)
     db.cancelar_pareamento_canal(pareamento_id, usuario)
     return None
@@ -372,7 +369,7 @@ def cancelar_pareamento(pareamento_id: str, user: dict = Depends(require_user)):
 
 @router.delete("/canais/{provedor}", status_code=204)
 def revogar_canal(provedor: str, user: dict = Depends(require_user)):
-    usuario = _usuario_referencia(user)
+    usuario = usuario_referencia(user)
     provedor = provedor.strip().lower()
     conexoes = db.listar_conexoes_canal(usuario)
     conexao = next((item for item in conexoes if item["provedor"] == provedor), None)

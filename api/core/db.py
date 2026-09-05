@@ -1014,6 +1014,15 @@ def listar_memorias_usuario(owner_ref: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def listar_todas_memorias_usuario() -> list[dict]:
+    """Todas as linhas (todos os donos). Uso exclusivo de rotinas de manutenção."""
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em FROM susbot_memorias"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def deletar_memoria_usuario(owner_ref: str, fact_ref: str | None = None) -> int:
     with _conn() as con:
         if fact_ref:

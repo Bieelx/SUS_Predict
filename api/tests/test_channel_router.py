@@ -284,7 +284,7 @@ def test_telegram_aprende_e_exibe_memoria_do_usuario(canais):
     router_module.processar_update_telegram(_update(51, "/memoria"))
 
     assert "Gabriel" in mensagens[-1][1]
-    assert "vigilância epidemiológica" in mensagens[-1][1]
+    assert "vigilância epidemiológica" not in mensagens[-1][1]
 
 
 def test_webhook_exige_segredo_configurado(canais):
