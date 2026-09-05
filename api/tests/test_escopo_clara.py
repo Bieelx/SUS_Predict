@@ -194,3 +194,12 @@ def test_social_que_nao_e_saudacao_continua_recusada(db, pergunta):  # noqa: F81
     agente = criar_susbot_agente("3550308", llm=llm, historico=[])
     fim = next(e for e in agente.stream_eventos(pergunta) if e["event"] == "fim")
     assert fim["data"]["resposta"] == MENSAGEM_FORA_DO_ESCOPO
+
+
+def test_texto_sobre_o_projeto_nao_tem_placeholder():
+    """Texto curado a mao: colchete indica placeholder esquecido; travessao e proibido."""
+
+    assert "[" not in TEXTO_SOBRE_O_PROJETO
+    assert "]" not in TEXTO_SOBRE_O_PROJETO
+    assert "\u2014" not in TEXTO_SOBRE_O_PROJETO
+    assert len(TEXTO_SOBRE_O_PROJETO) < 1200

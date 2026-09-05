@@ -117,34 +117,30 @@ MENSAGEM_IDENTIDADE = (
 )
 
 # ---------------------------------------------------------------------------
-# TEXTO CURADO À MÃO. Não deve ser gerado nem reescrito pelo modelo.
-# A ferramenta `sobre_o_projeto` devolve este texto tal como está. Preencha as
-# seções abaixo; os trechos entre [colchetes] são placeholders a substituir.
+# TEXTO CURADO À MÃO. Não deve ser gerado nem reescrito pelo modelo em runtime.
+# A ferramenta `sobre_o_projeto` devolve este texto tal como está. É a primeira
+# mensagem que a pessoa recebe ao dizer "oi" (web e Telegram), então precisa
+# caber numa tela de celular. Só liste capacidades que existem como ferramenta
+# implementada em `susbot_tools.py`. Sem colchetes nem placeholders: o teste
+# `test_texto_sobre_o_projeto_nao_tem_placeholder` falha se aparecerem.
 # ---------------------------------------------------------------------------
-TEXTO_SOBRE_O_PROJETO = f"""**O que é o SUS Predict**
-[Descrever em 2 a 3 frases: plataforma de apoio à gestão municipal de saúde que reúne dados públicos do DATASUS e dados locais do município, com previsão e alertas. Projeto de TCC da FIAP.]
+TEXTO_SOBRE_O_PROJETO = f"""Oi! Eu sou a {NOME_ASSISTENTE}, assistente do SUS Predict.
 
-**Para quem serve**
-[Gestores de secretarias municipais de saúde, equipes de vigilância epidemiológica e de compras/farmácia.]
+O SUS Predict junta dados públicos do DATASUS com dados locais do seu município para ajudar a gestão de saúde a decidir com mais segurança. É um projeto de TCC da FIAP, pensado para gestores, vigilância epidemiológica e equipes de farmácia e compras.
 
-**Quais bases alimentam a plataforma**
-- SIM: óbitos por causa básica.
-- SIH: internações hospitalares.
-- SINASC: nascidos vivos.
-- SIA: produção ambulatorial.
-- SINAN: doenças e agravos de notificação.
-[Todas persistidas no Supabase; estoque de insumos e alertas vêm do cadastro local do município.]
+**O que eu consigo fazer por aqui**
+- Consultar o estoque de insumos e a cobertura em dias de cada item.
+- Listar os alertas do município, por status ou tipo.
+- Mostrar casos, internações, óbitos, nascimentos e produção ambulatorial já carregados no sistema (SINAN, SIH, SIM, SINASC e SIA).
+- Preparar um ETP, o Estudo Técnico Preliminar, para um insumo. Isso só acontece depois da sua confirmação.
 
-**O que a {NOME_ASSISTENTE} consegue fazer**
-- Consultar estoque e cobertura de insumos do município.
-- Listar alertas abertos.
-- Mostrar séries de casos, internações, óbitos e nascimentos.
-- Abrir um ETP (Estudo Técnico Preliminar) mediante confirmação.
+**Como eu funciono**
+Tudo que eu respondo vem de uma consulta ao banco do SUS Predict. Eu não invento número. Se o dado ainda não foi carregado, eu aviso e digo o próximo passo.
 
-**O que a {NOME_ASSISTENTE} não faz**
-- Não responde perguntas clínicas, farmacológicas ou acadêmicas.
-- Não dá conselhos pessoais nem conversa sobre assuntos fora do sistema.
-- Não inventa números: tudo que ela diz vem de uma consulta ao banco ou deste texto."""
+**O que eu não faço**
+Não respondo perguntas clínicas, farmacológicas ou acadêmicas, nem assuntos fora do sistema.
+
+Me diz o que você precisa."""
 
 
 def montar_mensagem_resposta(
