@@ -11,7 +11,7 @@ Runtime capabilities:
     PYSUS_OK   → PySUS available (Python 3.12 + venv/) — downloads real DATASUS data
     PROPHET_OK → Prophet available — advanced prediction with confidence intervals
     SQLite     → always active, stores results locally (no Supabase needed)
-    Supabase   → optional sync when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set
+    Supabase   → optional sync when SUPABASE_URL + a secret key (SUPABASE_SECRET_KEY / SUPABASE_SECRET / SUPABASE_SERVICE_ROLE_KEY) are set
 """
 
 import gc

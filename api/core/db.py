@@ -2,7 +2,8 @@
 Storage layer: SQLite (always) + Supabase (optional sync).
 
 SQLite activates automatically — zero config needed.
-Supabase syncs when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set.
+Supabase syncs when SUPABASE_URL + a secret key (SUPABASE_SECRET_KEY, SUPABASE_SECRET or
+SUPABASE_SERVICE_ROLE_KEY) are set — see _supabase_read_key().
 """
 import json
 import logging
@@ -176,6 +177,18 @@ CREATE TABLE IF NOT EXISTS susbot_memorias (
     criado_em          TEXT NOT NULL,
     atualizado_em      TEXT NOT NULL,
     UNIQUE (owner_ref, fact_ref)
+);
+
+-- Armazenamento 1 de docs/09: quem pode o que. Só o admin escreve (SQL/seed).
+-- Sem linha = sem acesso (403). Nunca é alterado a partir da conversa.
+CREATE TABLE IF NOT EXISTS usuarios_acesso (
+    usuario        TEXT PRIMARY KEY,
+    perfil         TEXT NOT NULL,
+    municipios     TEXT NOT NULL DEFAULT '[]',
+    ativo          INTEGER NOT NULL DEFAULT 1,
+    atribuido_por  TEXT,
+    criado_em      TEXT NOT NULL,
+    atualizado_em  TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_lookup  ON datasus_runs (sistema, uf, cidade, ano_ini, ano_fim);
@@ -1037,6 +1050,56 @@ def deletar_memoria_usuario(owner_ref: str, fact_ref: str | None = None) -> int:
     return int(cursor.rowcount)
 
 
+# ── usuarios_acesso (docs/09, Fase 1) ────────────────────────────────────────
+
+def get_acesso(usuario: str) -> dict | None:
+    """Linha de `usuarios_acesso` para o usuário, ou None. `municipios` volta como lista."""
+
+    with _conn() as con:
+        row = con.execute(
+            "SELECT * FROM usuarios_acesso WHERE usuario = ?", (str(usuario or "").strip(),)
+        ).fetchone()
+    if not row:
+        return None
+    out = dict(row)
+    try:
+        out["municipios"] = list(json.loads(out.get("municipios") or "[]"))
+    except (TypeError, ValueError):
+        out["municipios"] = []
+    out["ativo"] = int(out.get("ativo") or 0)
+    return out
+
+
+def upsert_acesso(
+    usuario: str,
+    perfil: str,
+    municipios: list[str] | None = None,
+    ativo: bool = True,
+    atribuido_por: str | None = None,
+) -> dict:
+    """Escrita administrativa (seed/SQL/testes). Nenhum caminho de conversa chama isto."""
+
+    agora = datetime.now(timezone.utc).isoformat()
+    usuario = str(usuario or "").strip()
+    if not usuario:
+        raise ValueError("usuario vazio")
+    municipios_lista = [str(m) for m in (municipios or [])]
+    with _conn() as con:
+        con.execute("""
+            INSERT INTO usuarios_acesso (usuario, perfil, municipios, ativo, atribuido_por, criado_em, atualizado_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(usuario) DO UPDATE SET
+                perfil = excluded.perfil,
+                municipios = excluded.municipios,
+                ativo = excluded.ativo,
+                atribuido_por = excluded.atribuido_por,
+                atualizado_em = excluded.atualizado_em
+        """, (usuario, perfil, json.dumps(municipios_lista), 1 if ativo else 0, atribuido_por, agora, agora))
+    row = get_acesso(usuario) or {}
+    _sync_row("usuarios_acesso", {**row, "ativo": bool(row.get("ativo")), "municipios": municipios_lista})
+    return row
+
+
 # ── Supabase read-only query (curated tables, e.g. sih_dengue_*, sinan_dengue_*) ──
 
 def _supabase_read_key() -> str:
@@ -1140,7 +1203,7 @@ def _sb_upsert(base_url: str, key: str, table: str, rows: list[dict]) -> None:
 
 def _try_supabase_sync(job_id, resultado, run_row, serie_rows, sexo_rows, faixa_rows, causa_rows) -> None:
     sb_url = os.getenv("SUPABASE_URL", "").strip()
-    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    sb_key = _supabase_read_key()
     if not sb_url or not sb_key:
         return
     try:
@@ -1157,7 +1220,7 @@ def _try_supabase_sync(job_id, resultado, run_row, serie_rows, sexo_rows, faixa_
 def _sync_row(table: str, row: dict) -> None:
     """Best-effort upsert of a single row to Supabase. No-op if not configured, never raises."""
     sb_url = os.getenv("SUPABASE_URL", "").strip()
-    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    sb_key = _supabase_read_key()
     if not sb_url or not sb_key:
         return
     try:
@@ -1169,7 +1232,7 @@ def _sync_row(table: str, row: dict) -> None:
 def _sync_delete(table: str, eq: dict) -> None:
     """Best-effort delete from Supabase. No-op if not configured, never raises."""
     sb_url = os.getenv("SUPABASE_URL", "").strip()
-    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    sb_key = _supabase_read_key()
     if not sb_url or not sb_key:
         return
     try:
@@ -1180,7 +1243,7 @@ def _sync_delete(table: str, eq: dict) -> None:
 
 def _supabase_find_cached(req: dict) -> dict | None:
     sb_url = os.getenv("SUPABASE_URL", "").strip()
-    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    sb_key = _supabase_read_key()
     if not sb_url or not sb_key:
         return None
     sb_cache = os.getenv("SUPABASE_ENABLE_CACHE_READ", "true").strip().lower()

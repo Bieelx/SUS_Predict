@@ -1,6 +1,6 @@
 # SusPredict — Identidade, permissões e memória da Clara
 
-**Status: APROVADO. Fase 0 implementada em 05/09/2026; fases 1–4 pendentes.**
+**Status: APROVADO. Fase 0 implementada em 05/09/2026; Fase 1 implementada em 05/09/2026 (aguardando seed + deploy); fases 2–4 pendentes.**
 Data do levantamento: 05/09/2026, branch `main` (commit `0369027`).
 
 Decisões fechadas com o grupo em 05/09/2026: perfis `gestor`, `vigilancia`, `farmacia`,
@@ -177,9 +177,12 @@ barata de auditar e testar.
 | `atribuido_por` | TEXT | quem fez a última alteração (e-mail do admin) |
 | `criado_em` / `atualizado_em` | TEXT | ISO 8601 |
 
-Sem linha na tabela = **sem acesso** (403), mesmo com token válido. Não há perfil padrão
-implícito. Isso é deliberado: "qualquer um que faça signup vira usuário válido" é o mesmo
-problema do `chat_id` como identidade, só que na web.
+Sem linha na tabela = **sem acesso a dados**. Desde a revisão de 05/09/2026 (ver
+"Provisionamento automático" abaixo) o primeiro login cria a linha com perfil
+`visitante`, que só tem `sobre_o_projeto`; o 403 continua para `ativo=0` e para toda
+ferramenta/endpoint de dados. Continua não havendo perfil de dados implícito: "qualquer
+um que faça signup vira usuário válido" é o mesmo problema do `chat_id` como identidade,
+só que na web — e segue fechado.
 
 O mapa de capacidades fica em código, por exemplo em `api/core/permissoes.py`:
 
@@ -189,6 +192,7 @@ O mapa de capacidades fica em código, por exemplo em `api/core/permissoes.py`:
 | `vigilancia` | epidemiologia, alertas, sobre_o_projeto | epidemiologia, alertas |
 | `farmacia` | estoque, alertas, gerar_etp, sobre_o_projeto | estoque, alertas, ETP |
 | `admin` | tudo que `gestor` tem | tudo + gestão de `usuarios_acesso` |
+| `visitante` | só `sobre_o_projeto` | só `/api/dados/municipios` (lista de nomes, sem dado de saúde) |
 
 `sobre_o_projeto` é universal. `executar_sql_fallback` não entra em nenhum perfil.
 Os nomes e a distribuição exata são chute inicial para o grupo bater.
@@ -371,7 +375,7 @@ existe** em produção, a primeira fase é blindá-la, não criá-la.
 | Fase | Entrega | Valor | Risco | Depende de |
 |---|---|---|---|---|
 | **0 — Blindar o que existe** ✅ 05/09/2026 | Remover `cargo`/`area_atuacao`; `preferencia_resposta` vira enum; memória sai do planejador e vai para bloco delimitado na resposta; delimitadores na lista de bloqueio; unificar `_usuario_referencia`; remover `cargo` do signup | Fecha os vetores 1–4 hoje | Zero: só restringe | nada |
-| **1 — Identidade e permissão por ferramenta** | Tabela `usuarios_acesso` (SQLite + SQL para Supabase); `permissoes.py` com mapa perfil→ferramentas; `carregar_acesso` + `require_acesso`; três barreiras no agente; confirmação e REST cobertos; Telegram recusa inativo; testes | Primeira vez que "quem pode o quê" existe | Médio: usuários sem linha ficam trancados — precisa seed inicial dos 5 do grupo | Fase 0 |
+| **1 — Identidade e permissão por ferramenta** ✅ 05/09/2026 | Tabela `usuarios_acesso` (SQLite + SQL para Supabase); `permissoes.py` com mapa perfil→ferramentas; `carregar_acesso` + `require_acesso`; três barreiras no agente; confirmação e REST cobertos; Telegram recusa inativo; testes | Primeira vez que "quem pode o quê" existe | Médio: usuários sem linha ficam trancados — precisa seed inicial dos 5 do grupo | Fase 0 |
 | **2 — Escopo de município** | `municipios` na tabela; `exigir_municipio` nos pontos de entrada; `/api/dados/municipios` filtrado; pareamento validado | Fecha vetor 6 | Baixo | Fase 1 |
 | **3 — Memória visível ao usuário** | Tela "O que a Clara lembra" no painel (lista + apagar); opcionalmente novos campos, se o grupo pedir, sempre pela lista fechada | UX e transparência | Baixo | Fase 1 (identidade confiável) |
 | **4 — Defesa em profundidade** | `usuarios_acesso_log`; admin mínimo (endpoint `admin` para atribuir perfil); reavaliar RLS + JWT do usuário se o Supabase virar primário; unificar os dois `schema.sql` e criar as tabelas `susbot_*`/`canal_*` que o sync espera | Auditoria e robustez | Baixo | Fase 2 |
@@ -404,8 +408,109 @@ cd /caminho/do/projeto && venv/bin/python -m api.core.susbot_memory
 ```
 
 Achado novo: o Supabase do grupo já tem uma tabela `public.user_roles` (apareceu no hint
-do PostgREST). Não é referenciada por nenhum código deste repositório — verificar o que
-ela contém antes de criar `usuarios_acesso` na Fase 1, para não duplicar.
+do PostgREST). Não é referenciada por nenhum código deste repositório. Investigada na
+Fase 1 — ver "Dois conceitos de admin" abaixo.
+
+### Fase 1 — registro de implementação (05/09/2026)
+
+**Risco de deploy, leia primeiro.** A partir do deploy da Fase 1, quem não tiver linha
+ativa em `usuarios_acesso` perde acesso à Clara (web e Telegram) e a `/api/dados/*`.
+Ordem obrigatória no Ubuntu:
+
+1. Supabase, SQL Editor: `supabase/usuarios_acesso.sql` (tabela) e
+   `supabase/susbot_canais.sql` (tabelas que o sync espera — achado lateral fechado).
+2. Seed das 5 pessoas: `supabase/seed_usuarios_acesso.sql` (Supabase) **e**
+   `supabase/seed_usuarios_acesso_sqlite.sql` no SQLite do servidor (`sqlite3 "$SQLITE_PATH" < …`).
+   O SQLite é o banco que a Clara realmente lê; o Supabase é espelho.
+3. Só então reiniciar o serviço.
+
+| Item | Onde |
+|---|---|
+| Tabela `usuarios_acesso` (SQLite em `_SCHEMA`; Postgres em `supabase/usuarios_acesso.sql`); `get_acesso`, `upsert_acesso` (escrita administrativa, sync best-effort) | `api/core/db.py` |
+| `PERFIS` (gestor, vigilancia, farmacia, admin), `sobre_o_projeto` universal, `executar_sql_fallback` em nenhum; `Acesso`, `AcessoNegado`, `carregar_acesso`, `carregar_acesso_http` (403), `require_acesso(ferramenta)`, `mensagem_ferramenta_negada` | `api/core/permissoes.py` |
+| Barreira 1: `system_prompt_planejador(permitidas)` monta FERRAMENTAS E ARGUMENTOS e exemplos só com o permitido; `plano_schema(permitidas)` no adapter local. `SYSTEM_PROMPT_PLANEJADOR`/`PLANO_SCHEMA` continuam como a versão completa | `prompts.py`, `local_llm.py` |
+| Barreira 2: `validar_plano(..., permitidas=)` devolve `acao="sem_permissao"` com log `"ferramenta sem permissao"`, separado de `"fora do enum"`; vale para LLM local, Gemini, Groq e `rotear_intencao` | `susbot_agent.py` |
+| Barreira 3: `criar_susbot_tools(ibge6, permitidas)`; `ClaraAgent.permitidas`; tool ausente no dict responde com a recusa em código | `susbot_tools.py`, `susbot_agent.py` |
+| Recusa em código, distinta de fora-do-escopo ("Seu perfil não tem acesso a … Fale com o administrador."), sem LLM | `permissoes.mensagem_ferramenta_negada` |
+| `stream_eventos_confirmado` exige `FERRAMENTAS_ESCRITA` **e** `permitidas` **e** presença no dict | `susbot_agent.py` |
+| `/api/susbot/perguntar`: `carregar_acesso_http` antes do agente; `permitidas=acesso.ferramentas` | `susbot_router.py` |
+| Telegram: acesso carregado a cada mensagem; inativo/sem linha recebe a mensagem de recusa e o agente nem é criado | `channel_router._processar_pergunta_telegram` |
+| REST: `/municipios` → qualquer perfil ativo; `/epidemiologia`, `/internacoes`, `/vacinacao` → `consultar_epidemiologia`; `/visao-geral` → `consultar_alertas`; `/ruptura` → `consultar_estoque` | `operational_router.py` |
+| Frontend: 403 com "administrador" no detalhe é exibido como veio (antes caía no erro genérico) | `ClaraPanel.jsx` |
+| Chave do Supabase unificada: `_sync_row`, `_sync_delete`, `_try_supabase_sync`, `_supabase_find_cached` usam `_supabase_read_key()` (aceita `SUPABASE_SECRET_KEY`, `SUPABASE_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`). Round-trip upsert/delete validado contra o projeto real | `db.py` |
+| Testes: `test_permissoes.py` (13) — permitida passa; negada rebaixada nas 3 barreiras isoladamente; sem linha 403; inativo 403 web e recusa Telegram; confirmação sem permissão recusada; REST direto | 179 passando |
+
+Fora do escopo desta fase, de propósito: nenhuma validação de `ibge6` contra
+`acesso.municipios` (Fase 2). A coluna já existe e é carregada em `Acesso.municipios`.
+
+### Provisionamento automático no primeiro login (revisão de 05/09/2026)
+
+**Por que mudou.** "Sem linha = 403" trancava qualquer pessoa do grupo que logasse antes
+do seed, e o seed depende de UUIDs que só aparecem depois do primeiro signup. A rede de
+segurança é provisionar a linha no primeiro acesso — **sem** abrir dado para quem fez
+signup por conta própria. O seed continua sendo o caminho principal; isto é fallback.
+
+Duas faixas, decididas em `api/core/permissoes.py::provisionar_acesso`:
+
+| Faixa | Quem | Linha criada | Acesso |
+|---|---|---|---|
+| 1 — equipe | e-mail em `EQUIPE_AUTORIZADA` (constante versionada, e-mail → perfil) | perfil da lista | o do perfil |
+| 2 — qualquer outro | e-mail fora da lista, ou token sem e-mail | `visitante` | só `sobre_o_projeto`; nenhum REST de dados |
+
+Regras que valem para as duas faixas:
+
+- O e-mail vem do **token** (`require_user` → GoTrue `GET /auth/v1/user`, campo `email`;
+  no dev-auth, `_dev_usuario` já preenche `email`). Nunca do body. Comparação em
+  minúsculas e sem espaços nas pontas (`normalizar_email`).
+- **Só na ausência de linha.** Linha existente nunca é sobrescrita: um rebaixamento feito
+  pelo admin não é desfeito pelo próximo login. `ativo=0` não é reativado — continua 403.
+- `admin` **nunca** é provisionado, nem pela lista: `_validar_equipe` roda no import e
+  derruba o boot se algum e-mail estiver como `admin` ou com perfil desconhecido.
+- `atribuido_por = "provisionamento_automatico"`, para distinguir de atribuição manual.
+- Log `INFO` em `sus_predict.permissoes` com usuário, e-mail, perfil e faixa.
+- `visitante` é perfil de primeira classe em `PERFIS` (validado como os outros, sem caso
+  especial espalhado). Só a mensagem de recusa é própria: `MENSAGEM_VISITANTE` orienta a
+  pedir liberação ao administrador; é distinta de fora-do-escopo e da recusa genérica de
+  ferramenta negada.
+- **Telegram não provisiona.** O webhook não tem o token do usuário (só `conexao.usuario`);
+  como o pareamento exige login web antes, a linha já existe quando o Telegram chega.
+  Sem linha no Telegram continua recusado.
+
+**A superfície de dados continua fechada:** um visitante passa nas três barreiras só com
+`sobre_o_projeto`; `consultar_estoque`, `consultar_alertas`, `consultar_epidemiologia`,
+`gerar_etp` e os endpoints `/epidemiologia`, `/visao-geral`, `/internacoes`,
+`/vacinacao`, `/ruptura` devolvem a recusa de visitante. O único endpoint que um visitante
+alcança é `/municipios` (nomes de município do IBGE, sem dado de saúde).
+
+Testes em `test_permissoes.py`: e-mail na lista ganha o perfil (com caixa diferente);
+fora da lista vira visitante; visitante consegue `sobre_o_projeto` e é barrado em estoque,
+epidemiologia e nos endpoints REST; linha existente não é sobrescrita; `ativo=0` não é
+reativado; admin na constante falha no boot; Telegram não provisiona.
+
+**Qual `schema.sql` morre:** `supabase_schema.sql` (raiz). O Supabase real tem
+`datasus_serie` com PK composta `(run_id, ano, tipo)` e sem coluna `id`, ou seja, o que
+foi aplicado é `supabase/schema.sql`. A versão da raiz (BIGSERIAL + RLS) nunca rodou. Os
+SQLs novos desta fase ficam em `supabase/` por isso. Não apaguei o arquivo nesta rodada;
+é só remover.
+
+### Dois conceitos de admin no sistema (decisão consciente, 05/09/2026)
+
+Existem **duas** noções de administrador e elas **não se falam**:
+
+| | Painel externo | SusPredict (`usuarios_acesso`) |
+|---|---|---|
+| Onde | `public.user_roles` (enum `app_role` só com `admin`, PK `(user_id, role)`), `public.profiles` (uma linha por usuário do Auth, via trigger), RPC `public.has_role(requested_role)` (usa `auth.uid()`), `public.admin_audit_log` (`user.invited`) | `public.usuarios_acesso` + `api/core/permissoes.py` |
+| Quem criou | Desconhecido; padrão de template RBAC (Lovable / docs do Supabase), criado em 09/08/2026 fora deste repositório. Tabelas com GRANT revogado para `anon` | Este repositório, Fase 1 |
+| Quem lê | Provavelmente um app/Edge Function externo | Só o backend, via chave secreta, antes de qualquer LLM |
+| Estado | 2 linhas `admin` (uma é conta de teste) | Seed pendente |
+
+Decisão: **não adotar, não migrar, não tocar** (nem para ler em runtime). Motivos: enum
+só com `admin` exigiria `ALTER TYPE` irreversível; PK composta permite vários perfis por
+pessoa, contrário ao modelo daqui; não tem `ativo` nem `municipios`; `has_role()` depende
+de `auth.uid()`, inútil com chave secreta e no modo `dev-*`; e há algo externo pendurado
+nela que não enxergamos. As 2 linhas de `user_roles` **não** entram no seed.
+Pendente: descobrir no grupo quem criou e se o painel externo continua em uso; atualizar
+esta seção com a resposta.
 
 ---
 
@@ -416,7 +521,7 @@ ela contém antes de criar `usuarios_acesso` na Fase 1, para não duplicar.
   o JWT localmente com o JWKS do projeto seria o próximo passo.
 - Rate limit da Clara é por `X-API-Key`, e a chave é uma só por instalação: um usuário
   consome o balde de todos. Com identidade confiável, o limite deveria ser por `usuario`.
-- `supabase/schema.sql` e `supabase_schema.sql` divergem (só o segundo tem RLS). Um deles
-  deve morrer.
-- O sync para Supabase de `susbot_*`, `canal_*`, `estoque`, `alertas`, `etps` aponta para
-  tabelas que nenhum SQL versionado cria.
+- ~~`supabase/schema.sql` e `supabase_schema.sql` divergem~~ — resolvido na Fase 1: morre o da raiz.
+- ~~O sync para Supabase de `susbot_*`, `canal_*`, `estoque`, `alertas`, `etps` aponta para
+  tabelas que nenhum SQL versionado cria~~ — resolvido: `supabase/susbot_canais.sql`. Além disso o
+  sync lia só `SUPABASE_SERVICE_ROLE_KEY` e era no-op com o `.env` atual; corrigido na Fase 1.

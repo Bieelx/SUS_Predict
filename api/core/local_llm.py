@@ -20,19 +20,29 @@ from api.core.prompts import (
     FERRAMENTAS_PLANEJAVEIS,
     SYSTEM_PROMPT_PLANEJADOR,
     SYSTEM_PROMPT_RESPOSTA,
+    ferramentas_permitidas_ordenadas,
     montar_mensagem_resposta,
+    system_prompt_planejador,
 )
 
-PLANO_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "acao": {"type": "string", "enum": list(ACOES_PLANEJADOR)},
-        "ferramenta": {"type": "string", "enum": list(FERRAMENTAS_PLANEJAVEIS)},
-        "argumentos": {"type": "object"},
-    },
-    "required": ["acao"],
-    "additionalProperties": False,
-}
+
+def plano_schema(permitidas=None) -> dict[str, Any]:
+    """Schema JSON do plano com o enum de ferramentas restrito ao perfil (barreira 1)."""
+
+    return {
+        "type": "object",
+        "properties": {
+            "acao": {"type": "string", "enum": list(ACOES_PLANEJADOR)},
+            "ferramenta": {"type": "string", "enum": ferramentas_permitidas_ordenadas(permitidas)},
+            "argumentos": {"type": "object"},
+        },
+        "required": ["acao"],
+        "additionalProperties": False,
+    }
+
+
+# Schema completo (todos os perfis). Mantido para compatibilidade.
+PLANO_SCHEMA = plano_schema(FERRAMENTAS_PLANEJAVEIS)
 
 # Nomes antigos mantidos como alias: os prompts vivem em api/core/prompts.py.
 PLANEJADOR_SYSTEM = SYSTEM_PROMPT_PLANEJADOR
@@ -114,9 +124,9 @@ class LocalClaraLLM:
         payload = {
             "model": self._modelo,
             "stream": False,
-            "format": PLANO_SCHEMA,
+            "format": plano_schema(ferramentas),
             "messages": [
-                {"role": "system", "content": PLANEJADOR_SYSTEM},
+                {"role": "system", "content": system_prompt_planejador(ferramentas)},
                 {
                     "role": "user",
                     "content": json.dumps(

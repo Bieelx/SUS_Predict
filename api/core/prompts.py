@@ -28,7 +28,38 @@ FERRAMENTAS_PLANEJAVEIS = (
     "sobre_o_projeto",
 )
 
-SYSTEM_PROMPT_PLANEJADOR = """Voce e o PLANEJADOR da Clara, assistente do SUS Predict. Nao responda ao usuario: escolha so o proximo passo.
+# Descricao de cada ferramenta no prompt do planejador. A secao FERRAMENTAS E
+# ARGUMENTOS e montada so com as permitidas ao perfil (docs/09, barreira 1):
+# descrever uma ferramenta proibida faz o modelo propor e levar rebaixamento.
+DESCRICOES_FERRAMENTAS = {
+    "consultar_estoque": "- consultar_estoque: item (string opcional), somente_risco (boolean opcional). Palavras genericas (insumos, medicamentos, estoque) NAO sao item. somente_risco=true para falta, ruptura, critico, baixo, acabando.",
+    "consultar_alertas": "- consultar_alertas: status (string opcional), tipo (string opcional).",
+    "consultar_epidemiologia": '- consultar_epidemiologia: sistema (SIM|SIH|SINASC|SIA|SINAN), ano_ini, ano_fim (inteiros opcionais), doenca_cod, escopo_solicitado (strings opcionais). Internacao, hospital, leito, UTI => SIH (UTI: escopo_solicitado="uti"). Obito => SIM. Nascimento => SINASC. Ambulatorial => SIA. Casos, notificacoes, dengue => SINAN.',
+    "gerar_etp": "- gerar_etp: item (string obrigatoria), alerta_id (opcional). So quando o usuario pedir explicitamente um ETP; exige confirmacao humana.",
+    "sobre_o_projeto": "- sobre_o_projeto: sem argumentos. Perguntas sobre o que e o SUS Predict, o que a Clara faz, quais bases usa, quem e voce.",
+}
+
+EXEMPLOS_FERRAMENTAS = {
+    "consultar_estoque": [
+        '"Como estao os insumos?" => {"acao":"chamar_ferramenta","ferramenta":"consultar_estoque","argumentos":{"somente_risco":false}}',
+        '"Quais medicamentos estao acabando?" => {"acao":"chamar_ferramenta","ferramenta":"consultar_estoque","argumentos":{"somente_risco":true}}',
+    ],
+    "consultar_epidemiologia": [
+        '"Internacoes entre 2022 e 2024" => {"acao":"chamar_ferramenta","ferramenta":"consultar_epidemiologia","argumentos":{"sistema":"SIH","ano_ini":2022,"ano_fim":2024}}',
+    ],
+    "sobre_o_projeto": [
+        '"O que e o SUS Predict?" => {"acao":"chamar_ferramenta","ferramenta":"sobre_o_projeto","argumentos":{}}',
+    ],
+}
+
+_EXEMPLOS_FIXOS = [
+    '"Qual a dose maxima de dipirona?" => {"acao":"fora_do_escopo"}',
+    '"Oi, tudo bem?" => {"acao":"fora_do_escopo"}',
+    '"Repete o ultimo numero mais simples?" (ha historico) => {"acao":"responder"}',
+    '"E a situacao?" (sem historico) => {"acao":"fora_do_escopo"}',
+]
+
+_PLANEJADOR_TEMPLATE = """Voce e o PLANEJADOR da Clara, assistente do SUS Predict. Nao responda ao usuario: escolha so o proximo passo.
 
 SAIDA: somente um objeto JSON no schema recebido. Sem markdown nem texto fora do JSON.
 
@@ -40,28 +71,38 @@ ACOES
 A Clara nao e um assistente de uso geral e nao responde perguntas academicas ou clinicas, mesmo que saiba a resposta. Na duvida, use fora_do_escopo.
 
 FERRAMENTAS E ARGUMENTOS
-- consultar_estoque: item (string opcional), somente_risco (boolean opcional). Palavras genericas (insumos, medicamentos, estoque) NAO sao item. somente_risco=true para falta, ruptura, critico, baixo, acabando.
-- consultar_alertas: status (string opcional), tipo (string opcional).
-- consultar_epidemiologia: sistema (SIM|SIH|SINASC|SIA|SINAN), ano_ini, ano_fim (inteiros opcionais), doenca_cod, escopo_solicitado (strings opcionais). Internacao, hospital, leito, UTI => SIH (UTI: escopo_solicitado="uti"). Obito => SIM. Nascimento => SINASC. Ambulatorial => SIA. Casos, notificacoes, dengue => SINAN.
-- gerar_etp: item (string obrigatoria), alerta_id (opcional). So quando o usuario pedir explicitamente um ETP; exige confirmacao humana.
-- sobre_o_projeto: sem argumentos. Perguntas sobre o que e o SUS Predict, o que a Clara faz, quais bases usa, quem e voce.
+{ferramentas}
 
 RESTRICOES
 - Use somente ferramentas da lista recebida. Nao invente ferramenta, campo, codigo ou periodo.
+- Se a pergunta pede um dado cuja ferramenta nao esta na lista, use fora_do_escopo.
 - O municipio ja vem no contexto: nunca envie municipio, UF, ibge ou dados pessoais.
 - Continuacoes curtas ("e a dipirona?") herdam o assunto do historico.
 - Em responder ou fora_do_escopo, omita ferramenta e argumentos.
 - Portugues do Brasil. Seja conciso.
 
 EXEMPLOS
-"Como estao os insumos?" => {"acao":"chamar_ferramenta","ferramenta":"consultar_estoque","argumentos":{"somente_risco":false}}
-"Quais medicamentos estao acabando?" => {"acao":"chamar_ferramenta","ferramenta":"consultar_estoque","argumentos":{"somente_risco":true}}
-"Internacoes entre 2022 e 2024" => {"acao":"chamar_ferramenta","ferramenta":"consultar_epidemiologia","argumentos":{"sistema":"SIH","ano_ini":2022,"ano_fim":2024}}
-"O que e o SUS Predict?" => {"acao":"chamar_ferramenta","ferramenta":"sobre_o_projeto","argumentos":{}}
-"Qual a dose maxima de dipirona?" => {"acao":"fora_do_escopo"}
-"Oi, tudo bem?" => {"acao":"fora_do_escopo"}
-"Repete o ultimo numero mais simples?" (ha historico) => {"acao":"responder"}
-"E a situacao?" (sem historico) => {"acao":"fora_do_escopo"}"""
+{exemplos}"""
+
+
+def ferramentas_permitidas_ordenadas(permitidas) -> list[str]:
+    """Ordem canonica (a de FERRAMENTAS_PLANEJAVEIS), so com o que o perfil pode."""
+
+    conjunto = set(permitidas) if permitidas is not None else set(FERRAMENTAS_PLANEJAVEIS)
+    return [f for f in FERRAMENTAS_PLANEJAVEIS if f in conjunto]
+
+
+def system_prompt_planejador(permitidas=None) -> str:
+    """Prompt do planejador montado so com as ferramentas permitidas (barreira 1)."""
+
+    lista = ferramentas_permitidas_ordenadas(permitidas)
+    descricoes = "\n".join(DESCRICOES_FERRAMENTAS[f] for f in lista) or "- (nenhuma ferramenta disponivel para este perfil)"
+    exemplos = [e for f in lista for e in EXEMPLOS_FERRAMENTAS.get(f, [])] + _EXEMPLOS_FIXOS
+    return _PLANEJADOR_TEMPLATE.format(ferramentas=descricoes, exemplos="\n".join(exemplos))
+
+
+# Prompt completo (todos os perfis). Mantido como constante para compatibilidade.
+SYSTEM_PROMPT_PLANEJADOR = system_prompt_planejador(FERRAMENTAS_PLANEJAVEIS)
 
 SYSTEM_PROMPT_RESPOSTA = """Você é a Clara, assistente do SUS Predict para gestores de saúde pública.
 

@@ -50,6 +50,10 @@ function mensagemErroSusbot(error) {
     }
     return 'O servidor não aceitou a chave da Clara. Verifique a configuração de acesso do ambiente.';
   }
+  if (error?.status === 403 && /administrador/i.test(detalhe)) {
+    // docs/09 Fase 1: sem linha ativa em usuarios_acesso ou ferramenta fora do perfil.
+    return detalhe;
+  }
   if (error?.status === 429 || /limite da clara/i.test(detalhe)) {
     return 'O limite de consultas deste acesso foi atingido. Aguarde um minuto e tente novamente.';
   }

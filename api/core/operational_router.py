@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.core.auth import require_user
+from api.core.permissoes import Acesso, require_acesso
 from api.core.db import sb_select, supabase_configured
 from api.core.prediction import gerar_predicao_mensal
 
@@ -103,7 +103,7 @@ def _prever_tres_meses(linhas: list[dict]) -> dict[str, Any]:
 
 
 @router.get("/municipios")
-def municipios(_user: dict = Depends(require_user)) -> dict[str, Any]:
+def municipios(_acesso: Acesso = Depends(require_acesso())) -> dict[str, Any]:
     """Dimensão IBGE de São Paulo — única origem da lista do seletor de município."""
     linhas = _select("ibge_sp", order="nome_municipio.asc")
     itens = [
@@ -124,7 +124,7 @@ def municipios(_user: dict = Depends(require_user)) -> dict[str, Any]:
 def epidemiologia(
     ibge: str = Query(...),
     periodo: str = Query("12 Meses"),
-    _user: dict = Depends(require_user),
+    _acesso: Acesso = Depends(require_acesso("consultar_epidemiologia")),
 ) -> dict[str, Any]:
     codigo = _ibge6(ibge)
     janela = _periodo(periodo)
@@ -190,7 +190,7 @@ def epidemiologia(
 def visao_geral(
     ibge: str = Query(...),
     periodo: str = Query("Mes"),
-    _user: dict = Depends(require_user),
+    _acesso: Acesso = Depends(require_acesso("consultar_alertas")),
 ) -> dict[str, Any]:
     periodos = {"Mes", "Trimestre", "Ano"}
     if periodo not in periodos:
@@ -255,7 +255,7 @@ def visao_geral(
 def internacoes(
     periodo: str = Query("12 Meses"),
     cnes: str = Query("TODOS"),
-    _user: dict = Depends(require_user),
+    _acesso: Acesso = Depends(require_acesso("consultar_epidemiologia")),
 ) -> dict[str, Any]:
     janela = _periodo(periodo)
     filtros = {"periodo": janela}
@@ -315,7 +315,7 @@ def internacoes(
 def vacinacao(
     ibge: str = Query(...),
     periodo: str = Query("12 Meses"),
-    _user: dict = Depends(require_user),
+    _acesso: Acesso = Depends(require_acesso("consultar_epidemiologia")),
 ) -> dict[str, Any]:
     codigo = _ibge6(ibge)
     janela = _periodo(periodo)
@@ -378,7 +378,7 @@ def _agrupar_alertas(linhas: list[dict]) -> list[dict]:
 def ruptura(
     ibge: str = Query(...),
     periodo: str = Query("12 Meses"),
-    _user: dict = Depends(require_user),
+    _acesso: Acesso = Depends(require_acesso("consultar_estoque")),
 ) -> dict[str, Any]:
     codigo = _ibge6(ibge)
     janela = _periodo(periodo)

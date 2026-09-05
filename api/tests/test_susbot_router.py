@@ -37,6 +37,8 @@ def router(monkeypatch):
     from api.core import db as db_module
     importlib.reload(db_module)
     db_module.init_db()
+    # docs/09 Fase 1: /perguntar exige linha ativa em usuarios_acesso.
+    db_module.upsert_acesso("user-abc", "gestor", ["355030"], ativo=True, atribuido_por="teste")
 
     import api.core.susbot_router as router_module
     importlib.reload(router_module)

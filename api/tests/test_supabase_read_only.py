@@ -11,7 +11,9 @@ def test_chave_secreta_moderna_configura_apenas_consulta(monkeypatch):
     assert db._sb_headers("sb_secret_teste") == {"apikey": "sb_secret_teste"}
 
 
-def test_select_usa_get_e_nao_ativa_rotina_de_escrita(monkeypatch):
+def test_select_usa_get_e_sync_usa_a_mesma_chave(monkeypatch):
+    # docs/09 Fase 1: leitura e sync aceitam os mesmos nomes de chave. Antes o sync
+    # so lia SUPABASE_SERVICE_ROLE_KEY e era no-op silencioso com SUPABASE_SECRET_KEY.
     monkeypatch.setenv("SUPABASE_URL", "https://exemplo.supabase.co")
     monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_teste")
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
@@ -31,7 +33,7 @@ def test_select_usa_get_e_nao_ativa_rotina_de_escrita(monkeypatch):
     assert requisicoes == [
         ("https://exemplo.supabase.co/rest/v1/tabela_curada?select=*&periodo=eq.12%20Meses", "sb_secret_teste")
     ]
-    assert escritas == []
+    assert escritas == [((("https://exemplo.supabase.co", "sb_secret_teste", "qualquer_tabela", [{"id": 1}])), {})]
 
 
 def test_select_pagina_alem_do_limite_do_postgrest(monkeypatch):

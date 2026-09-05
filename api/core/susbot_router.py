@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from api.core.auth import require_user
 from api.core.identidade import usuario_referencia
 from api.core import db
+from api.core.permissoes import provisionar_acesso_http
 from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
     apagar_memorias,
@@ -122,6 +123,9 @@ def perguntar(
     usuario = usuario_referencia(user)
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
+    # docs/09: acesso resolvido antes de qualquer LLM. Sem linha = provisiona (equipe ou
+    # visitante) a partir do e-mail do token; inativo = 403.
+    acesso = provisionar_acesso_http(user)
 
     pergunta = " ".join(str(req.pergunta or "").split()).strip()
     if not pergunta and not req.confirmar:
@@ -150,6 +154,8 @@ def perguntar(
         usuario=usuario,
         historico=historico,
         memoria_usuario=contexto_para_agente(usuario),
+        permitidas=acesso.ferramentas,
+        perfil=acesso.perfil,
     )
 
     def _stream() -> Any:

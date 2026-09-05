@@ -112,8 +112,13 @@ def _resposta_vazia(motivo: str, **extra) -> dict:
     return payload
 
 
-def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
-    """Cria as tools da Clara com o município fixado por closure."""
+def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
+    """Cria as tools da Clara com o município fixado por closure.
+
+    `permitidas` (docs/09, barreira 3): quando informado, o dict só contém as
+    ferramentas do perfil — o resto não existe no processo. None = todas (uso
+    interno e testes; os routers sempre passam `acesso.ferramentas`).
+    """
 
     ibge = _normalizar_ibge6(ibge6)
 
@@ -357,7 +362,7 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
 
         return {"encontrado": True, "texto": TEXTO_SOBRE_O_PROJETO}
 
-    return {
+    todas = {
         "consultar_estoque": consultar_estoque,
         "consultar_alertas": consultar_alertas,
         "consultar_epidemiologia": consultar_epidemiologia,
@@ -365,6 +370,9 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
         "sobre_o_projeto": sobre_o_projeto,
         "executar_sql_fallback": executar_sql_fallback,
     }
+    if permitidas is None:
+        return todas
+    return {nome: fn for nome, fn in todas.items() if nome in set(permitidas)}
 
 
 # Ferramentas que alteram estado — exigem confirmação humana explícita antes de

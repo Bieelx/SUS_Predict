@@ -14,7 +14,7 @@ PERIODOS = {"Trimestre", "Semestre", "12 Meses", "3 Anos", "5 Anos"}
 
 def _select(table: str, eq: dict | None = None, order: str | None = None) -> list[dict]:
     if not supabase_configured():
-        raise HTTPException(503, "Supabase não configurado (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes)")
+        raise HTTPException(503, "Supabase não configurado (SUPABASE_URL / chave secreta ausentes)")
     try:
         return sb_select(table, eq, order=order)
     except RuntimeError as e:

@@ -26,10 +26,11 @@ from api.core.prompts import (
     FERRAMENTAS_PLANEJAVEIS,
     MENSAGEM_FORA_DO_ESCOPO,
     MENSAGEM_IDENTIDADE,
-    SYSTEM_PROMPT_PLANEJADOR,
     SYSTEM_PROMPT_RESPOSTA,
     montar_mensagem_resposta,
+    system_prompt_planejador,
 )
+from api.core.permissoes import mensagem_ferramenta_negada
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
 from api.core.susbot_intents import normalizar_texto, rotear_intencao
 from api.core.susbot_metrics import registrar_execucao
@@ -276,7 +277,7 @@ _ACOES_INTERNAS = {"resposta", "ferramenta", "fora_do_escopo"}
 _ALIASES_ACAO = {"responder": "resposta", "chamar_ferramenta": "ferramenta", "tool": "ferramenta", "consulta": "ferramenta"}
 
 
-def validar_plano(plano: Any, *, origem: str, tem_historico: bool) -> dict[str, Any]:
+def validar_plano(plano: Any, *, origem: str, tem_historico: bool, permitidas=None) -> dict[str, Any]:
     """Barreira de escopo unica, aplicada a todo plano (LLM local, Gemini, Groq, roteador).
 
     Rebaixa para fora_do_escopo: acao fora do enum, ferramenta fora do enum e
@@ -298,6 +299,11 @@ def validar_plano(plano: Any, *, origem: str, tem_historico: bool) -> dict[str, 
     if acao == "ferramenta":
         if ferramenta not in FERRAMENTAS_PLANEJAVEIS:
             return rebaixar("ferramenta fora do enum")
+        if permitidas is not None and ferramenta not in set(permitidas):
+            # Barreira 2 (docs/09): logado separado de "fora do enum" pra medir quantas
+            # vezes o modelo/roteador/cliente tentou algo que o perfil nao pode.
+            log.warning("plano rebaixado para sem_permissao (origem=%s, ferramenta=%r): ferramenta sem permissao", origem, ferramenta)
+            return {"acao": "sem_permissao", "ferramenta": ferramenta, "argumentos": {}, "resposta": "", "referencia_rota": None}
         return plano
     if ferramenta:
         log.warning("campo ferramenta=%r ignorado: acao=%s (origem=%s)", ferramenta, acao, origem)
@@ -341,7 +347,7 @@ def _prompt_planejamento(pergunta: str, contexto: dict[str, Any], ferramentas: l
         {"pergunta": pergunta, "contexto": contexto, "ferramentas": ferramentas},
         ensure_ascii=False,
     )
-    return [("system", SYSTEM_PROMPT_PLANEJADOR), ("human", humano)]
+    return [("system", system_prompt_planejador(ferramentas)), ("human", humano)]
 
 
 def _prompt_resposta(
@@ -549,11 +555,20 @@ class ClaraAgent:
     memoria_usuario: dict[str, Any] = field(default_factory=dict)
     llm: Any | None = None
     tools: dict[str, Callable] = field(default_factory=dict)
+    # Ferramentas do perfil (docs/09). None = todas as planejaveis: so para uso interno
+    # e testes; os routers sempre passam acesso.ferramentas.
+    permitidas: frozenset[str] | None = None
+    # Perfil do usuario (docs/09): so muda o texto da recusa (visitante tem mensagem propria).
+    perfil: str | None = None
 
     def __post_init__(self) -> None:
         self.ibge6 = _ibge6(self.ibge6)
+        if self.permitidas is None:
+            self.permitidas = frozenset(FERRAMENTAS_PLANEJAVEIS)
+        else:
+            self.permitidas = frozenset(self.permitidas)
         if not self.tools:
-            self.tools = criar_susbot_tools(self.ibge6)
+            self.tools = criar_susbot_tools(self.ibge6, self.permitidas)
         self._graph = self._montar_grafo() if LANGGRAPH_OK else None
 
     def _obter_llm(self) -> Any:
@@ -682,8 +697,9 @@ class ClaraAgent:
 
     def _planejar_com_llm(self, pergunta: str) -> dict[str, Any]:
         llm = self._obter_llm()
-        plano = llm.planejar(pergunta, self._contexto(), list(FERRAMENTAS_PLANEJAVEIS))
-        return validar_plano(plano, origem=type(llm).__name__, tem_historico=bool(self.historico))
+        ferramentas = [f for f in FERRAMENTAS_PLANEJAVEIS if f in self.permitidas]
+        plano = llm.planejar(pergunta, self._contexto(), ferramentas)
+        return validar_plano(plano, origem=type(llm).__name__, tem_historico=bool(self.historico), permitidas=self.permitidas)
 
     def _node_consultar(self, state: dict[str, Any]) -> dict[str, Any]:
         plano = state.get("plano") or {}
@@ -694,10 +710,17 @@ class ClaraAgent:
         argumentos = plano.get("argumentos") or {}
         executora = self.tools.get(ferramenta)
         if executora is None:
+            # Barreira 3 (docs/09): a ferramenta nao existe neste processo. Se e uma
+            # ferramenta real que o perfil nao tem, a recusa vem em codigo.
+            motivo = (
+                mensagem_ferramenta_negada(ferramenta, self.perfil)
+                if ferramenta in FERRAMENTAS_PLANEJAVEIS
+                else f"Ferramenta desconhecida: {ferramenta}"
+            )
             return {
                 "resultado_ferramenta": {
                     "encontrado": False,
-                    "motivo": f"Ferramenta desconhecida: {ferramenta}",
+                    "motivo": motivo,
                 },
                 "referencia_rota": plano.get("referencia_rota"),
             }
@@ -814,7 +837,7 @@ class ClaraAgent:
                 "sem_llm": False,
             }
         else:
-            plano = validar_plano(plano_obrigatorio, origem="rotear_intencao", tem_historico=bool(self.historico))
+            plano = validar_plano(plano_obrigatorio, origem="rotear_intencao", tem_historico=bool(self.historico), permitidas=self.permitidas)
             execucao = {
                 "modo": "deterministico",
                 "intencao": rota_local.intencao,
@@ -825,6 +848,26 @@ class ClaraAgent:
                 "sem_llm": True,
             }
         ferramenta = str(plano.get("ferramenta") or "").strip()
+
+        if plano.get("acao") == "sem_permissao":
+            # Recusa gerada em codigo, distinta de fora_do_escopo. Nada e executado.
+            mensagem = mensagem_ferramenta_negada(ferramenta, self.perfil)
+            execucao.update({"intencao": "sem_permissao", "llm_resposta": False})
+            execucao["sem_llm"] = not execucao.get("llm_planejamento")
+            registrar_execucao(execucao)
+            yield {"event": "token", "data": {"texto": mensagem}}
+            yield {
+                "event": "fim",
+                "data": {
+                    "resposta": mensagem,
+                    "referencia_rota": None,
+                    "plano": plano,
+                    "resultado_ferramenta": None,
+                    "artefato": None,
+                    "execucao": execucao,
+                },
+            }
+            return
 
         if plano.get("acao") == "fora_do_escopo":
             # Recusa gerada em codigo: nenhuma chamada de geracao ao LLM neste caminho.
@@ -888,9 +931,14 @@ class ClaraAgent:
 
         yield {"event": "status", "data": {"mensagem": f"Executando {ferramenta}"}}
 
-        executora = self.tools.get(ferramenta)
-        if executora is None or ferramenta not in FERRAMENTAS_ESCRITA:
+        if ferramenta not in FERRAMENTAS_ESCRITA:
             yield {"event": "erro", "data": {"mensagem": f"Ferramenta de escrita inválida: {ferramenta}"}}
+            return
+        # docs/09: o nome vem do cliente, entao confere permissao E existencia no dict.
+        executora = self.tools.get(ferramenta)
+        if ferramenta not in self.permitidas or executora is None:
+            log.warning("confirmacao recusada (usuario=%s, ferramenta=%r): ferramenta sem permissao", self.usuario, ferramenta)
+            yield {"event": "erro", "data": {"mensagem": mensagem_ferramenta_negada(ferramenta, self.perfil)}}
             return
 
         resultado = executora(**argumentos)
@@ -923,8 +971,10 @@ def criar_susbot_agente(
     memoria_usuario: dict[str, Any] | None = None,
     llm: Any | None = None,
     tools: dict[str, Callable] | None = None,
+    permitidas=None,
+    perfil: str | None = None,
 ) -> ClaraAgent:
-    """Factory do agente da Clara."""
+    """Factory do agente da Clara. `permitidas` = acesso.ferramentas (docs/09)."""
 
     return ClaraAgent(
         ibge6=ibge6,
@@ -934,4 +984,6 @@ def criar_susbot_agente(
         memoria_usuario=memoria_usuario or {},
         llm=llm,
         tools=tools or {},
+        permitidas=permitidas,
+        perfil=perfil,
     )

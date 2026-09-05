@@ -28,6 +28,7 @@ from api.core.audio_transcription import (
 )
 from api.core.auth import require_user
 from api.core.identidade import usuario_referencia
+from api.core.permissoes import AcessoNegado, carregar_acesso
 from api.core.channel_media import MidiaCanalIndisponivel, baixar_audio_telegram
 from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
@@ -383,6 +384,12 @@ def revogar_canal(provedor: str, user: dict = Depends(require_user)):
 def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
     usuario = conexao["usuario"]
     ibge6 = conexao["ibge6"]
+    # docs/09: acesso carregado a cada mensagem — desativar na tabela vale na proxima.
+    try:
+        acesso = carregar_acesso(usuario)
+    except AcessoNegado as exc:
+        log.warning("Telegram recusado (usuario=%s): %s", usuario, exc)
+        return str(exc), str(exc)
     conversa_id_atual = None if _telegram_sessao_expirada(conexao) else conexao.get("conversa_atual_id")
     conversa = db.get_conversa(conversa_id_atual) if conversa_id_atual else None
     if not conversa or conversa.get("usuario") != usuario:
@@ -404,6 +411,8 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
         usuario=usuario,
         historico=historico,
         memoria_usuario=contexto_para_agente(usuario),
+        permitidas=acesso.ferramentas,
+        perfil=acesso.perfil,
     )
     resposta = ""
     confirmacao_pendente = False

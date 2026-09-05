@@ -6,7 +6,7 @@ import pytest
 
 from api.core.local_llm import (
     LocalClaraLLM, OllamaIndisponivel, PLANEJADOR_SYSTEM,
-    PLANO_SCHEMA, RESPOSTA_SYSTEM,
+    PLANO_SCHEMA, RESPOSTA_SYSTEM, plano_schema,
 )
 
 
@@ -47,7 +47,9 @@ def test_planejamento_usa_api_nativa_schema_e_normaliza_responder(monkeypatch):
     plano = llm.planejar("O que e dengue?", {}, ["gerar_etp"])
 
     assert requisicao["url"] == "http://127.0.0.1:11434/api/chat"
-    assert requisicao["payload"]["format"] == PLANO_SCHEMA
+    # docs/09 barreira 1: o enum do schema so traz as ferramentas recebidas.
+    assert requisicao["payload"]["format"] == plano_schema(["gerar_etp"])
+    assert requisicao["payload"]["format"]["properties"]["ferramenta"]["enum"] == ["gerar_etp"]
     assert requisicao["payload"]["stream"] is False
     assert requisicao["payload"]["options"] == {"temperature": 0, "num_predict": 192}
     assert requisicao["timeout"] == 91
