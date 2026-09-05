@@ -51,7 +51,10 @@ def test_planejamento_usa_api_nativa_schema_e_normaliza_responder(monkeypatch):
     assert requisicao["payload"]["stream"] is False
     assert requisicao["payload"]["options"] == {"temperature": 0, "num_predict": 192}
     assert requisicao["timeout"] == 91
-    assert plano == {"acao": "resposta", "resposta": ""}
+    # O adapter so traduz vocabulario; ignorar `ferramenta` com acao=responder e
+    # papel de ClaraAgent.validar_plano (unica barreira pra todos os backends).
+    assert plano["acao"] == "resposta"
+    assert plano["ferramenta"] == "gerar_etp"
 
 
 def test_planejamento_json_invalido_faz_fallback_seguro(monkeypatch):
@@ -89,6 +92,7 @@ def test_planejamento_normaliza_alias_e_remove_ibge_dos_argumentos(monkeypatch):
         "acao": "ferramenta",
         "ferramenta": "consultar_estoque",
         "argumentos": {"item": "dipirona"},
+        "resposta": "",
     }
 
 
@@ -113,8 +117,13 @@ def test_resposta_repassa_chunks_sem_bufferizar(monkeypatch):
 
 def test_prompts_locais_cobrem_regras_criticas_para_modelo_pequeno():
     assert "JSON" in PLANEJADOR_SYSTEM
-    assert "palavras genéricas" in PLANEJADOR_SYSTEM.lower()
-    assert "confirmação humana" in PLANEJADOR_SYSTEM
+    assert "palavras genericas" in PLANEJADOR_SYSTEM.lower()
+    assert "confirmacao humana" in PLANEJADOR_SYSTEM
+    assert "fora_do_escopo" in PLANEJADOR_SYSTEM
+    assert "sobre_o_projeto" in PLANEJADOR_SYSTEM
+    assert PLANO_SCHEMA["properties"]["acao"]["enum"] == ["responder", "chamar_ferramenta", "fora_do_escopo"]
+    assert "sobre_o_projeto" in PLANO_SCHEMA["properties"]["ferramenta"]["enum"]
+    assert PLANO_SCHEMA["required"] == ["acao"]
     assert "única fonte" in RESPOSTA_SYSTEM
     assert "não informa ocupação" in RESPOSTA_SYSTEM
     assert "não comprovam estoque físico" in RESPOSTA_SYSTEM

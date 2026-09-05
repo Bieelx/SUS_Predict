@@ -241,6 +241,40 @@ O frontend mostra o botão `Exportar XLSX` quando a análise está carregada.
 - `GET /api/export/{job_id}`: export XLSX.
 - `GET /api/runs`: lista runs no Supabase (para mapa/filtros).
 
+## Escopo da Clara
+
+A Clara é a assistente de chat do SUS Predict (web e Telegram). Ela **não é um chatbot de uso geral**. Por decisão de projeto, a Clara só produz texto a partir de duas fontes:
+
+1. **Dados devolvidos por uma ferramenta do sistema** (estoque de insumos, alertas, séries epidemiológicas do SIM/SIH/SINASC/SIA/SINAN, geração de ETP).
+2. **Um texto fixo sobre o projeto**, escrito à mão pela equipe (ferramenta `sobre_o_projeto`).
+
+Qualquer outra pergunta recebe uma recusa curta e padronizada, gerada em código, sem passar pelo modelo de linguagem.
+
+**O que ela responde**
+
+- "Quais insumos estão em risco de faltar?"
+- "Quais alertas estão abertos no município?"
+- "Como evoluíram as internações por dengue entre 2022 e 2024?"
+- "O que é o SUS Predict? O que você consegue fazer?"
+- Pedidos para reformular ou esclarecer algo que ela mesma disse nesta conversa.
+
+**O que ela recusa**
+
+- Perguntas clínicas e farmacológicas (doses, interações, diagnóstico), mesmo que pareçam simples.
+- Perguntas acadêmicas de qualquer área: química, biologia, matemática, programação, política.
+- Conselhos pessoais e conversa social.
+- Qualquer pergunta cuja resposta exigiria conhecimento próprio do modelo em vez de dado do município.
+
+**Por quê**
+
+A Clara roda sobre um modelo de linguagem pequeno e quantizado (ver seção abaixo), executado localmente para não depender de API comercial. Modelos desse porte respondem perguntas abertas com confiança, mas erram com frequência e, pior, mantêm o erro quando corrigidos. Em um sistema de apoio à gestão de saúde, uma resposta clínica errada é um risco real. A regra dura (só dado de ferramenta ou texto curado) elimina essa classe de erro pela arquitetura, não por prompt: o planejador decide entre `responder`, `chamar_ferramenta` e `fora_do_escopo`, e o backend valida todo plano antes de executar, rebaixando para `fora_do_escopo` qualquer coisa fora do enum ou qualquer "responder" sem histórico de conversa que o justifique. A recusa nunca é redigida pelo modelo.
+
+Detalhes do fluxo: [docs/UTILIZACAO_IA_CLARA.md](docs/UTILIZACAO_IA_CLARA.md). Textos e prompts centralizados em `api/core/prompts.py`.
+
+## Modelo de linguagem — Built with Qwen
+
+O modelo local da Clara (`susbot-3b`, servido pelo Ollama) é derivado do **Qwen2.5 3B Instruct**, quantizado em `q4_K_M`. Este projeto é **Built with Qwen**, conforme a atribuição exigida pela cláusula 4(b) da [Qwen Research License](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/blob/main/LICENSE). O modelo pode ser substituído por Gemini ou Groq via `SUSBOT_LLM_PROVIDER`; a barreira de escopo descrita acima vale para os três, porque fica no agente e não no adapter de cada provedor.
+
 ## Limites e considerações
 
 - FTP do DATASUS pode ser lento em recortes grandes.

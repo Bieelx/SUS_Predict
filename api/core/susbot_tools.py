@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 from api.core import db
+from api.core.prompts import TEXTO_SOBRE_O_PROJETO
 from api.core.sql_guard import validar_sql
 
 _SISTEMAS_VALIDOS = {"SIM", "SIH", "SINASC", "SIA", "SINAN"}
@@ -351,11 +352,17 @@ def criar_susbot_tools(ibge6: str) -> dict[str, Callable]:
             "motivo": "" if dados else "Consulta executada sem linhas retornadas.",
         }
 
+    def sobre_o_projeto(**_kwargs) -> dict:
+        """Texto curado a mao sobre o SUS Predict. Nao consulta banco nem LLM."""
+
+        return {"encontrado": True, "texto": TEXTO_SOBRE_O_PROJETO}
+
     return {
         "consultar_estoque": consultar_estoque,
         "consultar_alertas": consultar_alertas,
         "consultar_epidemiologia": consultar_epidemiologia,
         "gerar_etp": gerar_etp,
+        "sobre_o_projeto": sobre_o_projeto,
         "executar_sql_fallback": executar_sql_fallback,
     }
 

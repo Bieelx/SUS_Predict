@@ -78,7 +78,7 @@ def test_stream_do_susbot_emite_tool_token_referencia_e_fim(db):
 
 
 def test_stream_do_susbot_usa_llm_quando_nao_ha_ferramenta(db):
-    # Pergunta genérica (acao='resposta', sem tool) continua narrada pelo LLM.
+    # acao='resposta' so e aceita pra reformular algo ja dito: precisa de historico.
     from api.core.susbot_agent import criar_susbot_agente
     from api.tests.susbot_seed_fixture import seed_susbot_municipio
 
@@ -89,9 +89,10 @@ def test_stream_do_susbot_usa_llm_quando_nao_ha_ferramenta(db):
 
     seed_susbot_municipio("3550308")
     llm = LLMSemFerramenta()
-    agente = criar_susbot_agente("3550308", llm=llm)
+    historico = [{"pergunta": "estoque de soro?", "resposta": "Seu estoque dura 12 dias."}]
+    agente = criar_susbot_agente("3550308", llm=llm, historico=historico)
 
-    eventos = list(agente.stream_eventos("O que é dengue?"))
+    eventos = list(agente.stream_eventos("Pode repetir de forma mais simples?"))
 
     tokens = [evento["data"]["texto"] for evento in eventos if evento["event"] == "token"]
     assert tokens == ["Seu estoque ", "dura 12 dias."]
@@ -222,9 +223,10 @@ def test_metricas_contabilizam_rotas_com_e_sem_llm(db):
 
     resetar_metricas()
     seed_susbot_municipio("351300")
-    agente = criar_susbot_agente("351300", llm=LLMSemFerramenta())
+    historico = [{"pergunta": "estoque?", "resposta": "Dipirona em risco."}]
+    agente = criar_susbot_agente("351300", llm=LLMSemFerramenta(), historico=historico)
     list(agente.stream_eventos("Quais insumos estão em falta?"))
-    list(agente.stream_eventos("O que é vigilância epidemiológica?"))
+    list(agente.stream_eventos("Pode explicar melhor o que você disse?"))
 
     metricas = obter_metricas()
     assert metricas["respostas_total"] == 2

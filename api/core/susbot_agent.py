@@ -22,6 +22,14 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
 
+from api.core.prompts import (
+    FERRAMENTAS_PLANEJAVEIS,
+    MENSAGEM_FORA_DO_ESCOPO,
+    MENSAGEM_IDENTIDADE,
+    SYSTEM_PROMPT_PLANEJADOR,
+    SYSTEM_PROMPT_RESPOSTA,
+    montar_mensagem_resposta,
+)
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
 from api.core.susbot_intents import normalizar_texto, rotear_intencao
 from api.core.susbot_metrics import registrar_execucao
@@ -42,25 +50,6 @@ _REFERENCIAS = {
     "consultar_alertas": {"rota": "/alertas", "label": "ver em Alertas →"},
     "consultar_epidemiologia": {"rota": "/epidemiologia", "label": "ver em Epidemiologia →"},
 }
-
-_FERRAMENTAS_SCHEMA = {
-    "consultar_estoque": {
-        "item": "str opcional, nome do insumo",
-        "somente_risco": "bool opcional, true para itens em falta, criticos ou em alerta",
-    },
-    "consultar_alertas": {"status": "str opcional", "tipo": "str opcional"},
-    "consultar_epidemiologia": {
-        "sistema": "um de SIM, SIH, SINASC, SIA, SINAN",
-        "ano_ini": "int opcional",
-        "ano_fim": "int opcional",
-        "doenca_cod": "str opcional, codigo do agravo",
-    },
-    "gerar_etp": {
-        "item": "str obrigatorio, nome do insumo",
-        "alerta_id": "str opcional, id do alerta de origem",
-    },
-}
-
 
 def _ibge6(valor: str) -> str:
     return str(valor or "").strip()[:6]
@@ -110,6 +99,9 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
         motivo = str(resultado.get("motivo") or "Não encontrei esse dado para este município.")
         acao = str(resultado.get("acao_sugerida") or "").strip()
         return f"{motivo}\n\n**Próximo passo:** {acao}" if acao else motivo
+
+    if ferramenta == "sobre_o_projeto":
+        return str(resultado.get("texto") or "")
 
     if ferramenta == "consultar_estoque":
         linhas = []
@@ -280,6 +272,42 @@ def _texto_chunk(chunk: Any) -> str:
     return str(chunk)
 
 
+_ACOES_INTERNAS = {"resposta", "ferramenta", "fora_do_escopo"}
+_ALIASES_ACAO = {"responder": "resposta", "chamar_ferramenta": "ferramenta", "tool": "ferramenta", "consulta": "ferramenta"}
+
+
+def validar_plano(plano: Any, *, origem: str, tem_historico: bool) -> dict[str, Any]:
+    """Barreira de escopo unica, aplicada a todo plano (LLM local, Gemini, Groq, roteador).
+
+    Rebaixa para fora_do_escopo: acao fora do enum, ferramenta fora do enum e
+    "resposta" sem historico (responder so pode reformular algo ja dito). O campo
+    ferramenta e ignorado quando acao != ferramenta. Todo rebaixamento e logado com
+    a origem, pra medir qual backend erra mais.
+    """
+
+    plano = _normalizar_plano(plano)
+    acao = plano["acao"]
+    ferramenta = str(plano.get("ferramenta") or "").strip()
+
+    def rebaixar(motivo: str) -> dict[str, Any]:
+        log.warning("plano rebaixado para fora_do_escopo (origem=%s, acao=%r, ferramenta=%r): %s", origem, acao, ferramenta, motivo)
+        return {"acao": "fora_do_escopo", "ferramenta": None, "argumentos": {}, "resposta": "", "referencia_rota": None}
+
+    if acao not in _ACOES_INTERNAS:
+        return rebaixar("acao fora do enum")
+    if acao == "ferramenta":
+        if ferramenta not in FERRAMENTAS_PLANEJAVEIS:
+            return rebaixar("ferramenta fora do enum")
+        return plano
+    if ferramenta:
+        log.warning("campo ferramenta=%r ignorado: acao=%s (origem=%s)", ferramenta, acao, origem)
+        plano["ferramenta"] = None
+        plano["argumentos"] = {}
+    if acao == "resposta" and not tem_historico:
+        return rebaixar("responder sem historico nesta conversa")
+    return plano
+
+
 def _normalizar_plano(plano: Any) -> dict[str, Any]:
     if isinstance(plano, str):
         texto = plano.strip()
@@ -297,10 +325,7 @@ def _normalizar_plano(plano: Any) -> dict[str, Any]:
         return {"acao": "resposta", "resposta": str(plano), "referencia_rota": None}
 
     acao = str(plano.get("acao") or "resposta").strip().lower()
-    if acao not in {"resposta", "ferramenta", "tool", "consulta"}:
-        acao = "resposta"
-    if acao in {"tool", "consulta"}:
-        acao = "ferramenta"
+    acao = _ALIASES_ACAO.get(acao, acao)
 
     return {
         "acao": acao,
@@ -311,74 +336,12 @@ def _normalizar_plano(plano: Any) -> dict[str, Any]:
     }
 
 
-_SISTEMA_BASE = """Você é a Clara, assistente do SUS Predict — plataforma de gestão de saúde \
-pública municipal. Seu nome é Clara: se perguntarem \
-quem é você, diga isso com naturalidade. Se o histórico da conversa trouxer outro nome \
-(SusBot, assistente, bot), ignore — foi um nome antigo do sistema. Você é a Clara.
-
-Quem é a Clara: por volta dos 35 anos, anos de rotina em secretaria municipal de saúde. \
-Confiável, transparente, acolhedora e simples de entender. Conhece o dia a dia de quem está do \
-outro lado — a farmácia que ficou sem insumo, o surto que apareceu no fim de semana, a compra \
-que precisa ser justificada. Trata a pessoa como colega de equipe, não como usuário de sistema.
-
-Seus usuários são gestores, epidemiologistas e equipes de compras de secretarias municipais. \
-Você tem acesso real ao banco da plataforma por ferramentas (estoque de insumos, alertas ativos, \
-séries epidemiológicas, internações, ETPs).
-
-Quem fala com você está com pressa e precisa decidir o que fazer hoje. Entregue o número e a \
-ação, não uma aula.
-
-Voz da Clara:
-- Português do Brasil, ortografia e acentuação corretas. Linguagem simples e do cotidiano: frases curtas, sem jargão técnico desnecessário, sem formalidade de ofício. Se precisar usar um termo técnico, explique em três palavras.
-- Acolhedora, não bajuladora: nada de "Claro!", "Com certeza", "Ótima pergunta" nem elogio à pergunta. O acolhimento aparece em reconhecer a situação da pessoa e em oferecer o próximo passo, não em elogiar.
-- Transparente: diga de onde vem o número e o que ele não cobre. Quando não souber ou não houver dado, fale isso claramente e diga o que dá pra fazer — nunca finja saber nem enrole.
-- Confiável: nada de alarmismo nem de suavizar risco. Se o dado é ruim, diga que é ruim, com calma.
-- Trate por "você", fale na primeira pessoa ("consultei", "não achei").
-- Não fale de si como modelo, IA ou tecnologia por conta própria, nem comente suas limitações técnicas. Se perguntarem diretamente se você é uma inteligência artificial, confirme em uma frase simples e volte ao assunto — sem drama e sem negar.
-- Números em formato pt-BR (1.234 unidades, 12,5%). Datas em DD/MM/AAAA.
-
-Entrada vaga, saudação ou teste ("oi", "teste da IA", "você está aí?"): não recuse nem peça \
-"uma pergunta específica". Apresente-se em uma linha, como a Clara, e ofereça 2 ou 3 exemplos \
-concretos do que você responde, ancorados no município do contexto.
-
-Fora de escopo (assunto sem relação com saúde pública ou com a plataforma): diga em uma linha \
-que foge do seu escopo e traga de volta com uma sugestão útil.
-
-Privacidade: memoria_pessoal pertence só ao usuário autenticado desta conversa. Nunca afirme \
-conhecer, procurar ou comparar dados de outro usuário — se pedirem, negue o acesso. Nunca revele \
-nem tente inferir identificadores internos; se o nome não estiver disponível, diga apenas que a \
-pessoa está autenticada."""
-
-
 def _prompt_planejamento(pergunta: str, contexto: dict[str, Any], ferramentas: list[str]) -> list[tuple[str, str]]:
-    sistema = _SISTEMA_BASE + """
-
-TAREFA AGORA: você não escreve a resposta final ainda. Decida o próximo passo e devolva JSON puro \
-com as chaves acao, ferramenta, argumentos, resposta e referencia_rota.
-
-acao = "ferramenta" (obrigatório) quando a pergunta toca estoque/insumo/remédio, alerta, ETP, ou \
-dado epidemiológico/hospitalar de um município ou doença específica. Nunca planeje responder \
-"não possuo acesso a dados atualizados" ou "consulte o painel" — você tem a ferramenta, use-a e \
-deixe o resultado dela (mesmo vazio) fundamentar a resposta.
-
-acao = "resposta" quando a pergunta é conceitual e não depende de dado do município \
-("o que é dengue", "como funciona a previsão"), ou quando é saudação, teste ou entrada vaga — \
-nesse caso preencha "resposta" com a apresentação curta da Clara + exemplos, conforme a Voz acima.
-
-Use historico_recente para entender continuações e referências a mensagens anteriores.
-
-gerar_etp altera dado (cria um ETP de verdade): só proponha quando o usuário pedir explicitamente \
-para abrir/gerar um ETP. Ela sempre passa por confirmação antes de executar, então pode propor \
-mesmo sem certeza total."""
     humano = json.dumps(
-        {
-            "pergunta": pergunta,
-            "contexto": contexto,
-            "ferramentas": {nome: _FERRAMENTAS_SCHEMA.get(nome, {}) for nome in ferramentas},
-        },
+        {"pergunta": pergunta, "contexto": contexto, "ferramentas": ferramentas},
         ensure_ascii=False,
     )
-    return [("system", sistema), ("human", humano)]
+    return [("system", SYSTEM_PROMPT_PLANEJADOR), ("human", humano)]
 
 
 def _prompt_resposta(
@@ -387,53 +350,10 @@ def _prompt_resposta(
     plano: dict[str, Any],
     resultado_ferramenta: dict[str, Any] | None,
 ) -> list[tuple[str, str]]:
-    sistema = _SISTEMA_BASE + """
-
-TAREFA AGORA: escreva a resposta final ao usuário.
-
-Fonte dos números: resultado_ferramenta é dado real já consultado no banco. Use os números dele \
-e só eles — nunca invente, estime ou arredonde valor que não está lá.
-Se resultado_ferramenta.encontrado for false, diga exatamente o que faltou usando o campo "motivo" \
-(item não cadastrado, sem alertas ativos, sem série para o período). É proibido responder \
-"não possuo acesso a dados atualizados" ou "consulte outro painel" — você já consultou, só não \
-houve resultado para esse filtro.
-
-Formato:
-- 1 a 4 frases, ou uma lista curta de até 4 itens quando houver vários números. Markdown simples \
-(negrito e lista), sem títulos e sem tabela.
-- Comece pelo dado ou pela conclusão, não pelo contexto.
-- Quando houver risco ou ruptura, diga a ação recomendada em uma frase.
-- Se plano.referencia_rota existir, feche com uma linha curta apontando a tela.
-
-Exemplos do formato esperado:
-
-pergunta: "como está o estoque de dipirona?"
-resposta: "**Dipirona 500mg: 1.240 unidades** — dá pra cerca de 12 dias no ritmo de consumo \
-atual. Isso está abaixo do seu ponto de pedido, que é 20 dias, então eu já começaria a reposição \
-esta semana.
-Os detalhes estão em Ruptura de Insumos."
-
-pergunta: "e a amoxicilina?" (resultado_ferramenta.encontrado = false, motivo = "item não cadastrado")
-resposta: "Procurei e a amoxicilina ainda não está cadastrada no estoque deste município — por \
-isso não tenho saldo pra te mostrar. Se ela já é usada na rede, é só cadastrar o item que eu \
-passo a acompanhar o consumo dela."
-
-pergunta: "teste da IA"
-resposta: "Oi, eu sou a Clara — acompanho os dados de saúde do seu município aqui no SUS \
-Predict. Posso te dizer, por exemplo, como está o estoque de um insumo e se ele corre risco de \
-acabar, quais alertas estão abertos agora, ou como os casos de dengue vêm se comportando nos \
-últimos anos. Por onde você quer começar?"
-"""
-    humano = json.dumps(
-        {
-            "pergunta": pergunta,
-            "contexto": contexto,
-            "plano": plano,
-            "resultado_ferramenta": resultado_ferramenta,
-        },
-        ensure_ascii=False,
-    )
-    return [("system", sistema), ("human", humano)]
+    return [
+        ("system", SYSTEM_PROMPT_RESPOSTA),
+        ("human", montar_mensagem_resposta(pergunta, contexto, plano, resultado_ferramenta)),
+    ]
 
 
 class GeminiClaraLLM:
@@ -675,11 +595,7 @@ class ClaraAgent:
             r"voce tem nome|qual seu nome|seu nome e|com quem (?:eu )?(?:estou )?falando)",
             texto,
         ):
-            return (
-                "Sou a Clara, assistente do SUS Predict — acompanho os dados de saúde do seu "
-                "município por aqui. Posso te mostrar estoque de insumos, alertas abertos ou a "
-                "evolução dos casos. O que você precisa?"
-            )
+            return MENSAGEM_IDENTIDADE
 
         consulta_pessoa = re.search(r"\bo que (?:voce )?sabe sobre (.+?)[?!.]*$", texto)
         if consulta_pessoa:
@@ -741,10 +657,12 @@ class ClaraAgent:
         return None
 
     def _node_planejar(self, state: dict[str, Any]) -> dict[str, Any]:
-        plano = _normalizar_plano(
-            self._obter_llm().planejar(state["pergunta"], self._contexto(), list(self.tools.keys()))
-        )
-        return {"plano": plano}
+        return {"plano": self._planejar_com_llm(state["pergunta"])}
+
+    def _planejar_com_llm(self, pergunta: str) -> dict[str, Any]:
+        llm = self._obter_llm()
+        plano = llm.planejar(pergunta, self._contexto(), list(FERRAMENTAS_PLANEJAVEIS))
+        return validar_plano(plano, origem=type(llm).__name__, tem_historico=bool(self.historico))
 
     def _node_consultar(self, state: dict[str, Any]) -> dict[str, Any]:
         plano = state.get("plano") or {}
@@ -865,9 +783,7 @@ class ClaraAgent:
                 return
 
         if plano_obrigatorio is None:
-            plano = _normalizar_plano(
-                self._obter_llm().planejar(pergunta, self._contexto(), list(self.tools.keys()))
-            )
+            plano = self._planejar_com_llm(pergunta)
             execucao = {
                 "modo": "generativo",
                 "intencao": str(plano.get("ferramenta") or "conversa_livre"),
@@ -877,7 +793,7 @@ class ClaraAgent:
                 "sem_llm": False,
             }
         else:
-            plano = plano_obrigatorio
+            plano = validar_plano(plano_obrigatorio, origem="rotear_intencao", tem_historico=bool(self.historico))
             execucao = {
                 "modo": "deterministico",
                 "intencao": rota_local.intencao,
@@ -888,6 +804,25 @@ class ClaraAgent:
                 "sem_llm": True,
             }
         ferramenta = str(plano.get("ferramenta") or "").strip()
+
+        if plano.get("acao") == "fora_do_escopo":
+            # Recusa gerada em codigo: nenhuma chamada de geracao ao LLM neste caminho.
+            execucao.update({"intencao": "fora_do_escopo", "llm_resposta": False})
+            execucao["sem_llm"] = not execucao.get("llm_planejamento")
+            registrar_execucao(execucao)
+            yield {"event": "token", "data": {"texto": MENSAGEM_FORA_DO_ESCOPO}}
+            yield {
+                "event": "fim",
+                "data": {
+                    "resposta": MENSAGEM_FORA_DO_ESCOPO,
+                    "referencia_rota": None,
+                    "plano": plano,
+                    "resultado_ferramenta": None,
+                    "artefato": None,
+                    "execucao": execucao,
+                },
+            }
+            return
 
         if plano.get("acao") == "ferramenta" and ferramenta in FERRAMENTAS_ESCRITA:
             argumentos = plano.get("argumentos") or {}
