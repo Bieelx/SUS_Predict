@@ -17,11 +17,15 @@ CREATE TABLE IF NOT EXISTS usuarios_acesso (
 
 INSERT INTO usuarios_acesso (usuario, perfil, municipios, ativo, atribuido_por, criado_em, atualizado_em)
 VALUES
-  ('<UUID_PESSOA_1>', 'admin',      '["351300"]', 1, '<SEU_EMAIL_ADMIN>', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  ('<UUID_PESSOA_2>', 'gestor',     '["351300"]', 1, '<SEU_EMAIL_ADMIN>', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  ('<UUID_PESSOA_3>', 'vigilancia', '["351300"]', 1, '<SEU_EMAIL_ADMIN>', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  ('<UUID_PESSOA_4>', 'farmacia',   '["351300"]', 1, '<SEU_EMAIL_ADMIN>', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  ('<UUID_PESSOA_5>', 'gestor',     '["351300"]', 1, '<SEU_EMAIL_ADMIN>', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+  -- gabbriel.araujo@outlook.com
+  ('971ffd73-af1a-44f5-b7d9-9d2b2665170b', 'admin',  '[]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  -- ariadinevamaral@gmail.com
+  ('77abe361-faa2-4b6d-a40f-fc770aae789e', 'gestor', '[]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  -- yasminmiguez@outlook.com
+  ('340fab46-455e-4d78-abad-10d9660df272', 'gestor', '[]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+  -- Para cadastrar alguém novo: copie a linha abaixo, troque UID e perfil, e acrescente
+  -- uma vírgula na linha anterior.
+  -- ('00000000-0000-0000-0000-000000000000', 'gestor', '[]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 ON CONFLICT(usuario) DO UPDATE SET
   perfil = excluded.perfil,
   municipios = excluded.municipios,

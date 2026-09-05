@@ -391,3 +391,16 @@ def test_endpoints_operacionais_usam_require_acesso():
         dep = inspect.signature(fn).parameters["_acesso"].default
         # a dependency e uma closure de require_acesso(ferramenta)
         assert dep.dependency.__closure__[0].cell_contents == ferramenta, nome
+
+
+def test_admin_do_seed_na_lista_da_equipe_nao_e_rebaixado(db):
+    # Gabriel esta como gestor em EQUIPE_AUTORIZADA e como admin no seed: a linha do
+    # seed existe antes do primeiro login, e o provisionamento so escreve sem linha.
+    from api.core.permissoes import EQUIPE_AUTORIZADA
+    email = "gabbriel.araujo@outlook.com"
+    assert EQUIPE_AUTORIZADA[email] == "gestor"
+    db.upsert_acesso("971ffd73-af1a-44f5-b7d9-9d2b2665170b", "admin", [], ativo=True, atribuido_por=email)
+    for _ in range(2):
+        acesso = provisionar_acesso({"id": "971ffd73-af1a-44f5-b7d9-9d2b2665170b", "email": email})
+        assert acesso.perfil == "admin"
+    assert db.get_acesso("971ffd73-af1a-44f5-b7d9-9d2b2665170b")["atribuido_por"] == email

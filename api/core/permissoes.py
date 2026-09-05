@@ -46,11 +46,13 @@ PERFIS: dict[str, frozenset[str]] = {
 # entra nesta lista (só por SQL manual) — o boot falha se entrar.
 # Chaves são normalizadas (minúsculas, sem espaços nas pontas) em _validar_equipe().
 EQUIPE_AUTORIZADA: dict[str, str] = {
-    "<EMAIL_PESSOA_1>": "gestor",
-    "<EMAIL_PESSOA_2>": "gestor",
-    "<EMAIL_PESSOA_3>": "vigilancia",
-    "<EMAIL_PESSOA_4>": "farmacia",
-    "<EMAIL_PESSOA_5>": "gestor",
+    "gabbriel.araujo@outlook.com": "gestor",
+    "ariadinevamaral@gmail.com": "gestor",
+    "yasminmiguez@outlook.com": "gestor",
+    # Vagas reservadas para os dois membros restantes do grupo: descomente e
+    # preencha o e-mail quando eles entrarem. Perfil nunca pode ser "admin".
+    # "email-do-quarto-membro": "gestor",
+    # "email-do-quinto-membro": "gestor",
 }
 
 

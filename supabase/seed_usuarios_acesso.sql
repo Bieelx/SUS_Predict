@@ -13,17 +13,20 @@
 -- As 2 linhas de public.user_roles NÃO são migradas: uma é conta de teste e aquela
 -- tabela pertence a um painel externo (docs/09).
 --
--- Substitua cada <...> antes de rodar. perfil ∈ gestor | vigilancia | farmacia | admin.
--- municipios: lista de ibge6 (6 dígitos). Fase 2 ainda não valida; deixe o município
--- de trabalho de cada um para não ter que voltar aqui depois.
+-- perfil ∈ gestor | vigilancia | farmacia | admin. municipios: lista de ibge6; a Fase 2
+-- ainda não valida nada, por isso fica vazia aqui.
 
 insert into public.usuarios_acesso (usuario, perfil, municipios, ativo, atribuido_por)
 values
-  ('<UUID_PESSOA_1>', 'admin',      '["351300"]'::jsonb, true, '<SEU_EMAIL_ADMIN>'),
-  ('<UUID_PESSOA_2>', 'gestor',     '["351300"]'::jsonb, true, '<SEU_EMAIL_ADMIN>'),
-  ('<UUID_PESSOA_3>', 'vigilancia', '["351300"]'::jsonb, true, '<SEU_EMAIL_ADMIN>'),
-  ('<UUID_PESSOA_4>', 'farmacia',   '["351300"]'::jsonb, true, '<SEU_EMAIL_ADMIN>'),
-  ('<UUID_PESSOA_5>', 'gestor',     '["351300"]'::jsonb, true, '<SEU_EMAIL_ADMIN>')
+  -- gabbriel.araujo@outlook.com
+  ('971ffd73-af1a-44f5-b7d9-9d2b2665170b', 'admin',  '[]'::jsonb, true, 'gabbriel.araujo@outlook.com'),
+  -- ariadinevamaral@gmail.com
+  ('77abe361-faa2-4b6d-a40f-fc770aae789e', 'gestor', '[]'::jsonb, true, 'gabbriel.araujo@outlook.com'),
+  -- yasminmiguez@outlook.com
+  ('340fab46-455e-4d78-abad-10d9660df272', 'gestor', '[]'::jsonb, true, 'gabbriel.araujo@outlook.com')
+  -- Para cadastrar alguém novo: copie a linha abaixo, troque UID (Authentication > Users)
+  -- e perfil (gestor | vigilancia | farmacia | admin), e acrescente uma vírgula na linha anterior.
+  -- ('00000000-0000-0000-0000-000000000000', 'gestor', '[]'::jsonb, true, 'gabbriel.araujo@outlook.com')
 on conflict (usuario) do update set
   perfil = excluded.perfil,
   municipios = excluded.municipios,
