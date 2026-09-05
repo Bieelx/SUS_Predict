@@ -737,8 +737,10 @@ export default function App() {
   if (authStatus !== 'authenticated') {
     return (
       <Suspense fallback={<CarregandoPagina />}>
-        <LoginScreen onEnter={user => {
-          setAuthUser(user || getCurrentUser());
+        <LoginScreen onEnter={async user => {
+          // /api/auth/me traz `acesso.perfil` (o login do GoTrue não); sem isso a
+          // área de administração só apareceria depois de um reload.
+          setAuthUser((await validateSession()) || user || getCurrentUser());
           setAuthStatus('authenticated');
         }} />
       </Suspense>
@@ -760,7 +762,7 @@ export default function App() {
       case 'epidemiologia': return <Epidemiologia municipio={municipio} onOpenClara={abrirClara} />;
       case 'internacoes':   return <Internacoes />;
       case 'vacinacao':     return <Vacinacao municipio={municipio} />;
-      case 'configuracoes': return <>{beta && <BetaVariantSettings value={betaVariant} onChange={changeBetaVariant} />}<PageConfiguracoes municipio={municipio} /></>;
+      case 'configuracoes': return <>{beta && <BetaVariantSettings value={betaVariant} onChange={changeBetaVariant} />}<PageConfiguracoes municipio={municipio} authUser={authUser} /></>;
       case 'perfil':        return <PagePerfil onLogout={handleLogout} />;
       default:              return <VisaoGeral municipio={municipio} onNavigate={navegar} onOpenClara={abrirClara} />;
     }

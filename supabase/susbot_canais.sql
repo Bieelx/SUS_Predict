@@ -114,6 +114,6 @@ begin
                            'canal_pareamentos','canal_conexoes','susbot_memorias']
   loop
     execute format('alter table public.%I enable row level security', t);
-    execute format('revoke all on public.%I from anon, authenticated', t);
+    execute format('revoke all on public.%I from public, anon, authenticated', t);
   end loop;
 end $$;

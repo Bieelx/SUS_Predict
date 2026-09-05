@@ -1,4 +1,5 @@
 import { Card } from '../shared/ui.jsx';
+import AdminUsuarios from './AdminUsuarios.jsx';
 
 // ─── Page: Configurações ───────────────────────────────────────────────────────
 //
@@ -28,13 +29,16 @@ function CardHead({ title, hint }) {
   );
 }
 
-export default function PageConfiguracoes({ municipio }) {
+export default function PageConfiguracoes({ municipio, authUser }) {
+  const admin = authUser?.acesso?.perfil === 'admin';
   return (
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', letterSpacing: '-0.02em', marginBottom: 4 }}>Configurações</h1>
         <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>Origem das informações e município em análise.</p>
       </div>
+
+      {admin && <AdminUsuarios euId={authUser?.id} />}
 
       <Card className="p-5" style={{ marginBottom: 20, border: '1px solid var(--ink-100)' }}>
         <CardHead title="Ambiente" hint="transparência" />

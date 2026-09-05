@@ -5,11 +5,13 @@ Requer SUPABASE_URL + SUPABASE_PUBLISHABLE_KEY (ou a chave legada
 SUPABASE_ANON_KEY) no .env.
 """
 import json
+import logging
 import os
 import base64
 import hashlib
 import hmac
 import urllib.error
+import urllib.parse
 import urllib.request
 import time
 
@@ -220,3 +222,83 @@ def require_user(authorization: str = Header(default="")) -> dict:
         raise HTTPException(401, "Token ausente")
     token = authorization.removeprefix("Bearer ").strip()
     return get_user(token)
+
+
+# ── Admin API do GoTrue (só backend, chave secreta) ───────────────────────────
+
+def _secret_key() -> str:
+    from api.core.db import _supabase_read_key  # mesma chave do sync; nunca vai ao frontend
+    return _supabase_read_key()
+
+
+def listar_usuarios_auth(por_pagina: int = 200) -> list[dict]:
+    """Todos os usuários do Auth via `GET /auth/v1/admin/users` (paginação por offset).
+
+    GoTrue devolve `{"users": [...]}` por página (`page`/`per_page`, default 50) e um
+    header `Link` para a próxima; aqui a paginação é por tamanho do lote: pede a
+    próxima página enquanto a atual vier cheia. Sem Supabase (modo dev) devolve [].
+    Só campos que o painel usa saem daqui — o payload cru do GoTrue não é repassado.
+    """
+    if not _supabase_configurado() or not _secret_key():
+        return []
+    from api.core.db import _sb_headers
+    key = _secret_key()
+    usuarios: list[dict] = []
+    pagina = 1
+    while True:
+        req = urllib.request.Request(
+            f"{_sb_url()}/auth/v1/admin/users?page={pagina}&per_page={por_pagina}",
+            headers=_sb_headers(key),
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                payload = json.loads(resp.read().decode("utf-8") or "{}")
+        except urllib.error.HTTPError as e:
+            raise HTTPException(503, f"GoTrue admin/users respondeu {e.code}")
+        except urllib.error.URLError as exc:
+            raise HTTPException(503, f"Supabase inacessível: {exc.reason}")
+        lote = payload.get("users") if isinstance(payload, dict) else payload
+        lote = lote or []
+        for u in lote:
+            usuarios.append({
+                "id": str(u.get("id") or ""),
+                "email": u.get("email"),
+                "criado_em": u.get("created_at"),
+                "ultimo_acesso": u.get("last_sign_in_at"),
+            })
+        if len(lote) < por_pagina:
+            return usuarios
+        pagina += 1
+
+
+def existe_usuario_auth(usuario: str) -> bool:
+    """`GET /auth/v1/admin/users/{id}`: uma chamada, 200 se existe, 404 se não.
+
+    Bem mais barato que paginar `admin/users` a cada PUT. Sem Supabase (dev-auth) não
+    há Auth para conferir: devolve True e a tabela é a única fonte.
+    """
+    if not _supabase_configurado() or not _secret_key():
+        logging.getLogger("sus_predict.auth").warning(
+            "existe_usuario_auth(%s): Supabase não configurado — validação no Auth PULADA "
+            "(aceitável só em dev-auth; em produção isto é erro de configuração)", usuario,
+        )
+        return True
+    from api.core.db import _sb_headers
+    usuario = str(usuario or "").strip()
+    if not usuario:
+        return False
+    req = urllib.request.Request(
+        f"{_sb_url()}/auth/v1/admin/users/{urllib.parse.quote(usuario, safe='')}",
+        headers=_sb_headers(_secret_key()),
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.getcode() == 200
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise HTTPException(503, f"GoTrue admin/users/{{id}} respondeu {e.code}")
+    except urllib.error.URLError as exc:
+        raise HTTPException(503, f"Supabase inacessível: {exc.reason}")

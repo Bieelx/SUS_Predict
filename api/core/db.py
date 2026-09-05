@@ -191,6 +191,20 @@ CREATE TABLE IF NOT EXISTS usuarios_acesso (
     atualizado_em  TEXT NOT NULL
 );
 
+-- docs/09 Fase 4 (antecipada): trilha append-only das alterações de usuarios_acesso.
+-- Só INSERT; nunca UPDATE/DELETE por código.
+CREATE TABLE IF NOT EXISTS usuarios_acesso_log (
+    id             TEXT PRIMARY KEY,
+    usuario        TEXT NOT NULL,
+    acao           TEXT NOT NULL,
+    perfil_antes   TEXT,
+    perfil_depois  TEXT,
+    ativo_antes    INTEGER,
+    ativo_depois   INTEGER,
+    por            TEXT NOT NULL,
+    quando         TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_runs_lookup  ON datasus_runs (sistema, uf, cidade, ano_ini, ano_fim);
 CREATE INDEX IF NOT EXISTS idx_runs_created ON datasus_runs (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alertas_ibge_status ON alertas (ibge6, status);
@@ -1098,6 +1112,68 @@ def upsert_acesso(
     row = get_acesso(usuario) or {}
     _sync_row("usuarios_acesso", {**row, "ativo": bool(row.get("ativo")), "municipios": municipios_lista})
     return row
+
+
+def list_acessos() -> list[dict]:
+    """Todas as linhas de `usuarios_acesso` (admin). `municipios` volta como lista."""
+
+    with _conn() as con:
+        rows = [dict(r) for r in con.execute("SELECT * FROM usuarios_acesso ORDER BY usuario").fetchall()]
+    for out in rows:
+        try:
+            out["municipios"] = list(json.loads(out.get("municipios") or "[]"))
+        except (TypeError, ValueError):
+            out["municipios"] = []
+        out["ativo"] = int(out.get("ativo") or 0)
+    return rows
+
+
+def count_admins_ativos() -> int:
+    with _conn() as con:
+        return int(con.execute(
+            "SELECT count(*) FROM usuarios_acesso WHERE perfil = 'admin' AND ativo = 1"
+        ).fetchone()[0])
+
+
+def insert_acesso_log(usuario: str, acao: str, antes: dict | None, depois: dict | None, por: str) -> dict:
+    """Append-only: uma linha por alteração administrativa em usuarios_acesso."""
+
+    antes = antes or {}
+    depois = depois or {}
+    row = {
+        "id": str(uuid.uuid4()),
+        "usuario": str(usuario),
+        "acao": str(acao),
+        "perfil_antes": antes.get("perfil"),
+        "perfil_depois": depois.get("perfil"),
+        "ativo_antes": None if not antes else int(bool(antes.get("ativo"))),
+        "ativo_depois": None if not depois else int(bool(depois.get("ativo"))),
+        "por": str(por),
+        "quando": datetime.now(timezone.utc).isoformat(),
+    }
+    with _conn() as con:
+        con.execute("""
+            INSERT INTO usuarios_acesso_log
+                (id, usuario, acao, perfil_antes, perfil_depois, ativo_antes, ativo_depois, por, quando)
+            VALUES (:id, :usuario, :acao, :perfil_antes, :perfil_depois, :ativo_antes, :ativo_depois, :por, :quando)
+        """, row)
+    _sync_row("usuarios_acesso_log", {
+        **row,
+        "ativo_antes": None if row["ativo_antes"] is None else bool(row["ativo_antes"]),
+        "ativo_depois": None if row["ativo_depois"] is None else bool(row["ativo_depois"]),
+    })
+    return row
+
+
+def list_acesso_log(usuario: str | None = None, limit: int = 200) -> list[dict]:
+    with _conn() as con:
+        if usuario:
+            cur = con.execute(
+                "SELECT * FROM usuarios_acesso_log WHERE usuario = ? ORDER BY quando DESC LIMIT ?", (usuario, limit)
+            )
+        else:
+            cur = con.execute("SELECT * FROM usuarios_acesso_log ORDER BY quando DESC LIMIT ?", (limit,))
+        return [dict(r) for r in cur.fetchall()]
 
 
 # ── Supabase read-only query (curated tables, e.g. sih_dengue_*, sinan_dengue_*) ──

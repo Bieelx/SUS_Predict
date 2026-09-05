@@ -75,6 +75,7 @@ from api.core.prediction import PROPHET_OK, gerar_predicao
 from api.core.susbot_router import router as susbot_router
 from api.core.susbot_access import avisar_se_protecao_desativada
 from api.core.channel_router import router as channel_router
+from api.core.admin_router import router as admin_router
 
 if PYSUS_OK:
     from api.core.download import baixar_ano, baixar_sinan, limpar_cache_pysus
@@ -102,6 +103,7 @@ app.include_router(dengue_router)
 app.include_router(operational_router)
 app.include_router(susbot_router)
 app.include_router(channel_router)
+app.include_router(admin_router)
 
 jobs: dict = {}
 TEMP_DIR = Path("./temp_data")
@@ -340,7 +342,12 @@ def auth_dev_login(req: AuthRequest | None = None):
 
 @app.get("/api/auth/me")
 def auth_me(user: dict = Depends(auth_core.require_user)):
-    return user
+    # `acesso.perfil` só para o frontend decidir o que mostrar; a autorização real é
+    # sempre do backend (require_acesso / require_admin). Só lê, não provisiona.
+    from api.core.db import get_acesso
+    from api.core.identidade import usuario_referencia
+    linha = get_acesso(usuario_referencia(user))
+    return {**user, "acesso": {"perfil": linha.get("perfil"), "ativo": bool(linha.get("ativo"))} if linha else None}
 
 
 @app.post("/api/auth/logout", status_code=204)

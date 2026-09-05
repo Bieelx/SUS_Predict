@@ -1,6 +1,6 @@
 # SusPredict — Identidade, permissões e memória da Clara
 
-**Status: APROVADO. Fase 0 implementada em 05/09/2026; Fase 1 implementada em 05/09/2026 (aguardando seed + deploy); fases 2–4 pendentes.**
+**Status: APROVADO. Fase 0 implementada em 05/09/2026; Fase 1 implementada e validada em produção em 05/09/2026; Fase 4 (parte: admin de usuários + `usuarios_acesso_log`) antecipada em 05/09/2026; Fases 2 e 3 pendentes.**
 Data do levantamento: 05/09/2026, branch `main` (commit `0369027`).
 
 Decisões fechadas com o grupo em 05/09/2026: perfis `gestor`, `vigilancia`, `farmacia`,
@@ -200,8 +200,9 @@ Os nomes e a distribuição exata são chute inicial para o grupo bater.
 **Nenhuma tabela nova para a memória.** `susbot_memorias` fica como está; muda só a lista
 de chaves permitidas (item 4).
 
-Opcional, fase posterior: `usuarios_acesso_log` (append-only: usuario, perfil_antes,
-perfil_depois, por, quando). Não bloqueia nada agora.
+`usuarios_acesso_log` (append-only: usuario, acao, perfil_antes, perfil_depois,
+ativo_antes, ativo_depois, por, quando) — implementada na antecipação da Fase 4 (ver
+registro abaixo).
 
 ### 2. Como a permissão entra no fluxo
 
@@ -381,7 +382,8 @@ existe** em produção, a primeira fase é blindá-la, não criá-la.
 | **4 — Defesa em profundidade** | `usuarios_acesso_log`; admin mínimo (endpoint `admin` para atribuir perfil); reavaliar RLS + JWT do usuário se o Supabase virar primário; unificar os dois `schema.sql` e criar as tabelas `susbot_*`/`canal_*` que o sync espera | Auditoria e robustez | Baixo | Fase 2 |
 
 Na fase 1 o admin atribui perfis por SQL no painel do Supabase (ou `sqlite3` no Ubuntu).
-Um endpoint de administração só na fase 4 — até lá, cinco pessoas não justificam UI.
+~~Um endpoint de administração só na fase 4 — até lá, cinco pessoas não justificam UI.~~
+Revisto em 05/09/2026: a parte "admin + log" da Fase 4 foi antecipada (registro abaixo).
 
 ### Fase 0 — registro de implementação (05/09/2026)
 
@@ -492,6 +494,82 @@ reativado; admin na constante falha no boot; Telegram não provisiona.
 foi aplicado é `supabase/schema.sql`. A versão da raiz (BIGSERIAL + RLS) nunca rodou. Os
 SQLs novos desta fase ficam em `supabase/` por isso. Não apaguei o arquivo nesta rodada;
 é só remover.
+
+### Fase 4 antecipada — administração de usuários e `usuarios_acesso_log` (05/09/2026)
+
+**Por que antecipou.** A Fase 1 foi validada em produção (acesso como admin, recusa
+correta como visitante, sem restart). Com o provisionamento automático, qualquer pessoa
+que cria conta vira `visitante` e precisa ser liberada — e o caso concreto é um professor
+criando conta e esperando acesso em minutos. Liberar por SQL exige achar o UUID no painel
+do Supabase e editar duas bases (Postgres + SQLite no Ubuntu); a tela faz isso em segundos
+e grava trilha. A Fase 2 (escopo de município) não bloqueia nada disso e fica para depois.
+O restante da Fase 4 (RLS + JWT do usuário, unificar `schema.sql`) continua pendente.
+
+**Backend** (`api/core/admin_router.py`, prefixo `/api/admin`, tudo sob `require_admin`
+= `require_acesso()` + `perfil == "admin"` resolvido pela tabela):
+
+| Método | Rota | Faz |
+|---|---|---|
+| GET | `/usuarios` | Auth (GoTrue) ⋈ `usuarios_acesso`. Quem só existe no Auth aparece com `sem_acesso: true`; sem-acesso vem primeiro na lista |
+| PUT | `/usuarios/{usuario}/perfil` `{perfil}` | Cria ou troca perfil (`visitante`, `gestor`, `vigilancia`, `farmacia`). Preserva `municipios` e `ativo` |
+| PUT | `/usuarios/{usuario}/ativo` `{ativo}` | Ativa/desativa. Exige linha existente (404 se não) |
+| GET | `/usuarios/{usuario}/log` | Trilha do usuário |
+
+Listagem do Auth: `GET {SUPABASE_URL}/auth/v1/admin/users?page=N&per_page=200`
+(`api/core/auth.py::listar_usuarios_auth`), com a chave secreta (`_supabase_read_key`, a
+mesma do sync) no header `apikey` — chaves `sb_secret_` não vão como Bearer. GoTrue
+pagina por offset (`page`/`per_page`, default 50; devolve `{"users": [...]}` e header
+`Link` para a próxima); o backend pede a página seguinte enquanto a atual vier cheia, e só
+repassa `id`, `email`, `created_at`, `last_sign_in_at` — o payload cru e a chave nunca saem.
+Sem Supabase (dev-auth) a lista do Auth é vazia e só a tabela aparece.
+
+`GET /api/auth/me` passou a devolver `acesso: {perfil, ativo}` (leitura pura de
+`usuarios_acesso`, sem provisionar) para o frontend decidir o que mostrar. Isso é
+cosmético: a autorização real continua no backend.
+
+**Regras (todas em código, todas testadas em `test_admin_usuarios.py`):**
+
+- `perfil = "admin"` no body → 400. Admin continua só por SQL manual
+  (`supabase/seed_usuarios_acesso.sql`). Perfil desconhecido → 400.
+- Admin não altera o próprio acesso (perfil ou ativo) → 400.
+- Operação que deixaria zero admins ativos → 409 (`_protege_ultimo_admin`). Via HTTP é
+  inalcançável (o único admin ativo seria ele mesmo, barrado antes), fica como defesa em
+  profundidade contra corrida.
+- Toda escrita grava `atribuido_por` = e-mail do admin (do token, nunca do body) e uma
+  linha em `usuarios_acesso_log` (`acao ∈ atribuir_perfil | ativar | desativar`).
+  Tabela SQLite em `db.py`; espelho Postgres em `supabase/usuarios_acesso_log.sql`
+  (rodar antes do deploy). Só INSERT por código.
+- Não-admin recebe 403 em todos os endpoints mesmo com a URL; sem token, 401.
+
+**Frontend**: `frontend/src/pages/AdminUsuarios.jsx`, card dentro de Configurações,
+renderizado só quando `authUser.acesso.perfil === "admin"`. Busca por e-mail/UUID;
+contas sem acesso destacadas e no topo, com botão "Liberar"; toda alteração passa por
+diálogo de confirmação. Linha do próprio admin e de outros admins não têm ações ("só por
+SQL").
+
+**Alvo do PUT validado no Auth** (revisão de 05/09/2026): antes de qualquer escrita,
+`auth.existe_usuario_auth(uuid)` faz `GET /auth/v1/admin/users/{id}` (uma chamada; 200
+existe, 404 não — verificado contra o projeto real). UUID fora do Auth → 404 e nada é
+gravado em `usuarios_acesso` nem em `usuarios_acesso_log`. Bem mais barato que paginar
+`admin/users` a cada PUT. Sem Supabase (dev-auth) não há Auth para conferir e a checagem
+é pulada.
+
+**Deploy — ordem bloqueante.** Rodar no Supabase, nesta ordem, ANTES do código subir:
+`usuarios_acesso.sql` → `seed_usuarios_acesso.sql` → `usuarios_acesso_log.sql` →
+`susbot_canais.sql` (detalhe em `supabase/SETUP.md`). Se o código subir antes, o login
+**não** quebra (`/api/auth/me` e `require_acesso` leem o SQLite, que `init_db()` cria no
+boot), mas o sync para o Postgres falha em silêncio (WARNING) e a trilha de auditoria fica
+só no servidor. **Achado na revisão:** consultando o projeto Supabase do `.env` local em
+05/09/2026, `usuarios_acesso`, `usuarios_acesso_log` e `susbot_memorias` **não existem**
+(PGRST205) — ou seja, a Fase 1 em produção roda 100% no SQLite e nenhum sync dessas
+tabelas chegou ao Postgres. Rodar os SQLs acima é pendência real, não formalidade.
+
+**RLS conferida:** os dois `.sql` ligam RLS e não criam policy nenhuma (sem policy, RLS
+nega tudo a `anon`/`authenticated`; a chave secreta bypassa RLS, e só o backend a tem), e
+ainda revogam GRANT das duas roles. Não criar policy nessas tabelas.
+
+**Limitações conscientes:** `last_sign_in_at` é o do GoTrue, não do Telegram.
+`municipios` continua sem UI (Fase 2).
 
 ### Dois conceitos de admin no sistema (decisão consciente, 05/09/2026)
 

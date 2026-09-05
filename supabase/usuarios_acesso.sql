@@ -19,6 +19,11 @@ create table if not exists public.usuarios_acesso (
   constraint usuarios_acesso_perfil_chk check (perfil in ('gestor', 'vigilancia', 'farmacia', 'admin', 'visitante'))
 );
 
--- Fecha a chave publicável. O backend usa a chave secreta, que bypassa RLS.
+-- Fecha a chave publicável. RLS ligada e NENHUMA policy = nega tudo para
+-- anon/authenticated; o backend usa a chave secreta, que bypassa RLS. O REVOKE garante
+-- 42501 mesmo se uma policy permissiva for criada por engano. Não crie policy aqui.
 alter table public.usuarios_acesso enable row level security;
-revoke all on public.usuarios_acesso from anon, authenticated;
+revoke all on public.usuarios_acesso from public, anon, authenticated;
+
+-- Conferência (com a chave publicável deve dar 401/42501 ou 404, nunca 200 com linhas):
+-- curl -H "apikey: $SUPABASE_PUBLISHABLE_KEY" "$SUPABASE_URL/rest/v1/usuarios_acesso?select=*&limit=1"

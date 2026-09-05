@@ -14,7 +14,7 @@ Documentação técnica e de produto do SusPredict, plataforma SaaS de inteligê
 | [05 — Análise de Dados](./05-analise-dados.md) | O que já existe por tela, o que falta, achado crítico (PySUS quebrado no ambiente atual) |
 | [06 — Arquitetura do Agente Clara](./06-agente-clara.md) | Ferramentas híbridas (parametrizadas + SQL controlado), LangGraph + Gemini, tabelas novas de estoque/alertas, risco de isolamento multi-tenant aceito nesta fase |
 | [07 — Briefing de Implementação do Chatbot](./07-briefing-implementacao-chatbot.md) | Insumo para a próxima sessão de brainstorming — gaps de schema, dependências, contrato de endpoint e testes antes de codar a Clara |
-| [09 — Identidade, permissões e memória](./09-identidade-permissoes-memoria.md) | Levantamento de auth (web/Telegram), Supabase e RLS; proposta de perfis de acesso, três barreiras de permissão no agente, memória blindada e faseamento — **proposto, sem código** |
+| [09 — Identidade, permissões e memória](./09-identidade-permissoes-memoria.md) | Levantamento de auth (web/Telegram), Supabase e RLS; proposta de perfis de acesso, três barreiras de permissão no agente, memória blindada e faseamento — **Fases 0, 1 e 4 (admin de usuários + log) implementadas; 2 e 3 pendentes** |
 
 ## Foco do MVP — fluxo prioritário
 
