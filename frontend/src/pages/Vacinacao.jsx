@@ -4,15 +4,14 @@ import { Badge, Card, SectionTitle } from '../shared/ui.jsx';
 import { EstadoConsulta, FonteReal, Kpi, SeletorPeriodo } from '../shared/dataUi.jsx';
 import { useDadosOperacionais } from '../shared/operationalClient.js';
 
-const IBGE_PADRAO = '351300';
 const numero = valor => Number(valor || 0);
 const inteiro = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 const decimal = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 const moeda = valor => numero(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-export default function Vacinacao({ demoState }) {
+export default function Vacinacao({ municipio }) {
   const [periodo, setPeriodo] = useState('12 Meses');
-  const { dados, carregando, erro, recarregar } = useDadosOperacionais('vacinacao', { ibge: IBGE_PADRAO, periodo }, !demoState?.enabled);
+  const { dados, carregando, erro, recarregar } = useDadosOperacionais('vacinacao', { ibge: municipio.ibge6, periodo });
   const faixas = (dados?.faixa_etaria || []).map(item => ({ faixa: item.faixa_etaria, casos: numero(item.casos), doses: numero(item.doses_aplicadas) }));
   const comparativo = (dados?.comparativo_municipios || []).map(item => ({ nome: item.nome_municipio, doses: numero(item.doses_aplicadas), incidencia: numero(item.incidencia_atual), casos: numero(item.casos_atual) }));
   const amostra = dados?.hospitalar_estadual?.possui_amostragem_suficiente;

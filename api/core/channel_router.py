@@ -35,7 +35,6 @@ from api.core.susbot_memory import (
     contexto_para_agente,
     executar_comando_memoria,
 )
-from api.core.susbot_seed import seed_susbot_municipio
 
 log = logging.getLogger("sus_predict.channel_router")
 
@@ -394,7 +393,6 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
         conversa = db.criar_conversa(usuario, titulo)
         db.atualizar_conversa_canal(conexao["id"], conversa["id"])
 
-    seed_susbot_municipio(ibge6)
     comando_memoria = executar_comando_memoria(usuario, texto)
     if comando_memoria is not None:
         db.adicionar_mensagem(conversa["id"], "telegram", texto, comando_memoria, None)

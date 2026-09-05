@@ -49,7 +49,7 @@ def test_stream_do_susbot_emite_tool_token_referencia_e_fim(db):
     # modelo rápido ignorando o resultado da ferramenta). llm.stream_resposta não
     # deve ser chamado nesse caminho.
     from api.core.susbot_agent import criar_susbot_agente
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
 
     seed_susbot_municipio("3550308")
     llm = LLMMock()
@@ -80,7 +80,7 @@ def test_stream_do_susbot_emite_tool_token_referencia_e_fim(db):
 def test_stream_do_susbot_usa_llm_quando_nao_ha_ferramenta(db):
     # Pergunta genérica (acao='resposta', sem tool) continua narrada pelo LLM.
     from api.core.susbot_agent import criar_susbot_agente
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
 
     class LLMSemFerramenta(LLMMock):
         def planejar(self, pergunta, contexto, ferramentas):
@@ -159,7 +159,7 @@ def test_memoria_pessoal_identifica_usuario_e_recusa_outro_perfil(db):
 
 def test_consulta_de_insumos_em_falta_forca_ferramenta(db):
     from api.core.susbot_agent import criar_susbot_agente
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
 
     class LLMIgnoraFerramenta(LLMMock):
         def planejar(self, pergunta, contexto, ferramentas):
@@ -181,7 +181,7 @@ def test_consulta_de_insumos_em_falta_forca_ferramenta(db):
 
 def test_consulta_operacional_nao_inicializa_provedor_llm(db, monkeypatch):
     from api.core import susbot_agent
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
 
     seed_susbot_municipio("351300")
 
@@ -213,7 +213,7 @@ def test_consulta_epidemiologica_extrai_periodo_sem_llm(db):
 def test_metricas_contabilizam_rotas_com_e_sem_llm(db):
     from api.core.susbot_agent import criar_susbot_agente
     from api.core.susbot_metrics import obter_metricas, resetar_metricas
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
 
     class LLMSemFerramenta(LLMMock):
         def planejar(self, pergunta, contexto, ferramentas):
@@ -275,7 +275,7 @@ def test_consulta_de_utis_nao_e_confundida_com_perfil_de_outro_usuario(db):
 
 def test_consulta_de_insumos_nao_e_confundida_com_perfil_de_outro_usuario(db):
     from api.core.susbot_agent import criar_susbot_agente
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
 
     class LLMIgnoraFerramenta(LLMMock):
         def planejar(self, pergunta, contexto, ferramentas):
@@ -303,7 +303,7 @@ def test_consulta_de_insumos_nao_e_confundida_com_perfil_de_outro_usuario(db):
 ])
 def test_consulta_generica_de_insumos_retorna_estoque_completo(db, pergunta):
     from api.core.susbot_agent import criar_susbot_agente
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
 
     seed_susbot_municipio("351300")
     llm = LLMMock()
@@ -360,7 +360,7 @@ def test_fallback_llm_propaga_erro_sem_fallback_configurado():
 
 def test_stream_sse_formata_eventos_em_blocos(db):
     from api.core.susbot_agent import criar_susbot_agente
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
 
     seed_susbot_municipio("3550308")
     agente = criar_susbot_agente("3550308", llm=LLMMock())

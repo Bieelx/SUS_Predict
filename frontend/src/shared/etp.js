@@ -1,14 +1,5 @@
 export const REFERENCIA_LEGAL = 'Lei 14.133/2021, art. 18 - Estudo Tecnico Preliminar';
 
-export const DOCUMENTOS_INICIAIS = [
-  { id: 'doc-1', nome: 'Dipirona 500mg', origem: 'Insumos', data: '07/07/2026', status: 'finalizado' },
-  { id: 'doc-2', nome: 'Soro fisiológico 1L', origem: 'Insumos', data: '28/06/2026', status: 'rascunho' },
-  { id: 'doc-3', nome: 'Insulina NPH', origem: 'Insumos', data: '30/06/2026', status: 'finalizado' },
-  { id: 'doc-4', nome: 'Amoxicilina 500mg', origem: 'Insumos', data: '15/06/2026', status: 'finalizado' },
-  { id: 'doc-5', nome: 'Paracetamol 750mg', origem: 'Alertas', data: '02/06/2026', status: 'finalizado' },
-  { id: 'doc-6', nome: 'Ondansetrona 8mg', origem: 'Insumos', data: '20/05/2026', status: 'finalizado' },
-];
-
 function normalizarAscii(valor) {
   return String(valor || '')
     .normalize('NFD')
@@ -114,27 +105,20 @@ export function dataHojeBr() {
   return new Date().toLocaleDateString('pt-BR');
 }
 
-// `demo` marca o PDF exportado durante o modo demonstração (auditoria P1-1):
-// o documento não pode circular sem indicar que veio de um cenário histórico
-// simulado, então o aviso vai no corpo visível do PDF, repetido, não só como
-// metadado que ninguém vê ao abrir o arquivo.
-export function baixarEtpPdf({ nome, origem, data, texto, demo = false }) {
-  const avisoDemo = 'DOCUMENTO GERADO EM MODO DEMONSTRACAO - NAO E UM DOCUMENTO OFICIAL';
+export function baixarEtpPdf({ nome, origem, data, texto }) {
   const blob = blobPdfSimples([
     'ESTUDO TECNICO PRELIMINAR',
-    ...(demo ? [avisoDemo, ''] : []),
     `Item: ${nome}`,
     `Origem: ${origem || 'Sistema'}`,
     `Gerado em: ${data || dataHojeBr()}`,
     `Base legal: ${REFERENCIA_LEGAL}`,
     '',
     ...(texto ? String(texto).split('\n') : ['Documento gerado no historico do SusPredict.']),
-    ...(demo ? ['', avisoDemo] : []),
   ]);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${demo ? 'DEMO-' : ''}ETP-${normalizarAscii(nome).replace(/\s+/g, '-')}.pdf`;
+  a.download = `ETP-${normalizarAscii(nome).replace(/\s+/g, '-')}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

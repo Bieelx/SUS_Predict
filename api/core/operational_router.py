@@ -102,6 +102,24 @@ def _prever_tres_meses(linhas: list[dict]) -> dict[str, Any]:
     }
 
 
+@router.get("/municipios")
+def municipios(_user: dict = Depends(require_user)) -> dict[str, Any]:
+    """Dimensão IBGE de São Paulo — única origem da lista do seletor de município."""
+    linhas = _select("ibge_sp", order="nome_municipio.asc")
+    itens = [
+        {
+            "ibge6": str(item.get("cod_ibge_completo") or "")[:6],
+            "ibge7": item.get("cod_ibge_completo"),
+            "nome": item.get("nome_municipio"),
+            "mesorregiao": item.get("nome_mesorregiao"),
+            "uf": "SP",
+        }
+        for item in linhas
+        if item.get("cod_ibge_completo") and item.get("nome_municipio")
+    ]
+    return {"meta": _meta(["ibge_sp"], [item.get("data_referencia") for item in linhas]), "municipios": itens}
+
+
 @router.get("/epidemiologia")
 def epidemiologia(
     ibge: str = Query(...),
@@ -196,16 +214,18 @@ def visao_geral(
         kpis = _select("visao_geral_kpis_periodo", {**filtro_territorio, "periodo": periodo})
     serie = _select("visao_geral_kpis_serie", filtro_territorio, order="competencia.asc")
     risco = _select("visao_geral_risco_agregado", filtro_territorio)
+    # visao_geral_evolucao_casos só cobre o estado e 21 municípios; para os
+    # demais a tela mostra estado vazio em vez de série substituta.
     evolucao = _select("visao_geral_evolucao_casos", filtro_territorio, order="competencia.asc")
-    if not evolucao:
-        evolucao = [
-            {**item, "tipo_serie": "HISTORICO", "casos_tendencia": None}
-            for item in serie
-        ]
     competencia = _select("visao_geral_competencia_referencia", limit=1)
+    # Mapa e alertas seguem o mesmo recorte territorial dos KPIs: mesorregião
+    # do município e alertas do próprio município. Categorias de ruptura não
+    # têm coluna territorial na base — são sempre estaduais.
     mapa = _select("visao_geral_mapa_mesorregiao", order="indice_risco_regional.desc")
+    if not visao_estadual:
+        mapa = [item for item in mapa if item.get("nome_mesorregiao") == municipio.get("nome_mesorregiao")]
     categorias = _select("visao_geral_ruptura_categoria", order="pct_distribuicao.desc")
-    alertas = _select("visao_geral_alertas_recentes", order="ordem.asc", limit=24)
+    alertas = _select("visao_geral_alertas_recentes", None if visao_estadual else filtro_territorio, order="ordem.asc", limit=24)
     grupos = (kpis, serie, risco, evolucao, competencia, mapa, categorias, alertas)
     referencias = [
         item.get("data_processamento") or item.get("competencia_referencia")
@@ -220,7 +240,7 @@ def visao_geral(
     ]
     return {
         "meta": _meta(tabelas, referencias),
-        "municipio": {"ibge6": codigo, "ibge7": codigo7, "nome": municipio.get("nome_municipio"), "uf": "SP"},
+        "municipio": {"ibge6": codigo, "ibge7": codigo7, "nome": municipio.get("nome_municipio"), "uf": "SP", "mesorregiao": municipio.get("nome_mesorregiao")},
         "periodo": periodo,
         "competencia": competencia[0] if competencia else None,
         "kpis": kpis[0] if kpis else None,
@@ -248,14 +268,18 @@ def internacoes(
     top_municipios = _select("sih_dengue_top_municipios", filtros, order="ranking.asc")
     faixa = _select("sih_dengue_internacoes_faixa_etaria", filtros, order="ordem_faixa.asc")
 
-    estabelecimentos = sorted(
-        (
-            {"cnes": str(item.get("cnes")), "razao_social": item.get("razao_social") or item.get("nome_hospital") or str(item.get("cnes"))}
-            for item in volume
-            if item.get("cnes") and item.get("cnes") != "TODOS"
-        ),
-        key=lambda item: item["razao_social"],
-    )
+    # Um item por CNES, identificado pelo nome do hospital (razão social agrupa
+    # vários hospitais e duplicava o seletor). Distinct por CNES, ordem alfabética.
+    por_cnes = {
+        str(item.get("cnes")): {
+            "cnes": str(item.get("cnes")),
+            "nome_hospital": item.get("nome_hospital") or str(item.get("cnes")),
+            "razao_social": item.get("razao_social"),
+        }
+        for item in volume
+        if item.get("cnes") and item.get("cnes") != "TODOS"
+    }
+    estabelecimentos = sorted(por_cnes.values(), key=lambda item: item["nome_hospital"])
     cnes_selecionado = str(cnes or "TODOS")
     if cnes_selecionado != "TODOS" and not any(item["cnes"] == cnes_selecionado for item in estabelecimentos):
         raise HTTPException(404, "Estabelecimento não encontrado na base SIH para o período selecionado")
@@ -366,17 +390,19 @@ def ruptura(
     resumo = _select("ruptura_insumos_resumo_periodo", {"cod_ibge_completo": codigo7, "periodo": janela})
     alertas_raw = _select("ruptura_insumos_alertas_atuais", {"cod_ibge_completo": codigo7})
     serie = _select("ruptura_insumos_serie_mensal", {"cod_ibge_completo": codigo7}, order="competencia.asc")
+    resumo_mensal = _select("ruptura_insumos_resumo_municipal", {"cod_ibge_completo": codigo7}, order="competencia.asc")
     competencia = _select("ruptura_insumos_competencia_referencia", limit=1)
     alertas = _agrupar_alertas(alertas_raw)
     referencias = [
         item.get("data_processamento") or item.get("competencia_referencia")
-        for grupo in (resumo, alertas, serie, competencia)
+        for grupo in (resumo, alertas, serie, resumo_mensal, competencia)
         for item in grupo
     ]
     tabelas = [
         "ruptura_insumos_resumo_periodo",
         "ruptura_insumos_alertas_atuais",
         "ruptura_insumos_serie_mensal",
+        "ruptura_insumos_resumo_municipal",
         "ruptura_insumos_competencia_referencia",
     ]
     return {
@@ -392,6 +418,7 @@ def ruptura(
         "resumo": resumo[0] if resumo else None,
         "alertas": alertas,
         "serie_mensal": serie,
+        "resumo_mensal": resumo_mensal,
         "metodologia": {
             "tipo": "risco de aquisição",
             "nao_e": "estoque físico ou previsão de dias restantes",

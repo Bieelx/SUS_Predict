@@ -1038,6 +1038,7 @@ def _supabase_read_key() -> str:
     """
     return (
         os.getenv("SUPABASE_SECRET_KEY", "").strip()
+        or os.getenv("SUPABASE_SECRET", "").strip()
         or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     )
 
@@ -1063,8 +1064,19 @@ def sb_select(table: str, eq: dict | None = None, order: str | None = None, limi
     if limit:
         url += f"&limit={limit}"
 
-    data = _sb_get(url, sb_key)
-    return data if isinstance(data, list) else []
+    # PostgREST corta a resposta em `max-rows` (1000 por padrão) sem avisar.
+    # Séries mensais por município passam disso, então pagina por offset até
+    # a última página vir incompleta. Com `limit` explícito não pagina.
+    pagina = 1000
+    linhas: list[dict] = []
+    offset = 0
+    while True:
+        data = _sb_get(url if offset == 0 else f"{url}&offset={offset}", sb_key)
+        lote = data if isinstance(data, list) else []
+        linhas.extend(lote)
+        if limit or len(lote) < pagina:
+            return linhas
+        offset += pagina
 
 
 # ── Supabase helpers (internal) ───────────────────────────────────────────────

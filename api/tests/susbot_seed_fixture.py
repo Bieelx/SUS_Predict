@@ -1,8 +1,8 @@
 """
-Seed sintético determinístico da Clara.
+Fixture de teste: seed sintético determinístico da Clara.
 
-Gera estoque e alertas por município para a demo permanecer estável entre
-execuções. O seed é idempotente por `ibge6`.
+Só os testes usam isto. O runtime não semeia mais estoque/alertas: sem dado
+real de estoque no Supabase, a Clara responde estado vazio explícito.
 """
 
 from __future__ import annotations

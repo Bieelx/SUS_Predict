@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE, THEMES, ThemeContext, MIcon, LogoIcon, DataStateBar, dataStateFromDemo } from './shared/ui.jsx';
+import { THEMES, ThemeContext, MIcon, LogoIcon } from './shared/ui.jsx';
+import { EstadoConsulta } from './shared/dataUi.jsx';
 
 const LoginScreen = lazy(() => import('./pages/Login.jsx'));
 const VisaoGeral = lazy(() => import('./pages/VisaoGeral.jsx'));
@@ -11,12 +12,9 @@ const Internacoes = lazy(() => import('./pages/Internacoes.jsx'));
 const Vacinacao = lazy(() => import('./pages/Vacinacao.jsx'));
 const PageConfiguracoes = lazy(() => import('./pages/Configuracoes.jsx'));
 const PagePerfil = lazy(() => import('./pages/Perfil.jsx'));
-const GeradorEtp = lazy(() => import('./pages/GeradorEtp.jsx'));
 const ClaraPanel = lazy(() => import('./pages/ClaraPanel.jsx').then(modulo => ({ default: modulo.ClaraPanel })));
-import { DOCUMENTOS_INICIAIS } from './shared/etp.js';
-import { obterIbgeDemo, obterMunicipioDemo } from './shared/demo.js';
 import { getCurrentUser, signOut, validateSession } from './shared/auth.js';
-import { preCarregarDadosOperacionais } from './shared/operationalClient.js';
+import { obterDadosOperacionais, preCarregarDadosOperacionais } from './shared/operationalClient.js';
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 //
@@ -40,7 +38,7 @@ const ICON_FG_ACTIVE = 'var(--sb-icon-active-fg)'; // ícone ativo
 
 const NAV_OPERACIONAL = [
   { id: 'visao-geral', label: 'Visão Geral', icon: 'grid_view' },
-  { id: 'alertas',     label: 'Alertas',     icon: 'notifications', badge: 3 },
+  { id: 'alertas',     label: 'Alertas',     icon: 'notifications' },
   { id: 'insumos',     label: 'Insumos',     icon: 'medication' },
 ];
 
@@ -224,7 +222,7 @@ function iniciaisDoUsuario(nome) {
   return `${partes[0]?.[0] || 'U'}${partes.length > 1 ? partes.at(-1)[0] : ''}`.toLocaleUpperCase('pt-BR');
 }
 
-function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
+function Sidebar({ current, onNav, aberta, user }) {
   // Abre já expandido quando a página ativa é de Análises — chegar em
   // Epidemiologia por um link de card e não ver o item destacado no menu é
   // desorientador. Reabre também quando a navegação vem de fora da sidebar.
@@ -273,7 +271,7 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
           {NAV_OPERACIONAL.map(item => (
             <NavItemTier1
               key={item.id}
-              item={{ ...item, badge: item.id === 'alertas' ? alertasBadge : item.badge }}
+              item={item}
               active={current === item.id}
               onClick={() => onNav(item.id)}
             />
@@ -309,12 +307,6 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
 
       {/* Footer */}
       <div style={{ padding: '12px 20px 18px', borderTop: '1px solid rgba(44,74,71,0.12)' }}>
-        {demoEnabled && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3DB887', flexShrink: 0, animation: 'dot-pulse 2.4s ease-in-out infinite' }} />
-            <span style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION }}>Replay histórico ativo</span>
-          </div>
-        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <SidebarFooterAction
             item={{ id: 'configuracoes', label: 'Configurações', icon: 'settings' }}
@@ -337,7 +329,6 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
               <p title={nomeUsuario} style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--sb-strong)', lineHeight: 1.2, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nomeUsuario}</p>
-              <p style={{ fontSize: 'var(--fs-xs)', color: SB_SECTION, margin: 0 }}>SMS · ADMIN</p>
             </div>
           </button>
         </div>
@@ -353,7 +344,7 @@ function Sidebar({ current, onNav, aberta, alertasBadge, demoEnabled, user }) {
 // (item ativo) e o <h1> da página já diziam, e nenhum nível dele era clicável.
 // A busca e o botão de "aplicativos" saíram: eram controles sem handler.
 
-function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar, demoEnabled }) {
+function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar }) {
   const tituloPagina = [...NAV_OPERACIONAL, ...NAV_ANALISES, ...NAV_MOBILE_SECUNDARIA]
     .find(item => item.id === page)?.label || 'Visão Geral';
 
@@ -390,7 +381,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
           <LogoIcon size={42} />
           <div>
             <p>{tituloPagina}</p>
-            <span>{page === 'internacoes' ? 'Estado de São Paulo' : `${municipio.nome} · ${municipio.uf}`}</span>
+            <span>{page === 'internacoes' ? 'Estado de São Paulo' : municipio ? `${municipio.nome} · ${municipio.uf}` : 'Carregando municípios…'}</span>
           </div>
         </div>
 
@@ -412,8 +403,8 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
           <select
             className="topbar-select"
             aria-label="Município em análise"
-            value={municipio.ibge6}
-            disabled={demoEnabled}
+            value={municipio?.ibge6 || ''}
+            disabled={!municipios.length}
             onChange={e => onTrocarMunicipio(municipios.find(m => m.ibge6 === e.target.value))}
           >
             {municipios.map(m => (
@@ -445,7 +436,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
   );
 }
 
-function MobileBottomNav({ current, alertasBadge, maisAberto, onNav, onOpenClara, onToggleMais }) {
+function MobileBottomNav({ current, maisAberto, onNav, onOpenClara, onToggleMais }) {
   const paginaSecundaria = NAV_MOBILE_SECUNDARIA.some(item => item.id === current);
 
   return (
@@ -463,11 +454,6 @@ function MobileBottomNav({ current, alertasBadge, maisAberto, onNav, onOpenClara
             >
               <span className="mobile-bottom-nav__icon">
                 <MIcon m={item.icon} size={21} />
-                {item.id === 'alertas' && alertasBadge > 0 && (
-                  <span className="mobile-bottom-nav__badge" aria-label={`${alertasBadge} alertas ativos`}>
-                    {alertasBadge > 9 ? '9+' : alertasBadge}
-                  </span>
-                )}
               </span>
               <span>{item.label}</span>
             </button>
@@ -500,7 +486,7 @@ function MobileBottomNav({ current, alertasBadge, maisAberto, onNav, onOpenClara
   );
 }
 
-function MobileMoreSheet({ current, aberta, demoEnabled, onClose, onNav }) {
+function MobileMoreSheet({ current, aberta, onClose, onNav }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -556,69 +542,8 @@ function MobileMoreSheet({ current, aberta, demoEnabled, onClose, onNav }) {
           ))}
         </div>
 
-        {demoEnabled && (
-          <p className="mobile-more-sheet__status">
-            <span aria-hidden="true" />
-            Replay histórico ativo
-          </p>
-        )}
       </section>
     </>
-  );
-}
-
-function DemoForaDoEscopo({ page, onNavigate }) {
-  const titulo = {
-    epidemiologia: 'Epidemiologia fora do replay',
-    internacoes: 'Internações fora do replay',
-    configuracoes: 'Configurações fora do replay',
-    perfil: 'Perfil fora do replay',
-  }[page] || 'Página fora do replay';
-
-  const subtitulo = {
-    epidemiologia: 'A demo histórica cobre Visão Geral, Alertas e Insumos. As análises ficam bloqueadas neste modo.',
-    internacoes: 'A demo histórica cobre Visão Geral, Alertas e Insumos. As análises ficam bloqueadas neste modo.',
-    configuracoes: 'A demo histórica não altera as configurações durante o replay.',
-    perfil: 'O perfil real fica fora do replay histórico.',
-  }[page] || 'Esta página não faz parte do replay histórico.';
-
-  return (
-    <div className="rise" style={{ maxWidth: 860 }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-          {titulo}
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: 0 }}>{subtitulo}</p>
-      </div>
-
-      <Card className="p-5">
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-          <span style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--primary-soft)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <MIcon m="lock" size={20} />
-          </span>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink-900)', margin: '2px 0 6px' }}>
-              Conteúdo bloqueado na demo histórica
-            </p>
-            <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--ink-700)', margin: 0 }}>
-              {subtitulo}
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
-          <button onClick={() => onNavigate('visao-geral')} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: 'white', fontSize: 13, fontWeight: 700 }}>
-            Ir para Visão Geral
-          </button>
-          <button onClick={() => onNavigate('alertas')} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--ink-100)', cursor: 'pointer', background: 'var(--elev)', color: 'var(--ink-700)', fontSize: 13, fontWeight: 700 }}>
-            Abrir Alertas
-          </button>
-          <button onClick={() => onNavigate('insumos')} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--ink-100)', cursor: 'pointer', background: 'var(--elev)', color: 'var(--ink-700)', fontSize: 13, fontWeight: 700 }}>
-            Abrir Insumos
-          </button>
-        </div>
-      </Card>
-    </div>
   );
 }
 
@@ -639,36 +564,14 @@ const SEMANTIC_TOKENS = {
   '--risk-alto': '#D94F4F', '--risk-medio': '#E8903A', '--risk-baixo': '#4A9B6F',
 };
 
-// Municípios da regional de saúde de Cotia — mock, mesmo conjunto do ranking
-// regional da Visão Geral. Vira chamada a /api/cidades/{uf} quando a tela plugar.
-const MUNICIPIOS = [
-  { ibge6: '351300', nome: 'Cotia',              uf: 'SP' },
-  { ibge6: '352220', nome: 'Itapevi',            uf: 'SP' },
-  { ibge6: '353440', nome: 'Osasco',             uf: 'SP' },
-  { ibge6: '351060', nome: 'Carapicuíba',        uf: 'SP' },
-  { ibge6: '351500', nome: 'Embu das Artes',     uf: 'SP' },
-  { ibge6: '350570', nome: 'Barueri',            uf: 'SP' },
-  { ibge6: '355700', nome: 'Vargem Grande Pta.', uf: 'SP' },
-];
+// A lista de municípios vem de /api/dados/municipios (dimensão ibge_sp do
+// Supabase). Só a escolha inicial é preferência de interface: Cotia, município
+// de referência do grupo, e depois o último selecionado no posto.
+const MUNICIPIO_INICIAL = '351300';
+const CHAVE_MUNICIPIO = 'sus_predict_municipio';
 
-function demoAtivaNaUrl() {
-  if (typeof window === 'undefined') return false;
-  return new URLSearchParams(window.location.search).get('demo') === 'crise-historica';
-}
-
-function atualizarUrlDemo(ativa) {
-  if (typeof window === 'undefined') return;
-  const url = new URL(window.location.href);
-  if (ativa) url.searchParams.set('demo', 'crise-historica');
-  else url.searchParams.delete('demo');
-  window.history.replaceState({}, '', url);
-}
-
-async function lerJson(response, fallback) {
-  if (!response.ok) {
-    throw new Error(fallback);
-  }
-  return response.json();
+function lerMunicipioSalvo() {
+  try { return localStorage.getItem(CHAVE_MUNICIPIO) || MUNICIPIO_INICIAL; } catch { return MUNICIPIO_INICIAL; }
 }
 
 export default function App() {
@@ -677,8 +580,6 @@ export default function App() {
   const [rota, setRota] = useState(lerRotaAtual);
   const page = rota.page;
   const [themeId, setThemeId] = useState('teal');
-  const [etpOrigem, setEtpOrigem] = useState(null);
-  const [etpAtivado, setEtpAtivado] = useState(false);
   const [claraOpenRequest, setClaraOpenRequest] = useState(null);
   const [chatAberto, setChatAberto] = useState(false);
   const [mobileMaisAberto, setMobileMaisAberto] = useState(false);
@@ -712,25 +613,39 @@ export default function App() {
       return proxima;
     });
   }
+
+  // Município em análise — único recorte geográfico do app, lido pela topbar
+  // e repassado a todas as telas.
+  const [municipios, setMunicipios] = useState({ lista: [], carregando: false, erro: null });
+  const [municipio, setMunicipio] = useState(null);
+  const carregarMunicipios = useCallback(async (forcar = false) => {
+    setMunicipios(anterior => ({ ...anterior, carregando: true, erro: null }));
+    try {
+      const payload = await obterDadosOperacionais('municipios', {}, { forcar });
+      const lista = payload.municipios || [];
+      setMunicipios({ lista, carregando: false, erro: null });
+      const salvo = lerMunicipioSalvo();
+      setMunicipio(atual => atual || lista.find(m => m.ibge6 === salvo) || lista.find(m => m.ibge6 === MUNICIPIO_INICIAL) || lista[0] || null);
+    } catch (erro) {
+      setMunicipios({ lista: [], carregando: false, erro: erro.message || 'Lista de municípios indisponível.' });
+    }
+  }, []);
   useEffect(() => {
-    if (etpOrigem) setEtpAtivado(true);
-  }, [etpOrigem]);
-  const [municipio, setMunicipio] = useState(MUNICIPIOS[0]);
-  const [documentos, setDocumentos] = useState(DOCUMENTOS_INICIAIS);
-  const [demoEnabled, setDemoEnabled] = useState(demoAtivaNaUrl);
-  const [demo, setDemo] = useState({
-    meta: null,
-    cutoff: null,
-    payload: null,
-    loading: false,
-    error: null,
-  });
+    if (authStatus === 'authenticated') void carregarMunicipios();
+  }, [authStatus, carregarMunicipios]);
+
+  function trocarMunicipio(escolhido) {
+    if (!escolhido) return;
+    setMunicipio(escolhido);
+    try { localStorage.setItem(CHAVE_MUNICIPIO, escolhido.ibge6); } catch { /* preferência opcional */ }
+  }
+
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
 
   useEffect(() => {
-    if (authStatus !== 'authenticated' || demoEnabled) return;
+    if (authStatus !== 'authenticated' || !municipio) return;
     void Promise.allSettled([
-      preCarregarDadosOperacionais(),
+      preCarregarDadosOperacionais(municipio.ibge6),
       import('./pages/VisaoGeral.jsx'),
       import('./pages/Alertas.jsx'),
       import('./pages/Insumos.jsx'),
@@ -739,7 +654,7 @@ export default function App() {
       import('./pages/Vacinacao.jsx'),
       import('./pages/Documentos.jsx'),
     ]);
-  }, [authStatus, demoEnabled]);
+  }, [authStatus, municipio]);
 
   useEffect(() => {
     let ativo = true;
@@ -766,18 +681,6 @@ export default function App() {
     setAuthUser(null);
     setAuthStatus('unauthenticated');
   }
-  const municipioDemo = demoEnabled ? obterMunicipioDemo(demo, MUNICIPIOS[0]) : null;
-  const ibgeDemo = demoEnabled ? obterIbgeDemo(demo, MUNICIPIOS[0].ibge6) : null;
-  const municipioAtual = demoEnabled && municipioDemo
-    ? { ...municipioDemo, ibge6: ibgeDemo }
-    : municipio;
-  const municipiosTopbar = demoEnabled && municipioDemo
-    ? [{ ...municipioDemo, ibge6: ibgeDemo }]
-    : MUNICIPIOS;
-  const scenarioIdDemo = demo.payload?.scenario_id || demo.meta?.scenario_id || 'demo-crise-historica-dengue-2024-campinas';
-  const documentosVisiveis = demoEnabled
-    ? documentos.filter(doc => doc.demoHistorica && doc.scenarioId === scenarioIdDemo)
-    : documentos.filter(doc => !doc.demoHistorica);
 
   const navegar = useCallback((destino, opcoes = {}) => {
     const parcial = typeof destino === 'string' ? { page: destino } : destino;
@@ -808,167 +711,7 @@ export default function App() {
     }
   }, []);
 
-  function salvarDocumento(doc) {
-    setDocumentos(prev => {
-      const existente = prev.find(item => item.nome === doc.nome);
-      const atualizados = existente
-        ? prev.map(item => item.nome === doc.nome ? { ...item, ...doc } : item)
-        : [doc, ...prev];
-      return atualizados.slice().sort((a, b) => {
-        const [da, ma, aa] = a.data.split('/').map(Number);
-        const [db, mb, ab] = b.data.split('/').map(Number);
-        return new Date(ab, mb - 1, db) - new Date(aa, ma - 1, da);
-      });
-    });
-  }
-
-  function handleEtpGerado(_documento, origem) {
-    if (!demoEnabled || !origem?.alertaId) return;
-    void marcarAlertaEmAndamento?.(origem.alertaId);
-  }
-
-  async function carregarMetaEEstado(cutoffDesejado = null) {
-    setDemo(prev => ({ ...prev, loading: true, error: null }));
-    try {
-      const metaResp = await fetch(`${API_BASE}/api/demo/crise-historica/meta`);
-      const meta = await lerJson(metaResp, 'Falha ao carregar a meta da demo');
-      const cutoff = cutoffDesejado || meta.cortes?.mes_inicial || meta.cortes?.cortes?.[0]?.mes || '2024-01';
-      const estadoResp = await fetch(`${API_BASE}/api/demo/crise-historica/estado?cutoff=${encodeURIComponent(cutoff)}`);
-      const payload = await lerJson(estadoResp, 'Falha ao carregar o corte da demo');
-
-      setDemo({
-        meta,
-        cutoff: payload.cutoff || cutoff,
-        payload,
-        loading: false,
-        error: null,
-      });
-    } catch (error) {
-      setDemo(prev => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Falha ao carregar a demo',
-      }));
-    }
-  }
-
-  async function carregarEstado(cutoff) {
-    setDemo(prev => ({ ...prev, loading: true, error: null }));
-    try {
-      const resp = await fetch(`${API_BASE}/api/demo/crise-historica/estado?cutoff=${encodeURIComponent(cutoff)}`);
-      const payload = await lerJson(resp, 'Falha ao carregar o corte da demo');
-      setDemo(prev => ({
-        ...prev,
-        cutoff: payload.cutoff || cutoff,
-        payload,
-        loading: false,
-        error: null,
-      }));
-    } catch (error) {
-      setDemo(prev => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Falha ao carregar o corte da demo',
-      }));
-    }
-  }
-
-  function iniciarDemo() {
-    atualizarUrlDemo(true);
-    setDemoEnabled(true);
-  }
-
-  async function reiniciarDemo() {
-    if (!demoEnabled) return iniciarDemo();
-    setDemo(prev => ({ ...prev, loading: true, error: null }));
-    try {
-      const resp = await fetch(`${API_BASE}/api/demo/crise-historica/reset`, { method: 'POST' });
-      const payload = await lerJson(resp, 'Falha ao reiniciar a demo');
-      setDemo(prev => ({
-        ...prev,
-        cutoff: payload.cutoff || prev.meta?.cortes?.mes_inicial || '2024-01',
-        payload,
-        loading: false,
-        error: null,
-      }));
-    } catch (error) {
-      setDemo(prev => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Falha ao reiniciar a demo',
-      }));
-    }
-  }
-
-  function obterCutoffVizinho(passos) {
-    const cortes = demo.meta?.cortes?.cortes || [];
-    const atual = demo.cutoff || demo.meta?.cortes?.mes_inicial || cortes[0]?.mes;
-    const indiceAtual = cortes.findIndex(item => item.mes === atual);
-    if (indiceAtual < 0) return null;
-    const alvo = cortes[indiceAtual + passos];
-    return alvo?.mes || null;
-  }
-
-  async function voltarMes() {
-    const anterior = obterCutoffVizinho(-1);
-    if (anterior) await carregarEstado(anterior);
-  }
-
-  async function avancarMes() {
-    const proximo = obterCutoffVizinho(1);
-    if (proximo) await carregarEstado(proximo);
-  }
-
-  async function marcarAlertaEmAndamento(alertaId) {
-    if (!demoEnabled) return null;
-    const cutoff = demo.cutoff || demo.meta?.cortes?.mes_inicial || '2024-01';
-    try {
-      const resp = await fetch(
-        `${API_BASE}/api/demo/crise-historica/alertas/${encodeURIComponent(alertaId)}/andamento?cutoff=${encodeURIComponent(cutoff)}`,
-        { method: 'POST' },
-      );
-      const payload = await lerJson(resp, 'Falha ao atualizar o alerta da demo');
-      setDemo(prev => ({
-        ...prev,
-        cutoff: payload.cutoff || cutoff,
-        payload,
-        loading: false,
-        error: null,
-      }));
-      return payload;
-    } catch (error) {
-      setDemo(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Falha ao atualizar o alerta da demo',
-      }));
-      return null;
-    }
-  }
-
-  useEffect(() => {
-    if (!demoEnabled) return;
-    carregarMetaEEstado();
-  }, [demoEnabled]);
-
-  const demoState = {
-    enabled: demoEnabled,
-    meta: demo.meta,
-    cutoff: demo.cutoff,
-    payload: demo.payload,
-    loading: demo.loading,
-    error: demo.error,
-    iniciarDemo,
-    avancarMes,
-    voltarMes,
-    reiniciarDemo,
-    marcarAlertaEmAndamento,
-  };
-
-  const dataState = dataStateFromDemo(demoState);
-
-  const alertasBadge = demoEnabled && demo.payload
-    ? (demo.payload.alertas || []).filter(a => a.status === 'novo' || a.status === 'andamento').length
-    : 3;
+  const abrirClara = prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }));
 
   if (authStatus === 'checking') return <CarregandoPagina />;
 
@@ -984,22 +727,23 @@ export default function App() {
   }
 
   function render() {
-    const foraDoEscopoDemo = demoEnabled && ['epidemiologia', 'internacoes', 'vacinacao', 'configuracoes', 'perfil'].includes(page);
-    if (foraDoEscopoDemo) {
-      return <DemoForaDoEscopo page={page} onNavigate={navegar} />;
+    // Sem município não há recorte para consultar: a tela mostra o estado da
+    // própria lista (carregando ou erro), nunca um município substituto.
+    if (!municipio) {
+      return <EstadoConsulta carregando={municipios.carregando} erro={municipios.erro || 'Nenhum município retornado pela dimensão IBGE.'} onRetry={() => carregarMunicipios(true)} />;
     }
 
     switch (page) {
-      case 'visao-geral':   return <VisaoGeral municipio={municipioAtual} onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
-      case 'alertas':       return <Alertas onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} deepLinkAlertaId={rota.alertaId} filtroInicial={rota.alertaTipo} onFiltroChange={alertaTipo => navegar({ page: 'alertas', alertaId: rota.alertaId, alertaTipo }, { replace: true })} onDeepLinkClose={() => navegar({ page: 'alertas', alertaTipo: rota.alertaTipo }, { replace: true })} />;
-      case 'insumos':       return <Insumos municipio={municipioAtual} onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} demoState={demoState} />;
-      case 'documentos':    return <Documentos onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} documentos={documentosVisiveis} demoState={demoState} />;
-      case 'epidemiologia': return <Epidemiologia municipio={municipioAtual} onNavigate={navegar} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
-      case 'internacoes':   return <Internacoes onNavigate={navegar} demoState={demoState} />;
-      case 'vacinacao':     return <Vacinacao onNavigate={navegar} demoState={demoState} />;
-      case 'configuracoes': return <PageConfiguracoes onNavigate={navegar} demoState={demoState} />;
-      case 'perfil':        return <PagePerfil onNavigate={navegar} onLogout={handleLogout} demoState={demoState} />;
-      default:              return <VisaoGeral municipio={municipioAtual} onNavigate={navegar} onGerarEtp={o => setEtpOrigem(o)} onOpenClara={prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }))} demoState={demoState} />;
+      case 'visao-geral':   return <VisaoGeral municipio={municipio} onNavigate={navegar} onOpenClara={abrirClara} />;
+      case 'alertas':       return <Alertas municipio={municipio} onOpenClara={abrirClara} deepLinkAlertaId={rota.alertaId} />;
+      case 'insumos':       return <Insumos municipio={municipio} />;
+      case 'documentos':    return <Documentos />;
+      case 'epidemiologia': return <Epidemiologia municipio={municipio} onOpenClara={abrirClara} />;
+      case 'internacoes':   return <Internacoes />;
+      case 'vacinacao':     return <Vacinacao municipio={municipio} />;
+      case 'configuracoes': return <PageConfiguracoes municipio={municipio} />;
+      case 'perfil':        return <PagePerfil onLogout={handleLogout} />;
+      default:              return <VisaoGeral municipio={municipio} onNavigate={navegar} onOpenClara={abrirClara} />;
     }
   }
 
@@ -1008,7 +752,7 @@ export default function App() {
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
           (esquerda da sidebar, gap central, respiro do painel da Clara). */}
       <div style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
-        <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} alertasBadge={alertasBadge} demoEnabled={demoEnabled} user={authUser} />
+        <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} user={authUser} />
         {viewportCompacto && sidebarAberta && (
           <button
             type="button"
@@ -1019,13 +763,12 @@ export default function App() {
         )}
         <Topbar
           page={page}
-          municipio={municipioAtual}
-          municipios={municipiosTopbar}
-          onTrocarMunicipio={setMunicipio}
+          municipio={municipio}
+          municipios={municipios.lista}
+          onTrocarMunicipio={trocarMunicipio}
           onNavigate={navegar}
           sidebarAberta={sidebarAberta}
           onToggleSidebar={alternarSidebar}
-          demoEnabled={demoEnabled}
         />
         {/* Uma linguagem visual só: o conteúdo é sempre um card destacado do
             canvas, com o mesmo respiro do painel da Clara. Abrir o chat mexe
@@ -1038,10 +781,6 @@ export default function App() {
           transition: 'left .3s cubic-bezier(0.2,0.7,0.3,1), right .3s cubic-bezier(0.2,0.7,0.3,1)',
           display: 'flex', flexDirection: 'column',
         }}>
-          {/* Faixa persistente de estado do dado (auditoria P1-1) — fica acima
-              do card de conteúdo, então sobrevive à troca de página e não
-              some ao rolar. REAL não renderiza nada (ver DataStateBar). */}
-          <DataStateBar state={dataState} />
           {/* Duas camadas de propósito: a de fora arredonda e recorta, a de
               dentro rola. Com `border-radius` e `overflow-y: auto` no MESMO
               elemento, o Firefox pinta a barra de rolagem no scrollport, que
@@ -1073,21 +812,18 @@ export default function App() {
         <MobileMoreSheet
           current={page}
           aberta={mobileMaisAberto}
-          demoEnabled={demoEnabled}
           onClose={() => setMobileMaisAberto(false)}
           onNav={navegar}
         />
         <MobileBottomNav
           current={page}
-          alertasBadge={alertasBadge}
           maisAberto={mobileMaisAberto}
           onNav={navegar}
-          onOpenClara={() => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt: '' }))}
+          onOpenClara={() => abrirClara('')}
           onToggleMais={() => setMobileMaisAberto(aberto => !aberto)}
         />
         <Suspense fallback={null}>
-          {etpAtivado && <GeradorEtp origem={etpOrigem} onClose={() => setEtpOrigem(null)} onSalvarDocumento={salvarDocumento} onEtpGerado={handleEtpGerado} demoState={demoState} />}
-          <ClaraPanel page={page} onNavigate={navegar} ibge6={municipioAtual.ibge6} onOpenChange={setChatAberto} openRequest={claraOpenRequest} />
+          {municipio && <ClaraPanel page={page} onNavigate={navegar} ibge6={municipio.ibge6} onOpenChange={setChatAberto} openRequest={claraOpenRequest} />}
         </Suspense>
       </div>
     </ThemeContext.Provider>

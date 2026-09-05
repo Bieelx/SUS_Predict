@@ -25,7 +25,6 @@ from api.core.susbot_memory import (
     executar_comando_memoria,
     resumo_transparente,
 )
-from api.core.susbot_seed import seed_susbot_municipio
 from api.core.susbot_metrics import obter_metricas
 from api.core.susbot_access import verificar_acesso_susbot
 
@@ -132,7 +131,6 @@ def perguntar(
         raise HTTPException(400, "pergunta ausente")
 
     ibge6 = _ibge6(req)
-    seed_susbot_municipio(ibge6)
 
     pergunta_registro = pergunta or f"[confirmado] {req.confirmar.ferramenta}" if req.confirmar else pergunta
 

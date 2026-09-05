@@ -8,10 +8,10 @@ const numero = valor => Number(valor || 0);
 const inteiro = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 const decimal = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
-export default function Internacoes({ demoState }) {
+export default function Internacoes() {
   const [periodo, setPeriodo] = useState('12 Meses');
   const [cnes, setCnes] = useState('TODOS');
-  const { dados, carregando, erro, recarregar } = useDadosOperacionais('internacoes', { periodo, cnes }, !demoState?.enabled);
+  const { dados, carregando, erro, recarregar } = useDadosOperacionais('internacoes', { periodo, cnes });
   const hospitais = (dados?.hospitais || []).map(item => ({ nome: item.nome_hospital || item.razao_social || item.cnes, internacoes: numero(item.internacoes) }));
   const municipios = dados?.municipios || [];
   const faixas = (dados?.faixa_etaria || []).map(item => ({ faixa: item.faixa_etaria, internacoes: numero(item.internacoes) }));
@@ -27,7 +27,7 @@ export default function Internacoes({ demoState }) {
           <label style={rotuloFiltro}>Estabelecimento
             <select value={cnes} onChange={event => setCnes(event.target.value)} disabled={carregando} style={seletor}>
               <option value="TODOS">Todos os estabelecimentos</option>
-              {(dados?.estabelecimentos || []).map(item => <option key={item.cnes} value={item.cnes}>{item.razao_social}</option>)}
+              {(dados?.estabelecimentos || []).map(item => <option key={item.cnes} value={item.cnes}>{item.nome_hospital}</option>)}
             </select>
           </label>
           <SeletorPeriodo value={periodo} onChange={value => { setPeriodo(value); setCnes('TODOS'); }} carregando={carregando} />
@@ -35,7 +35,7 @@ export default function Internacoes({ demoState }) {
       </header>
       <EstadoConsulta carregando={carregando} erro={erro} onRetry={recarregar} quantidadeCards={3} />
       {dados && <>
-        <FonteReal meta={dados.meta} detalhe={`${cnes === 'TODOS' ? 'Todos os estabelecimentos' : dados.estabelecimentos?.find(item => item.cnes === cnes)?.razao_social || cnes} · ${periodo}`} />
+        <FonteReal meta={dados.meta} detalhe={`${cnes === 'TODOS' ? 'Todos os estabelecimentos' : dados.estabelecimentos?.find(item => item.cnes === cnes)?.nome_hospital || cnes} · ${periodo}`} />
         <div className="responsive-grid-3" style={grid3}>
           <Kpi rotulo="Internações" valor={inteiro(dados.consolidado?.internacoes_atual)} detalhe={dados.consolidado?.possui_base_comparacao ? `${decimal(dados.consolidado.variacao_percentual)}% vs. período anterior` : 'Consolidado SIH'} />
           <Kpi rotulo="Permanência média" valor={`${decimal(dados.permanencia?.permanencia_media_atual)} dias`} detalhe={dados.permanencia?.possui_base_comparacao ? `${decimal(dados.permanencia.diferenca_dias)} dias de diferença` : 'Sem base comparável'} />

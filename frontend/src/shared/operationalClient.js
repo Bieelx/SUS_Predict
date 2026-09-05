@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch } from './auth.js';
 import { assinarCacheSessao, lerCacheSessao, obterComCacheSessao } from './sessionCache.js';
 
-const CONSULTAS_INICIAIS = [
-  ['visao-geral', { ibge: 'TODOS', periodo: 'Mes' }],
-  ['ruptura', { ibge: '351300', periodo: '12 Meses' }],
-  ['epidemiologia', { ibge: '351300', periodo: '12 Meses' }],
+const consultasIniciais = ibge => [
+  ['visao-geral', { ibge, periodo: 'Mes' }],
+  ['ruptura', { ibge, periodo: '12 Meses' }],
+  ['epidemiologia', { ibge, periodo: '12 Meses' }],
   ['internacoes', { periodo: '12 Meses' }],
-  ['vacinacao', { ibge: '351300', periodo: '12 Meses' }],
+  ['vacinacao', { ibge, periodo: '12 Meses' }],
 ];
 
 function queryString(params) {
@@ -22,6 +22,9 @@ export async function consultarDados(recurso, params = {}) {
   const query = queryString(params);
   const response = await authenticatedFetch(`/api/dados/${recurso}${query ? `?${query}` : ''}`);
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 404) {
+    throw new Error(`O backend em uso não tem a rota /api/dados/${recurso}. Atualize o servidor (git pull + reinício da API) ou aponte SUSBOT_PROXY_TARGET para um backend com o código atual.`);
+  }
   if (!response.ok) throw new Error(payload.detail || `Não foi possível consultar ${recurso}.`);
   return payload;
 }
@@ -35,9 +38,9 @@ export function obterDadosOperacionais(recurso, params = {}, opcoes = {}) {
   return obterComCacheSessao(chave, () => consultarDados(recurso, params), opcoes);
 }
 
-export async function preCarregarDadosOperacionais() {
+export async function preCarregarDadosOperacionais(ibge) {
   const resultados = await Promise.allSettled(
-    CONSULTAS_INICIAIS.map(([recurso, params]) => obterDadosOperacionais(recurso, params)),
+    consultasIniciais(ibge).map(([recurso, params]) => obterDadosOperacionais(recurso, params)),
   );
   return resultados;
 }

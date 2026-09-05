@@ -24,7 +24,7 @@ def db(monkeypatch):
 
 
 def test_consultar_estoque_retorna_dias_restantes(db):
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
     from api.core.susbot_tools import criar_susbot_tools
 
     seed_susbot_municipio("3550308")
@@ -70,7 +70,7 @@ def test_consultar_estoque_bloqueia_calculo_sem_consumo_local(db):
 
 
 def test_consultar_estoque_aceita_nome_parcial(db):
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
     from api.core.susbot_tools import criar_susbot_tools
 
     seed_susbot_municipio("3550308")
@@ -83,7 +83,7 @@ def test_consultar_estoque_aceita_nome_parcial(db):
 
 
 def test_consultar_estoque_filtra_itens_em_risco(db):
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
     from api.core.susbot_tools import criar_susbot_tools
 
     seed_susbot_municipio("351300")
@@ -96,7 +96,7 @@ def test_consultar_estoque_filtra_itens_em_risco(db):
 
 
 def test_gerar_etp_aceita_nome_parcial_e_move_alerta(db):
-    from api.core.susbot_seed import seed_susbot_municipio
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
     from api.core.susbot_tools import criar_susbot_tools
 
     seed_susbot_municipio("3550308")

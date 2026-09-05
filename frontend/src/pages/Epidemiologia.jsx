@@ -13,13 +13,9 @@ const decimal = valor => numero(valor).toLocaleString('pt-BR', { maximumFraction
 const mes = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '');
 const mesLongo = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-export default function Epidemiologia({ municipio, demoState, onOpenClara }) {
+export default function Epidemiologia({ municipio, onOpenClara }) {
   const [periodo, setPeriodo] = useState('12 Meses');
-  const { dados, carregando, erro, recarregar } = useDadosOperacionais(
-    'epidemiologia',
-    { ibge: municipio.ibge6, periodo },
-    !demoState?.enabled,
-  );
+  const { dados, carregando, erro, recarregar } = useDadosOperacionais('epidemiologia', { ibge: municipio.ibge6, periodo });
 
   const previsao = dados?.previsao_3_meses;
   const serieAnalitica = useMemo(() => {

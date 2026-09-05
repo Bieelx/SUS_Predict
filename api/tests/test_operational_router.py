@@ -73,7 +73,9 @@ def test_internacoes_filtra_indicadores_por_estabelecimento(monkeypatch):
     fake_select, _ = _fake_select_factory({
         "sih_dengue_interacoes_periodo": [
             {"cnes": "TODOS", "internacoes_atual": 30},
-            {"cnes": "123", "razao_social": "Hospital Teste", "internacoes_atual": 7},
+            {"cnes": "123", "nome_hospital": "Hospital Teste", "razao_social": "Prefeitura", "internacoes_atual": 7},
+            {"cnes": "456", "nome_hospital": "Clinica Alfa", "razao_social": "Prefeitura", "internacoes_atual": 3},
+            {"cnes": "456", "nome_hospital": "Clinica Alfa", "razao_social": "Prefeitura", "internacoes_atual": 3},
         ],
         "sih_dengue_permanencia_media_periodo": [{"cnes": "123", "permanencia_media_atual": 2.5}],
         "sih_dengue_taxa_mortalidade_periodo": [{"cnes": "123", "taxa_mortalidade": 1.2}],
@@ -86,7 +88,48 @@ def test_internacoes_filtra_indicadores_por_estabelecimento(monkeypatch):
     assert resposta["consolidado"]["internacoes_atual"] == 7
     assert resposta["permanencia"]["permanencia_media_atual"] == 2.5
     assert resposta["mortalidade"]["taxa_mortalidade"] == 1.2
-    assert resposta["estabelecimentos"] == [{"cnes": "123", "razao_social": "Hospital Teste"}]
+    assert resposta["estabelecimentos"] == [
+        {"cnes": "456", "nome_hospital": "Clinica Alfa", "razao_social": "Prefeitura"},
+        {"cnes": "123", "nome_hospital": "Hospital Teste", "razao_social": "Prefeitura"},
+    ]
+
+
+def test_visao_geral_municipal_recorta_alertas_e_mapa_pelo_territorio(monkeypatch):
+    municipio = {**MUNICIPIO, "nome_mesorregiao": "Metropolitana de São Paulo"}
+    chamadas = []
+
+    def fake_select(table, eq=None, order=None, limit=None):
+        chamadas.append((table, eq))
+        if table == "ibge_sp":
+            return [municipio]
+        if table == "visao_geral_mapa_mesorregiao":
+            return [{"nome_mesorregiao": "Metropolitana de São Paulo"}, {"nome_mesorregiao": "Campinas"}]
+        if table == "visao_geral_evolucao_casos":
+            return []
+        if table == "visao_geral_kpis_serie":
+            return [{"competencia": "2025-12-01", "casos_notificados": 14}]
+        return []
+
+    monkeypatch.setattr(operational, "_select", fake_select)
+
+    resposta = operational.visao_geral("351300", "Mes", {})
+
+    assert resposta["evolucao"] == []  # sem série substituta
+    assert resposta["mapa_mesorregiao"] == [{"nome_mesorregiao": "Metropolitana de São Paulo"}]
+    assert ("visao_geral_alertas_recentes", {"cod_ibge_completo": "3513009"}) in chamadas
+
+
+def test_municipios_vem_da_dimensao_ibge(monkeypatch):
+    fake_select, _ = _fake_select_factory({})
+    monkeypatch.setattr(operational, "_select", lambda table, eq=None, order=None, limit=None: [
+        {"cod_ibge_completo": "3513009", "nome_municipio": "Cotia", "nome_mesorregiao": "Metropolitana de São Paulo"},
+    ])
+
+    resposta = operational.municipios({})
+
+    assert resposta["municipios"] == [
+        {"ibge6": "351300", "ibge7": "3513009", "nome": "Cotia", "mesorregiao": "Metropolitana de São Paulo", "uf": "SP"},
+    ]
 
 
 def test_epidemiologia_inclui_previsao_mensal_de_90_dias(monkeypatch):

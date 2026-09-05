@@ -1,23 +1,14 @@
 // Tela 04 — Histórico de Documentos (docs/telas/04-gerador-etp.md)
 //
-// Aba leve, de baixa prioridade no menu — consulta ocasional dos ETPs já gerados ou
-// em rascunho. O histórico é sincronizado com o modal de ETP via App.jsx.
+// Aba leve, de baixa prioridade no menu — consulta ocasional dos ETPs já gerados.
+// Não existe tabela de documentos no Supabase nem gerador real de ETP ainda, então a
+// lista chega vazia e a tela mostra o estado vazio explícito.
 
-import { Card, Badge, MIcon } from '../shared/ui.jsx';
+import { Card, MIcon } from '../shared/ui.jsx';
 import { baixarEtpPdf } from '../shared/etp.js';
 
 const STATUS_LABEL = { finalizado: 'Finalizado', rascunho: 'Rascunho' };
 const STATUS_COR = { finalizado: 'var(--good)', rascunho: 'var(--warn)' };
-
-// Fallback canônico para [Continuar] — usado só se algum documento rascunho vier sem
-// payload completo do item (o fluxo normal salva `doc.item` via GeradorEtp.jsx).
-const RASCUNHO_SORO = { nome: 'Soro fisiológico 1L', diasRestantes: 28, consumoSemanal: 340 };
-
-const estiloBotaoPrimario = {
-  padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'var(--primary)', color: 'white', fontSize: 11, fontWeight: 700,
-  display: 'inline-flex', alignItems: 'center', gap: 6,
-};
 
 const estiloBotaoOutline = {
   padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 700,
@@ -44,7 +35,7 @@ function StatusChip({ status }) {
   );
 }
 
-function EstadoVazio({ demoAtivo = false }) {
+function EstadoVazio() {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
@@ -54,18 +45,16 @@ function EstadoVazio({ demoAtivo = false }) {
         <MIcon m="description" size={38} />
       </span>
       <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', margin: '0 0 6px' }}>
-        {demoAtivo ? 'Nenhum ETP gerado neste replay ainda' : 'Nenhum documento gerado ainda'}
+        Nenhum documento gerado ainda
       </p>
       <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: 0, maxWidth: 380, lineHeight: 1.6 }}>
-        {demoAtivo
-          ? 'O histórico da demo só aparece depois que um alerta ou item crítico gera ETP dentro do replay histórico atual.'
-          : 'Os ETPs nascem de um alerta ou item de Insumos — não existe um ETP genérico sem contexto.'}
+        Os ETPs nascem de um alerta ou item de Insumos — não existe um ETP genérico sem contexto.
       </p>
     </div>
   );
 }
 
-function TabelaDocumentos({ documentos, onGerarEtp }) {
+function TabelaDocumentos({ documentos }) {
   return (
     <Card>
       <div style={{ overflowX: 'auto' }}>
@@ -88,14 +77,10 @@ function TabelaDocumentos({ documentos, onGerarEtp }) {
                 <td style={estiloTd}><StatusChip status={doc.status} /></td>
                 <td style={{ ...estiloTd, textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {doc.status === 'finalizado' ? (
-                    <button onClick={() => baixarEtpPdf({ ...doc, demo: doc.demoHistorica })} style={estiloBotaoOutline}>
+                    <button onClick={() => baixarEtpPdf(doc)} style={estiloBotaoOutline}>
                       <MIcon m="download" size={14} /> Baixar
                     </button>
-                  ) : (
-                    <button onClick={() => onGerarEtp(doc.item || RASCUNHO_SORO)} style={estiloBotaoPrimario}>
-                      Continuar
-                    </button>
-                  )}
+                  ) : null}
                 </td>
               </tr>
             ))}
@@ -106,12 +91,7 @@ function TabelaDocumentos({ documentos, onGerarEtp }) {
   );
 }
 
-export default function Documentos({ onNavigate, onGerarEtp, documentos = [], demoState }) {
-  const continuarRascunho = item => {
-    if (typeof onGerarEtp !== 'function') return;
-    onGerarEtp({ tipo: 'insumo', item });
-  };
-
+export default function Documentos({ documentos = [] }) {
   return (
     <div className="rise">
       <div style={{ marginBottom: 22 }}>
@@ -123,25 +103,8 @@ export default function Documentos({ onNavigate, onGerarEtp, documentos = [], de
         </p>
       </div>
 
-      {demoState?.enabled && (
-        <Card className="p-5" style={{ marginBottom: 20, border: '1px solid color-mix(in srgb, var(--info) 20%, transparent)', background: 'color-mix(in srgb, var(--info) 6%, white)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-            <Badge label="Demo histórica" color="var(--info)" />
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-700)' }}>
-              Os ETPs abaixo pertencem ao replay da dengue 2024 e preservam o contexto do corte temporal.
-            </span>
-          </div>
-          <p style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink-500)', margin: 0 }}>
-            O histórico existe para auditoria da decisão, não como fluxo genérico de documentos do produto.
-          </p>
-        </Card>
-      )}
 
-      {documentos.length === 0 ? (
-        <EstadoVazio demoAtivo={!!demoState?.enabled} />
-      ) : (
-        <TabelaDocumentos documentos={documentos} onGerarEtp={continuarRascunho} />
-      )}
+      {documentos.length === 0 ? <EstadoVazio /> : <TabelaDocumentos documentos={documentos} />}
     </div>
   );
 }

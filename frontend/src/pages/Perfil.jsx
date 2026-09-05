@@ -21,18 +21,13 @@ function LocalCardHead({ title, hint }) {
 // endpoint de auditoria de ações do usuário no MVP, a tela mostra só o que
 // `/api/auth/me` de fato retorna, e nada que pareça funcionalidade ausente.
 
-const PERFIL_UBSS = [
-  { nome: 'UBS Cotia Centro', leitos: '38 leitos · Cotia', status: 'crítico' },
-  { nome: 'UBS Vila Bela',    leitos: '24 leitos · Cotia', status: 'crítico' },
-];
-
 function fmtDataHora(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   return `${d.toLocaleDateString('pt-BR')}, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-export default function PagePerfil({ onNavigate, onLogout }) {
+export default function PagePerfil({ onLogout }) {
   const [user, setUser] = useState(getCurrentUser);
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(() => !getCurrentUser());
@@ -49,8 +44,8 @@ export default function PagePerfil({ onNavigate, onLogout }) {
       .finally(() => setCarregando(false));
   }, [user]);
 
-  const email = user?.email || 'marcia.oliveira@cotia.sp.gov.br';
-  const nome = user?.user_metadata?.nome || email.split('@')[0];
+  const email = user?.email || '—';
+  const nome = user?.user_metadata?.nome || (user?.email ? email.split('@')[0] : 'Usuário');
   const iniciais = nome.split(/[.\s]+/).filter(Boolean).slice(0, 2).map(s => s[0].toUpperCase()).join('') || 'US';
 
   const perfilCadastro = [
@@ -64,7 +59,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', letterSpacing: '-0.02em', marginBottom: 4 }}>Perfil do Usuário</h1>
-        <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>Suas informações, permissões e histórico de atividades no SusPredict.</p>
+        <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>O que a sessão autenticada informa sobre você.</p>
       </div>
 
       {erro && <Card className="p-4 mb-5" style={{ color: '#8A2A38', background: '#FBEAEA', border: '1px solid #E9C2C2' }}>{erro}</Card>}
@@ -80,12 +75,7 @@ export default function PagePerfil({ onNavigate, onLogout }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 20, fontWeight: 800, color: '#1A1814', lineHeight: 1.1, marginBottom: 4 }}>{carregando ? 'Carregando…' : nome}</h2>
-                <p style={{ fontSize: 13, color: 'var(--ink-400)', marginBottom: 12 }}>{email}</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {['Admin', 'Aprovador de ETP', 'Gestão de UBS'].map(p => (
-                    <span key={p} style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 99, fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-soft)', border: '1px solid var(--primary-soft-border)' }}>{p}</span>
-                  ))}
-                </div>
+                <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: 0 }}>{email}</p>
               </div>
             </div>
           </Card>
@@ -100,32 +90,6 @@ export default function PagePerfil({ onNavigate, onLogout }) {
               <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 0', fontSize: 13, borderBottom: '1px solid #F5F2EB' }}>
                 <span style={{ color: '#6B665D', flexShrink: 0 }}>{r.k}</span>
                 <span style={{ fontWeight: 600, color: '#1A1814', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, textAlign: 'right' }}>{r.v}</span>
-              </div>
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0 2px', fontSize: 13 }}>
-              <span style={{ color: '#6B665D' }}>MFA</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: '#2A6B40', background: '#2A6B4018', padding: '3px 8px', borderRadius: 99 }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2A6B40' }} /> ativo
-              </span>
-            </div>
-          </Card>
-
-          {/* UBSs sob responsabilidade */}
-          <Card className="p-5">
-            <LocalCardHead title="UBSs sob sua responsabilidade" hint="Cotia" />
-            {PERFIL_UBSS.map((u, i) => (
-              <div key={u.nome} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: i < PERFIL_UBSS.length - 1 ? '1px solid #EFEBE0' : 'none' }}>
-                <span style={{ width: 32, height: 32, borderRadius: 8, background: '#F0EDE6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#6B665D' }}>
-                  <span className="material-symbols-rounded" style={{ fontSize: 20 }}>local_hospital</span>
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#1A1814', lineHeight: 1.3 }}>{u.nome}</p>
-                  <p style={{ fontSize: 11, color: 'var(--ink-400)' }}>{u.leitos}</p>
-                </div>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600, color: '#D94F4F', background: '#D94F4F18', flexShrink: 0 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#D94F4F' }} />
-                  {u.status}
-                </span>
               </div>
             ))}
           </Card>
