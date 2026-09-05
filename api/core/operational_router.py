@@ -148,11 +148,10 @@ def epidemiologia(
     )
     previsao = _prever_tres_meses(historico_previsao)
     desfecho = _select("sinan_dengue_municipios_desfecho_clinico_anual", {"cod_ibge_municipio": codigo}, order="ano_referencia.asc")
-    cidades = _select("sinan_dengue_municipios_distribuicao_cidade", {"periodo": janela}, order="ranking.asc", limit=20)
 
     referencias = [
         item.get("data_referencia")
-        for grupo in (casos, incidencia, taxa_hosp, taxa_obito, faixa, genero, sazonalidade, historico_previsao, desfecho, cidades)
+        for grupo in (casos, incidencia, taxa_hosp, taxa_obito, faixa, genero, sazonalidade, historico_previsao, desfecho)
         for item in grupo
     ]
     tabelas = [
@@ -164,7 +163,6 @@ def epidemiologia(
         "sinan_dengue_municipios_distribuicao_genero",
         "sinan_dengue_municipios_sazonalidade",
         "sinan_dengue_municipios_desfecho_clinico_anual",
-        "sinan_dengue_municipios_distribuicao_cidade",
     ]
     return {
         "meta": _meta(tabelas, referencias),
@@ -184,7 +182,7 @@ def epidemiologia(
         "sazonalidade": sazonalidade,
         "previsao_3_meses": previsao,
         "desfecho_anual": desfecho,
-        "distribuicao_cidades": cidades,
+        "distribuicao_cidades": [],  # Compatibilidade; nenhuma tela usa este ranking.
     }
 
 
@@ -356,7 +354,7 @@ def vacinacao(
         "faixa_etaria": faixa,
         "comparativo_municipios": comparativo,
         "limitacoes": [
-            "A vacina contra dengue integra o calendário do SUS desde 2025; janelas longas ainda cobrem uma série curta.",
+            "A disponibilidade de registros de vacinação varia por município e período; ausência de informação não equivale a zero doses.",
             "O cruzamento com SIH é estadual, não municipal.",
             "Associação entre vacinação e desfechos não demonstra causalidade.",
         ],

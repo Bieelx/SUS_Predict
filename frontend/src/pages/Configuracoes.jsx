@@ -33,14 +33,14 @@ export default function PageConfiguracoes({ municipio }) {
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', letterSpacing: '-0.02em', marginBottom: 4 }}>Configurações</h1>
-        <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>Ambiente de dados e município em análise. Reduzida ao essencial do MVP.</p>
+        <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>Origem das informações e município em análise.</p>
       </div>
 
       <Card className="p-5" style={{ marginBottom: 20, border: '1px solid var(--ink-100)' }}>
         <CardHead title="Ambiente" hint="transparência" />
         <SettingRow
-          title="Real — conectado ao Supabase"
-          desc="Todos os números vêm de consulta às tabelas curadas do Supabase. Quando uma fonte falha ou não tem linhas para o recorte, a tela mostra estado vazio — nunca um número substituto."
+          title="Fonte de dados: Supabase"
+          desc="Os painéis analíticos consultam tabelas curadas do Supabase. A disponibilidade de cada consulta é indicada na própria tela. A Clara também pode consultar registros locais, que são uma fonte separada."
           last
         >
           <span style={{
@@ -49,7 +49,7 @@ export default function PageConfiguracoes({ municipio }) {
             background: 'color-mix(in srgb, var(--good) 14%, white)',
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-            REAL
+            FONTE CONFIGURADA
           </span>
         </SettingRow>
       </Card>

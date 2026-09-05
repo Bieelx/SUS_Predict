@@ -92,7 +92,7 @@ export default function LoginScreen({ onEnter }) {
             </div>
             <div>
               <dt>Escopo operacional</dt>
-              <dd>Vigilância epidemiológica, estoque e planejamento</dd>
+              <dd>Vigilância epidemiológica, aquisições e planejamento</dd>
             </div>
             <div>
               <dt>Rastreabilidade</dt>
@@ -161,7 +161,7 @@ export default function LoginScreen({ onEnter }) {
                 <span className="login-demo__badge">Ambiente de demonstração</span>
                 <h3>Explorar sem credenciais institucionais</h3>
               </div>
-              <p>Casos históricos reais; estoques, preços e ações operacionais são cenário fictício.</p>
+              <p>Acesso local de demonstração, quando habilitado. Os painéis consultam as mesmas fontes de dados; esta entrada não cria estoques ou preços fictícios.</p>
             </div>
             <button
               type="button"

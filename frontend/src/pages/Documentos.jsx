@@ -45,10 +45,10 @@ function EstadoVazio() {
         <MIcon m="description" size={38} />
       </span>
       <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', margin: '0 0 6px' }}>
-        Nenhum documento gerado ainda
+        Histórico de documentos ainda não integrado
       </p>
       <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: 0, maxWidth: 380, lineHeight: 1.6 }}>
-        Os ETPs nascem de um alerta ou item de Insumos — não existe um ETP genérico sem contexto.
+        Esta tela ainda não consulta os rascunhos de ETP produzidos pela Clara. Quando disponíveis, consulte-os na conversa em que foram gerados. A ausência de itens aqui não confirma a ausência de documentos.
       </p>
     </div>
   );
@@ -99,7 +99,7 @@ export default function Documentos({ documentos = [] }) {
           Documentos
         </h1>
         <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: 0 }}>
-          ETPs gerados
+          Estudos técnicos preliminares (ETPs)
         </p>
       </div>
 

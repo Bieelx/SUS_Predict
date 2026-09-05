@@ -58,7 +58,7 @@ async function requisicaoJson(path, {
   baseUrl = '', fetchImpl = globalThis.fetch, method = 'GET', body, signal, headers = {},
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
-  if (typeof fetchFn !== 'function') throw new Error('fetch indisponivel para consultar canais da Clara');
+  if (typeof fetchFn !== 'function') throw new Error('Consulta indisponível para consultar canais da Clara');
   const response = await fetchFn(resolverUrl(baseUrl, path), {
     method,
     headers: {
@@ -125,7 +125,7 @@ export async function listarConversasSusbot({
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
   if (typeof fetchFn !== 'function') {
-    throw new Error('fetch indisponivel para consultar historico da Clara');
+    throw new Error('Consulta indisponível para consultar histórico da Clara');
   }
 
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
@@ -153,7 +153,7 @@ export async function listarMensagensSusbot({
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
   if (typeof fetchFn !== 'function') {
-    throw new Error('fetch indisponivel para consultar mensagens da Clara');
+    throw new Error('Consulta indisponível para consultar mensagens da Clara');
   }
 
   if (!conversaId) {
@@ -355,7 +355,7 @@ export async function conversarComSusbot({
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
   if (typeof fetchFn !== 'function') {
-    throw new Error('fetch indisponivel para conversar com Clara');
+    throw new Error('Consulta indisponível para conversar com Clara');
   }
 
   const perguntaNormalizada = normalizarTexto(pergunta);

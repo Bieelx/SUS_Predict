@@ -88,7 +88,7 @@ export function SectionTitle({ children, action }) {
 
 export function Badge({ label, color }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: color + '22', color }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: `color-mix(in srgb, ${color} 13%, transparent)`, color }}>
       {label}
     </span>
   );

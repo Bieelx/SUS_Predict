@@ -348,7 +348,7 @@ function Sidebar({ current, onNav, aberta, user }) {
 // (item ativo) e o <h1> da página já diziam, e nenhum nível dele era clicável.
 // A busca e o botão de "aplicativos" saíram: eram controles sem handler.
 
-function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar }) {
+function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar, visaoEstadual, onVisaoEstadual }) {
   const tituloPagina = [...NAV_OPERACIONAL, ...NAV_ANALISES, ...NAV_MOBILE_SECUNDARIA]
     .find(item => item.id === page)?.label || 'Visão Geral';
 
@@ -385,7 +385,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
           <LogoIcon size={42} />
           <div>
             <p>{tituloPagina}</p>
-            <span>{page === 'internacoes' ? 'Estado de São Paulo' : municipio ? `${municipio.nome} · ${municipio.uf}` : 'Carregando municípios…'}</span>
+            <span>{page === 'internacoes' || (page === 'visao-geral' && visaoEstadual) ? 'Estado de São Paulo' : municipio ? `${municipio.nome} · ${municipio.uf}` : 'Carregando municípios…'}</span>
           </div>
         </div>
 
@@ -402,15 +402,19 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
         )}
 
         {page !== 'internacoes' && <>
-        <span className="eyebrow app-topbar-eyebrow" style={{ color: SB_SECTION }}>Município</span>
+        <span className="eyebrow app-topbar-eyebrow" style={{ color: SB_SECTION }}>{page === 'visao-geral' ? 'Território' : 'Município'}</span>
         <div className="app-municipio-picker" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <select
             className="topbar-select"
             aria-label="Município em análise"
-            value={municipio?.ibge6 || ''}
+            value={page === 'visao-geral' && visaoEstadual ? 'TODOS' : municipio?.ibge6 || ''}
             disabled={!municipios.length}
-            onChange={e => onTrocarMunicipio(municipios.find(m => m.ibge6 === e.target.value))}
+            onChange={e => {
+              onVisaoEstadual(e.target.value === 'TODOS');
+              if (e.target.value !== 'TODOS') onTrocarMunicipio(municipios.find(m => m.ibge6 === e.target.value));
+            }}
           >
+            {page === 'visao-geral' && <option value="TODOS">São Paulo (estado)</option>}
             {municipios.map(m => (
               <option key={m.ibge6} value={m.ibge6}>{m.nome} · {m.uf}</option>
             ))}
@@ -632,6 +636,7 @@ export default function App() {
   // e repassado a todas as telas.
   const [municipios, setMunicipios] = useState({ lista: [], carregando: false, erro: null });
   const [municipio, setMunicipio] = useState(null);
+  const [visaoEstadual, setVisaoEstadual] = useState(false);
   const carregarMunicipios = useCallback(async (forcar = false) => {
     setMunicipios(anterior => ({ ...anterior, carregando: true, erro: null }));
     try {
@@ -748,7 +753,7 @@ export default function App() {
     }
 
     switch (page) {
-      case 'visao-geral':   return <VisaoGeral municipio={municipio} onNavigate={navegar} onOpenClara={abrirClara} />;
+      case 'visao-geral':   return <VisaoGeral municipio={municipio} estadual={visaoEstadual} onNavigate={navegar} onOpenClara={abrirClara} />;
       case 'alertas':       return <Alertas municipio={municipio} onOpenClara={abrirClara} deepLinkAlertaId={rota.alertaId} />;
       case 'insumos':       return <Insumos municipio={municipio} />;
       case 'documentos':    return <Documentos />;
@@ -780,6 +785,8 @@ export default function App() {
           municipio={municipio}
           municipios={municipios.lista}
           onTrocarMunicipio={trocarMunicipio}
+          visaoEstadual={visaoEstadual}
+          onVisaoEstadual={setVisaoEstadual}
           onNavigate={navegar}
           sidebarAberta={beta && betaVariant === 'v2' && !viewportCompacto ? false : sidebarAberta}
           onToggleSidebar={alternarSidebar}

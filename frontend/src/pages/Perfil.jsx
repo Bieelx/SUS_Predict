@@ -58,7 +58,7 @@ export default function PagePerfil({ onLogout }) {
   return (
     <div className="rise">
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', letterSpacing: '-0.02em', marginBottom: 4 }}>Perfil do Usuário</h1>
+        <h1 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: '#1A1814', letterSpacing: '-0.02em', marginBottom: 4 }}>Perfil do usuário</h1>
         <p style={{ fontSize: 13, color: 'var(--ink-400)' }}>O que a sessão autenticada informa sobre você.</p>
       </div>
 
@@ -99,7 +99,7 @@ export default function PagePerfil({ onLogout }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: '#1A1814', marginBottom: 2 }}>Sair do SusPredict</p>
-                <p style={{ fontSize: 11, color: 'var(--ink-400)', lineHeight: 1.4 }}>Você será desconectado em todos os dispositivos.</p>
+                <p style={{ fontSize: 11, color: 'var(--ink-400)', lineHeight: 1.4 }}>Sua sessão neste navegador será encerrada.</p>
               </div>
               <button onClick={onLogout} style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#D94F4F', background: '#D94F4F12', border: '1px solid #D94F4F33', cursor: 'pointer', flexShrink: 0 }}>
                 Sair

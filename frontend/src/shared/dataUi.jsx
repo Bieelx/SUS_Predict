@@ -1,4 +1,5 @@
 import { Card, MIcon } from './ui.jsx';
+import { dataBr } from './formatters.js';
 
 export const PERIODOS_REAIS = ['Trimestre', 'Semestre', '12 Meses', '3 Anos', '5 Anos'];
 
@@ -54,13 +55,14 @@ export function PainelSkeleton() {
 
 export function FonteReal({ meta, detalhe }) {
   if (!meta) return null;
-  const data = meta.data_referencia ? new Date(meta.data_referencia).toLocaleDateString('pt-BR') : 'competência não informada';
+  const data = dataBr(meta.data_referencia);
   return (
     <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--ink-500)', marginBottom: 18 }}>
       <span>Fonte: {meta.fonte}</span>
       <span aria-hidden="true">·</span>
-      <span>Referência: {data}</span>
+      <span>Atualização da fonte: {data}</span>
       {detalhe && <><span aria-hidden="true">·</span><span>{detalhe}</span></>}
+      {meta.tabelas?.length > 0 && <details style={{ flexBasis: '100%' }}><summary style={{ cursor: 'pointer' }}>Ver tabelas de origem</summary><ul style={{ paddingLeft: 18, overflowWrap: 'anywhere' }}>{meta.tabelas.map(tabela => <li key={tabela}>{tabela}</li>)}</ul></details>}
     </div>
   );
 }
@@ -70,7 +72,7 @@ export function SeletorPeriodo({ value, onChange, carregando }) {
     <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <span className="eyebrow">Período</span>
       <select value={value} onChange={event => onChange(event.target.value)} disabled={carregando} style={select}>
-        {PERIODOS_REAIS.map(periodo => <option key={periodo}>{periodo}</option>)}
+        {PERIODOS_REAIS.map(periodo => <option key={periodo} value={periodo}>{periodo.toLocaleLowerCase('pt-BR').replace(/^./, letra => letra.toUpperCase())}</option>)}
       </select>
     </label>
   );

@@ -38,6 +38,7 @@ export const SUSBOT_PAGE_LABELS = {
   insumos: 'Insumos',
   epidemiologia: 'Epidemiologia',
   internacoes: 'Internações',
+  vacinacao: 'Vacinação',
   documentos: 'Documentos',
   configuracoes: 'Configurações',
   perfil: 'Perfil',

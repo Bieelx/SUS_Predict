@@ -114,3 +114,4 @@ docs/*
 .md
 frontend/tests/*
 !frontend/tests/beta-interface.spec.js
+!frontend/tests/auditoria-interface.spec.js

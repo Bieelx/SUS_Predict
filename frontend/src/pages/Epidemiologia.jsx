@@ -7,9 +7,7 @@ import { Badge, Card, MIcon, SectionTitle } from '../shared/ui.jsx';
 import { EstadoConsulta, FonteReal, Kpi, SeletorPeriodo, botao } from '../shared/dataUi.jsx';
 import { useDadosOperacionais } from '../shared/operationalClient.js';
 
-const numero = valor => Number(valor || 0);
-const inteiro = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
-const decimal = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+import { numero, inteiro, decimal, moeda, percentual, dias, janelaDados } from '../shared/formatters.js';
 const mes = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '');
 const mesLongo = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -66,13 +64,13 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
 
       <EstadoConsulta carregando={carregando} erro={erro} onRetry={recarregar} />
       {dados && <>
-        <FonteReal meta={dados.meta} detalhe={`${dados.municipio.nome}, ${dados.municipio.uf} · ${periodo}`} />
+        <FonteReal meta={dados.meta} detalhe={`${dados.municipio.nome}, ${dados.municipio.uf} · ${periodo} · ${janelaDados(dados.casos)}`} />
 
         <div className="responsive-grid-4" style={grid4}>
           <Kpi rotulo="Casos notificados" valor={inteiro(dados.casos?.casos_atual)} detalhe={dados.casos?.possui_base_comparacao ? `${decimal(dados.casos.variacao_pct)}% vs. janela anterior` : 'Sem base comparável'} />
           <Kpi rotulo="Incidência" valor={decimal(dados.incidencia?.incidencia_atual)} detalhe="casos por 100 mil habitantes" />
-          <Kpi rotulo="Hospitalização" valor={`${decimal(dados.taxa_hospitalizacao?.taxa_hosp_atual)}%`} detalhe={dados.taxa_hospitalizacao?.observacao || 'Taxa calculada sobre notificações'} />
-          <Kpi rotulo="Óbitos" valor={`${decimal(dados.taxa_obito?.taxa_obito_atual)}%`} detalhe={dados.taxa_obito?.observacao || 'Taxa de óbito no período'} tom="var(--risk-alto)" />
+          <Kpi rotulo="Hospitalização" valor={percentual(dados.taxa_hospitalizacao?.taxa_hosp_atual)} detalhe={(dados.taxa_hospitalizacao?.observacao !== 'OK' && dados.taxa_hospitalizacao?.observacao) || 'Taxa calculada sobre notificações'} />
+          <Kpi rotulo="Taxa de óbitos" valor={percentual(dados.taxa_obito?.taxa_obito_atual)} detalhe={(dados.taxa_obito?.observacao !== 'OK' && dados.taxa_obito?.observacao) || 'Taxa de óbito no período'} tom="var(--risk-alto)" />
         </div>
 
         <Card className="p-5" style={{ marginTop: 18 }}>
@@ -143,9 +141,9 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
         </div>
 
         <Card className="p-5" style={{ marginTop: 18 }}>
-          <SectionTitle>Desfecho clínico anual</SectionTitle>
+          <SectionTitle>Desfecho clínico anual</SectionTitle><p style={descricao}>Série anual completa da fonte, independente do filtro de período.</p>
           {desfecho.length ? <ResponsiveContainer width="100%" height={245}>
-            <BarChart data={desfecho}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="ano" /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="leves" stackId="a" fill="var(--risk-baixo)" /><Bar dataKey="hospitalizacoes" stackId="a" fill="var(--risk-medio)" /><Bar dataKey="obitos" stackId="a" fill="var(--risk-alto)" radius={[4, 4, 0, 0]} /></BarChart>
+            <BarChart data={desfecho}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="ano" /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="leves" name="Casos leves" stackId="a" fill="var(--risk-baixo)" /><Bar dataKey="hospitalizacoes" name="Hospitalizações" stackId="a" fill="var(--risk-medio)" /><Bar dataKey="obitos" name="Óbitos" stackId="a" fill="var(--risk-alto)" radius={[4, 4, 0, 0]} /></BarChart>
           </ResponsiveContainer> : <Vazio texto="Desfechos anuais indisponíveis." />}
         </Card>
       </>}

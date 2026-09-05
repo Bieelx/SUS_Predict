@@ -4,15 +4,13 @@ import { Card, SectionTitle } from '../shared/ui.jsx';
 import { EstadoConsulta, FonteReal, Kpi, SeletorPeriodo } from '../shared/dataUi.jsx';
 import { useDadosOperacionais } from '../shared/operationalClient.js';
 
-const numero = valor => Number(valor || 0);
-const inteiro = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
-const decimal = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+import { numero, inteiro, decimal, moeda, percentual, dias, janelaDados } from '../shared/formatters.js';
 
 export default function Internacoes() {
   const [periodo, setPeriodo] = useState('12 Meses');
   const [cnes, setCnes] = useState('TODOS');
   const { dados, carregando, erro, recarregar } = useDadosOperacionais('internacoes', { periodo, cnes });
-  const hospitais = (dados?.hospitais || []).map(item => ({ nome: item.nome_hospital || item.razao_social || item.cnes, internacoes: numero(item.internacoes) }));
+  const hospitais = (dados?.hospitais || []).map(item => ({ nome: item.nome_hospital || `CNES ${item.cnes}`, internacoes: numero(item.internacoes) }));
   const municipios = dados?.municipios || [];
   const faixas = (dados?.faixa_etaria || []).map(item => ({ faixa: item.faixa_etaria, internacoes: numero(item.internacoes) }));
 
@@ -27,7 +25,7 @@ export default function Internacoes() {
           <label style={rotuloFiltro}>Estabelecimento
             <select value={cnes} onChange={event => setCnes(event.target.value)} disabled={carregando} style={seletor}>
               <option value="TODOS">Todos os estabelecimentos</option>
-              {(dados?.estabelecimentos || []).map(item => <option key={item.cnes} value={item.cnes}>{item.nome_hospital}</option>)}
+              {(dados?.estabelecimentos || []).map(item => <option key={item.cnes} value={item.cnes}>{item.nome_hospital} · CNES {item.cnes}</option>)}
             </select>
           </label>
           <SeletorPeriodo value={periodo} onChange={value => { setPeriodo(value); setCnes('TODOS'); }} carregando={carregando} />
@@ -35,16 +33,16 @@ export default function Internacoes() {
       </header>
       <EstadoConsulta carregando={carregando} erro={erro} onRetry={recarregar} quantidadeCards={3} />
       {dados && <>
-        <FonteReal meta={dados.meta} detalhe={`${cnes === 'TODOS' ? 'Todos os estabelecimentos' : dados.estabelecimentos?.find(item => item.cnes === cnes)?.nome_hospital || cnes} · ${periodo}`} />
+        <FonteReal meta={dados.meta} detalhe={`${cnes === 'TODOS' ? 'Todos os estabelecimentos' : dados.estabelecimentos?.find(item => item.cnes === cnes)?.nome_hospital || cnes} · ${periodo} · ${janelaDados(dados.consolidado)}`} />
         <div className="responsive-grid-3" style={grid3}>
           <Kpi rotulo="Internações" valor={inteiro(dados.consolidado?.internacoes_atual)} detalhe={dados.consolidado?.possui_base_comparacao ? `${decimal(dados.consolidado.variacao_percentual)}% vs. período anterior` : 'Consolidado SIH'} />
-          <Kpi rotulo="Permanência média" valor={`${decimal(dados.permanencia?.permanencia_media_atual)} dias`} detalhe={dados.permanencia?.possui_base_comparacao ? `${decimal(dados.permanencia.diferenca_dias)} dias de diferença` : 'Sem base comparável'} />
-          <Kpi rotulo="Mortalidade hospitalar" valor={`${decimal(dados.mortalidade?.taxa_mortalidade)}%`} detalhe={`${inteiro(dados.mortalidade?.obitos)} óbitos no consolidado`} tom="var(--risk-alto)" />
+          <Kpi rotulo="Permanência média" valor={dias(dados.permanencia?.permanencia_media_atual)} detalhe={dados.permanencia?.possui_base_comparacao ? `${decimal(dados.permanencia.diferenca_dias)} dias de diferença` : 'Sem base comparável'} />
+          <Kpi rotulo="Mortalidade hospitalar" valor={percentual(dados.mortalidade?.taxa_mortalidade)} detalhe={`${inteiro(dados.mortalidade?.obitos)} óbitos no consolidado`} tom="var(--risk-alto)" />
         </div>
 
         <div className="responsive-grid-2" style={grid2}>
           <Card className="p-5">
-            <SectionTitle>Hospitais com mais internações</SectionTitle>
+            <SectionTitle>Hospitais com mais internações no estado</SectionTitle>
             {hospitais.length ? <ResponsiveContainer width="100%" height={270}>
               <BarChart data={hospitais} layout="vertical" margin={{ left: 16, right: 12 }}>
                 <CartesianGrid stroke="var(--ink-100)" horizontal={false} />
@@ -56,7 +54,7 @@ export default function Internacoes() {
             </ResponsiveContainer> : <Vazio>Ranking hospitalar indisponível.</Vazio>}
           </Card>
           <Card className="p-5">
-            <SectionTitle>Internações por faixa etária</SectionTitle>
+            <SectionTitle>Internações por faixa etária no estado</SectionTitle>
             {faixas.length ? <ResponsiveContainer width="100%" height={270}>
               <BarChart data={faixas}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="faixa" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="internacoes" fill="var(--accent)" radius={[4, 4, 0, 0]} /></BarChart>
             </ResponsiveContainer> : <Vazio>Distribuição etária indisponível.</Vazio>}
@@ -64,13 +62,13 @@ export default function Internacoes() {
         </div>
 
         <Card style={{ marginTop: 18, overflow: 'hidden' }}>
-          <div style={{ padding: '18px 20px 8px' }}><SectionTitle>Municípios com mais internações</SectionTitle></div>
+          <div style={{ padding: '18px 20px 8px' }}><SectionTitle>Municípios com mais internações no estado</SectionTitle></div>
           {municipios.length ? <div style={{ overflowX: 'auto' }}><table style={tabela}>
             <thead><tr><th style={th}>Posição</th><th style={th}>Município</th><th style={th}>IBGE</th><th style={{ ...th, textAlign: 'right' }}>Internações</th></tr></thead>
             <tbody>{municipios.map(item => <tr key={`${item.ranking}-${item.cod_ibge_municipio}`}><td style={td}>{item.ranking}º</td><td style={{ ...td, fontWeight: 700 }}>{item.nome_municipio}</td><td style={td}>{item.cod_ibge_municipio}</td><td style={{ ...td, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace' }}>{inteiro(item.internacoes)}</td></tr>)}</tbody>
           </table></div> : <Vazio>Ranking municipal indisponível.</Vazio>}
         </Card>
-        <p style={nota}>A base SIH disponível é hospitalar/estadual. Estes números não representam ocupação de leitos em tempo real.</p>
+        <p style={nota}>O filtro de estabelecimento altera os três indicadores. Os rankings e a distribuição etária mostram o estado de São Paulo no período selecionado. Estes números não representam ocupação de leitos em tempo real.</p>
       </>}
     </div>
   );

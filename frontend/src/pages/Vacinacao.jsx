@@ -4,10 +4,7 @@ import { Badge, Card, SectionTitle } from '../shared/ui.jsx';
 import { EstadoConsulta, FonteReal, Kpi, SeletorPeriodo } from '../shared/dataUi.jsx';
 import { useDadosOperacionais } from '../shared/operationalClient.js';
 
-const numero = valor => Number(valor || 0);
-const inteiro = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
-const decimal = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-const moeda = valor => numero(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+import { numero, inteiro, decimal, moeda, percentual, dias, janelaDados } from '../shared/formatters.js';
 
 export default function Vacinacao({ municipio }) {
   const [periodo, setPeriodo] = useState('12 Meses');
@@ -66,18 +63,18 @@ export default function Vacinacao({ municipio }) {
               <h2 style={{ fontSize: 17, margin: '5px 0 7px' }}>Vacinação × internações e custo</h2>
               <p style={{ ...nota, margin: 0, maxWidth: 720 }}>O SIH não oferece cobertura municipal completa neste contrato. Por isso, internações, custo e mortalidade abaixo são consolidados estaduais.</p>
             </div>
-            <Badge label={amostra ? 'Amostra suficiente' : 'Amostra insuficiente'} color={amostra ? 'var(--good)' : 'var(--warn)'} />
+            <Badge label={amostra == null ? 'Amostra não informada' : amostra ? 'Amostra suficiente' : 'Amostra insuficiente'} color={amostra ? 'var(--good)' : 'var(--warn)'} />
           </div>
           <div className="responsive-grid-3" style={{ ...grid3, marginTop: 18 }}>
             <Resumo label="Internações" value={inteiro(dados.hospitalar_estadual?.internacoes_atual)} />
             <Resumo label="Custo total" value={moeda(dados.hospitalar_estadual?.custo_total)} />
-            <Resumo label="Mortalidade" value={`${decimal(dados.hospitalar_estadual?.taxa_mortalidade)}%`} />
+            <Resumo label="Mortalidade" value={percentual(dados.hospitalar_estadual?.taxa_mortalidade)} />
           </div>
         </Card>
 
         <Card className="p-5" style={{ marginTop: 18, background: 'var(--subtle)' }}>
           <SectionTitle>Limitações de interpretação</SectionTitle>
-          <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--ink-500)', fontSize: 12.5, lineHeight: 1.7 }}>{dados.limitacoes.map(item => <li key={item}>{item}</li>)}</ul>
+          <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--ink-500)', fontSize: 12.5, lineHeight: 1.7 }}>{(dados.limitacoes || []).map(item => <li key={item}>{item}</li>)}</ul>
         </Card>
       </>}
     </div>
