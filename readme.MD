@@ -250,19 +250,22 @@ A Clara é a assistente de chat do SUS Predict (web e Telegram). Ela **não é u
 
 Qualquer outra pergunta recebe uma recusa curta e padronizada, gerada em código, sem passar pelo modelo de linguagem.
 
+Há um terceiro caminho, também sem modelo: **saudações de abertura** ("oi", "olá", "bom dia", "tudo bem?", "e aí, Clara") são reconhecidas por regra local e respondidas com o texto sobre o projeto, para que a conversa comece com uma apresentação do que ela faz. Isso só vale quando a mensagem inteira é a saudação. "Bom dia, quanto de dipirona tem em estoque?" vai direto para a consulta de estoque, e conversa social que não é saudação ("qual seu time?") continua sendo recusada.
+
 **O que ela responde**
 
 - "Quais insumos estão em risco de faltar?"
 - "Quais alertas estão abertos no município?"
 - "Como evoluíram as internações por dengue entre 2022 e 2024?"
 - "O que é o SUS Predict? O que você consegue fazer?"
+- Saudações de abertura ("oi", "bom dia"): respondidas com a apresentação do projeto.
 - Pedidos para reformular ou esclarecer algo que ela mesma disse nesta conversa.
 
 **O que ela recusa**
 
 - Perguntas clínicas e farmacológicas (doses, interações, diagnóstico), mesmo que pareçam simples.
 - Perguntas acadêmicas de qualquer área: química, biologia, matemática, programação, política.
-- Conselhos pessoais e conversa social.
+- Conselhos pessoais e conversa social que não seja uma saudação de abertura.
 - Qualquer pergunta cuja resposta exigiria conhecimento próprio do modelo em vez de dado do município.
 
 **Por quê**

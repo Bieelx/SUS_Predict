@@ -130,3 +130,67 @@ def test_prompt_de_resposta_ancora_nos_dados():
     msg = montar_mensagem_resposta("p", {}, {"acao": "ferramenta"}, {"encontrado": True, "dados": [1]})
     assert "=== DADOS DA FERRAMENTA (inicio) ===" in msg
     assert msg.index("PERGUNTA DO USUARIO") < msg.index("=== DADOS DA FERRAMENTA (inicio) ===")
+
+
+def test_sessao_nova_com_pergunta_de_dominio_nao_e_rebaixada(db):  # noqa: F811
+    """Primeira mensagem da conversa (historico vazio): pergunta legitima vai para a ferramenta."""
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
+
+    seed_susbot_municipio("3550308")
+    # Caso 1: roteador local resolve sem LLM (caminho do /start numa demo).
+    llm = LLMPlanoFixo({"acao": "fora_do_escopo"})
+    agente = criar_susbot_agente("3550308", llm=llm, historico=[])
+    fim = next(e for e in agente.stream_eventos("quanto de dipirona tem em estoque?") if e["event"] == "fim")
+    assert fim["data"]["plano"]["acao"] == "ferramenta"
+    assert fim["data"]["plano"]["ferramenta"] == "consultar_estoque"
+    assert fim["data"]["resposta"] != MENSAGEM_FORA_DO_ESCOPO
+
+    # Caso 2: formulacao que escapa do roteador e chega ao LLM, ainda sem historico.
+    llm = LLMPlanoFixo({"acao": "chamar_ferramenta", "ferramenta": "consultar_estoque", "argumentos": {"item": "dipirona"}})
+    agente = criar_susbot_agente("3550308", llm=llm, historico=[])
+    fim = next(e for e in agente.stream_eventos("e a dipirona, como anda?") if e["event"] == "fim")
+    assert fim["data"]["plano"]["acao"] == "ferramenta"
+    assert fim["data"]["execucao"]["llm_planejamento"] is True
+    assert fim["data"]["resposta"] != MENSAGEM_FORA_DO_ESCOPO
+
+
+@pytest.mark.parametrize("pergunta", [
+    "oi", "Olá!", "bom dia", "Boa tarde.", "boa noite", "tudo bem?", "E aí?", "Oi Clara, tudo bem?",
+    "Olá, bom dia!", "oi, tudo bom", "opa", "beleza?",
+])
+def test_saudacao_pura_resolve_em_sobre_o_projeto_sem_llm(db, pergunta):  # noqa: F811
+    from api.core.susbot_intents import rotear_intencao
+
+    rota = rotear_intencao(pergunta)
+    assert rota is not None and rota.plano["ferramenta"] == "sobre_o_projeto"
+
+    llm = LLMPlanoFixo({"acao": "fora_do_escopo"})
+    agente = criar_susbot_agente("3550308", llm=llm, historico=[])
+    fim = next(e for e in agente.stream_eventos(pergunta) if e["event"] == "fim")
+    assert fim["data"]["resposta"] == TEXTO_SOBRE_O_PROJETO
+    assert fim["data"]["execucao"]["sem_llm"] is True
+    assert not llm.stream_chamadas
+
+
+@pytest.mark.parametrize("pergunta, ferramenta", [
+    ("bom dia, quanto de dipirona tem em estoque?", "consultar_estoque"),
+    ("Oi! Quais alertas estão abertos?", "consultar_alertas"),
+    ("boa tarde, internações de 2023 a 2024", "consultar_epidemiologia"),
+])
+def test_saudacao_seguida_de_pergunta_vai_para_a_ferramenta_certa(pergunta, ferramenta):
+    from api.core.susbot_intents import rotear_intencao
+
+    rota = rotear_intencao(pergunta)
+    assert rota is not None
+    assert rota.plano["ferramenta"] == ferramenta
+
+
+@pytest.mark.parametrize("pergunta", ["qual seu time?", "você gosta de música?", "oi, me conta uma piada", "bom dia, qual a capital da França?"])
+def test_social_que_nao_e_saudacao_continua_recusada(db, pergunta):  # noqa: F811
+    from api.core.susbot_intents import rotear_intencao
+
+    assert rotear_intencao(pergunta) is None
+    llm = LLMPlanoFixo({"acao": "fora_do_escopo"})
+    agente = criar_susbot_agente("3550308", llm=llm, historico=[])
+    fim = next(e for e in agente.stream_eventos(pergunta) if e["event"] == "fim")
+    assert fim["data"]["resposta"] == MENSAGEM_FORA_DO_ESCOPO

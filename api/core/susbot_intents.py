@@ -71,10 +71,38 @@ def _extrair_item_estoque(texto: str) -> str | None:
     return None
 
 
+# Saudações e aberturas de conversa (texto já normalizado: sem acento, minúsculo).
+# Só casa quando a mensagem inteira é saudação, com pontuação opcional entre as
+# partes. "bom dia, quanto de dipirona tem?" não casa e segue para as regras abaixo.
+_SAUDACAO = (
+    r"(?:oi+|ola+|alo+|opa+|hey|hello|e ai|eai|bom dia|boa tarde|boa noite|"
+    r"tudo (?:bem|bom|certo|joia)|beleza|como (?:vai|esta|voce esta)|"
+    r"voce esta ai|tem alguem ai|clara)"
+)
+_RE_SO_SAUDACAO = re.compile(rf"^(?:{_SAUDACAO}[\s,.!?;:]*)+$")
+
+
+def eh_saudacao(texto_normalizado: str) -> bool:
+    return bool(texto_normalizado) and bool(_RE_SO_SAUDACAO.match(texto_normalizado))
+
+
 def rotear_intencao(pergunta: str) -> IntentRoute | None:
     """Retorna uma rota somente quando a intenção operacional é inequívoca."""
 
     texto = normalizar_texto(pergunta)
+    if eh_saudacao(texto):
+        return IntentRoute(
+            intencao="saudacao",
+            confianca=1.0,
+            motivo="saudacao de abertura",
+            plano={
+                "acao": "ferramenta",
+                "ferramenta": "sobre_o_projeto",
+                "argumentos": {},
+                "resposta": "",
+                "referencia_rota": None,
+            },
+        )
     if texto.startswith(("o que e ", "o que sao ", "explique ", "como funciona ")):
         return None
 

@@ -105,13 +105,13 @@ PRODUCT.md
 .playwright-mcp
 .docs/*
 .docs/
-docs/
-docs
-!docs/
-docs/*
-!docs/documentacao/
-!docs/documentacao/**
+docs/superpowers/plans/
+docs/superpowers/specs/
 .md
 frontend/tests/*
 !frontend/tests/beta-interface.spec.js
 !frontend/tests/auditoria-interface.spec.js
+
+# estado dos hooks do plugin ruflo (regravado a cada comando)
+.claude-flow/
+api/.claude-flow/

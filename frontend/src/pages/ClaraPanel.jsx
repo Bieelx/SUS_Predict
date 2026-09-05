@@ -41,7 +41,7 @@ const SUSBOT_IBGE6_PADRAO = '351300';
 
 function mensagemErroSusbot(error) {
   const detalhe = String(error?.detail || error?.responseText || error?.message || '');
-  if (/chave do susbot inv[aá]lida/i.test(detalhe)) {
+  if (/chave da clara inv[aá]lida/i.test(detalhe)) {
     if (error?.proxyApiKeyInjected === false) {
       return 'O proxy local não enviou a chave da Clara. Configure SUSBOT_API_KEY no .env.local e reinicie o frontend.';
     }
@@ -50,7 +50,7 @@ function mensagemErroSusbot(error) {
     }
     return 'O servidor não aceitou a chave da Clara. Verifique a configuração de acesso do ambiente.';
   }
-  if (error?.status === 429 || /limite do susbot/i.test(detalhe)) {
+  if (error?.status === 429 || /limite da clara/i.test(detalhe)) {
     return 'O limite de consultas deste acesso foi atingido. Aguarde um minuto e tente novamente.';
   }
   if (/token ausente|token inv[aá]lido|token expirado|usu[aá]rio autenticado inv[aá]lido/i.test(detalhe)) {

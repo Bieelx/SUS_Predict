@@ -474,7 +474,7 @@ function MobileBottomNav({ current, maisAberto, onNav, onOpenClara, onToggleMais
           aria-label="Abrir Clara"
           onClick={onOpenClara}
         >
-          <span className="mobile-bottom-nav__icon mobile-bottom-nav__susbot-mark">SB</span>
+          <span className="mobile-bottom-nav__icon mobile-bottom-nav__susbot-mark">C</span>
           <span>Clara</span>
         </button>
 
