@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { THEMES, ThemeContext, MIcon, LogoIcon } from './shared/ui.jsx';
 import { EstadoConsulta } from './shared/dataUi.jsx';
+import './beta/beta.css';
+import { BetaVariantSettings, BetaTopNav, readBetaVariant } from './beta/BetaVariants.jsx';
 
 const LoginScreen = lazy(() => import('./pages/Login.jsx'));
 const VisaoGeral = lazy(() => import('./pages/VisaoGeral.jsx'));
@@ -76,6 +78,7 @@ const PAGE_PATHS = {
 function lerRotaAtual() {
   if (typeof window === 'undefined') return { page: 'visao-geral', alertaId: null, alertaTipo: 'todos' };
   const partes = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  if (partes[0] === 'beta') partes.shift();
   const candidata = partes[0] || 'visao-geral';
   const page = PAGE_PATHS[candidata] ? candidata : 'visao-geral';
   const params = new URLSearchParams(window.location.search);
@@ -92,6 +95,7 @@ function urlDaRota(rota) {
   url.pathname = page === 'alertas' && rota.alertaId
     ? `/alertas/${encodeURIComponent(rota.alertaId)}`
     : PAGE_PATHS[page];
+  if (/^\/beta(?:\/|$)/.test(window.location.pathname)) url.pathname = `/beta${url.pathname}`;
   url.searchParams.delete('tipo');
   if (page === 'alertas' && rota.alertaTipo && rota.alertaTipo !== 'todos') {
     url.searchParams.set('tipo', rota.alertaTipo);
@@ -579,6 +583,16 @@ export default function App() {
   const [authUser, setAuthUser] = useState(getCurrentUser);
   const [rota, setRota] = useState(lerRotaAtual);
   const page = rota.page;
+  const beta = /^\/beta(?:\/|$)/.test(window.location.pathname);
+  const [betaVariant, setBetaVariant] = useState(readBetaVariant);
+  const betaScrollRef = useRef(null);
+  useEffect(() => {
+    if (beta && betaScrollRef.current) betaScrollRef.current.scrollTop = 0;
+  }, [beta, page]);
+  function changeBetaVariant(value) {
+    setBetaVariant(value);
+    try { localStorage.setItem('sus_predict_beta_variant', value); } catch { /* Optional preference. */ }
+  }
   const [themeId, setThemeId] = useState('teal');
   const [claraOpenRequest, setClaraOpenRequest] = useState(null);
   const [chatAberto, setChatAberto] = useState(false);
@@ -706,7 +720,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (window.location.pathname === '/' || !PAGE_PATHS[window.location.pathname.split('/').filter(Boolean)[0]]) {
+    if (!beta && (window.location.pathname === '/' || !PAGE_PATHS[window.location.pathname.split('/').filter(Boolean)[0]])) {
       window.history.replaceState({ page }, '', urlDaRota(rota));
     }
   }, []);
@@ -741,7 +755,7 @@ export default function App() {
       case 'epidemiologia': return <Epidemiologia municipio={municipio} onOpenClara={abrirClara} />;
       case 'internacoes':   return <Internacoes />;
       case 'vacinacao':     return <Vacinacao municipio={municipio} />;
-      case 'configuracoes': return <PageConfiguracoes municipio={municipio} />;
+      case 'configuracoes': return <>{beta && <BetaVariantSettings value={betaVariant} onChange={changeBetaVariant} />}<PageConfiguracoes municipio={municipio} /></>;
       case 'perfil':        return <PagePerfil onLogout={handleLogout} />;
       default:              return <VisaoGeral municipio={municipio} onNavigate={navegar} onOpenClara={abrirClara} />;
     }
@@ -751,7 +765,7 @@ export default function App() {
     <ThemeContext.Provider value={{ themeId, setThemeId }}>
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
           (esquerda da sidebar, gap central, respiro do painel da Clara). */}
-      <div style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
+      <div className={beta ? `beta-app beta-${betaVariant}` : undefined} style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
         <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} user={authUser} />
         {viewportCompacto && sidebarAberta && (
           <button
@@ -767,9 +781,10 @@ export default function App() {
           municipios={municipios.lista}
           onTrocarMunicipio={trocarMunicipio}
           onNavigate={navegar}
-          sidebarAberta={sidebarAberta}
+          sidebarAberta={beta && betaVariant === 'v2' && !viewportCompacto ? false : sidebarAberta}
           onToggleSidebar={alternarSidebar}
         />
+        {beta && betaVariant === 'v2' && <BetaTopNav current={page} onNavigate={navegar} />}
         {/* Uma linguagem visual só: o conteúdo é sempre um card destacado do
             canvas, com o mesmo respiro do painel da Clara. Abrir o chat mexe
             em uma propriedade só (`right`) — o card não muda de identidade, e o
@@ -797,11 +812,15 @@ export default function App() {
             boxShadow: '0 8px 28px rgba(26,24,20,0.12)',
             overflow: 'hidden',
           }}>
-            <div className="app-content-scroll" style={{ height: '100%', overflowY: 'auto' }}>
+            <div ref={betaScrollRef} className="app-content-scroll" style={{ height: '100%', overflowY: 'auto' }}>
               {/* Folga extra embaixo: o FAB da Clara flutua sobre o canto
                   inferior direito do card, e sem isso o último bloco de conteúdo
                   fica embaixo dele quando a página chega ao fim da rolagem. */}
               <div className="app-page-content" style={{ padding: '28px 36px 84px', maxWidth: 1600, margin: '0 auto' }}>
+                {beta && <div className="beta-context">
+                  <button type="button" className="beta-context-label beta-version-shortcut" onClick={() => navegar('configuracoes')} aria-label={`Beta ${betaVariant}, escolher versão`}><span className="beta-mark">BETA {betaVariant.toUpperCase()}</span> Explorar versões <span aria-hidden="true">↗</span></button>
+                  <a href={`${window.location.pathname.replace(/^\/beta/, '') || '/visao-geral'}${window.location.search}${window.location.hash}`}>Interface original <span aria-hidden="true">↗</span></a>
+                </div>}
                 <Suspense fallback={<CarregandoPagina />}>
                   {render()}
                 </Suspense>

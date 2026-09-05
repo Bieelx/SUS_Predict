@@ -112,4 +112,5 @@ docs/*
 !docs/documentacao/
 !docs/documentacao/**
 .md
-frontend/tests/
+frontend/tests/*
+!frontend/tests/beta-interface.spec.js

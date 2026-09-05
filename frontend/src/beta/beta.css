@@ -1,0 +1,184 @@
+/* Experiment isolated to /beta. Existing pages and data contracts are shared. */
+.beta-app {
+  --sb: oklch(93% 0.008 240) !important;
+  --sb-border: oklch(85% 0.01 240) !important;
+  --sb-text: oklch(39% 0.018 240) !important;
+  --sb-section: oklch(47% 0.015 240) !important;
+  --sb-strong: oklch(27% 0.024 240) !important;
+  --sb-icon-bg: transparent !important;
+  --sb-icon-fg: oklch(48% 0.02 240) !important;
+  --content: oklch(98% 0.004 240) !important;
+  --elev: oklch(99% 0.002 240) !important;
+  --subtle: oklch(96% 0.005 240) !important;
+  --ink-100: oklch(90% 0.007 240) !important;
+  --ink-200: oklch(82% 0.009 240) !important;
+  --ink-900: oklch(26% 0.016 240) !important;
+  --ink-700: oklch(37% 0.015 240) !important;
+  --ink-500: oklch(48% 0.015 240) !important;
+  --sb-w: 232px;
+  --topbar-h: 72px;
+  --gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.beta-app .app-sidebar > div:first-child { border-bottom: 0 !important; }
+.beta-app .app-sidebar nav { padding: 24px 16px !important; }
+.beta-app .app-sidebar nav .eyebrow { letter-spacing: .09em; font-size: 10px; }
+.beta-app .nav-item { min-height: 46px; margin-bottom: 5px !important; box-shadow: none !important; }
+.beta-app .nav-item > span:first-child:not(:only-child) { box-shadow: none !important; }
+.beta-app .nav-item[aria-current] { background: var(--elev) !important; }
+.beta-app .nav-item[aria-current] > span:first-child { display: none; }
+.beta-app .nav-item[aria-current] > span:nth-child(2) { background: var(--primary-soft) !important; color: var(--primary) !important; box-shadow: none !important; }
+.beta-app .nav-item-2 { min-height: 38px; }
+.beta-app .nav-item:hover, .beta-app .nav-item-2:hover, .beta-app .nav-footer:hover { background: var(--content) !important; }
+.beta-app .app-topbar { border-bottom: 0 !important; padding-right: 28px !important; }
+.beta-app .topbar-btn { background: transparent !important; border-color: transparent !important; width: 38px !important; height: 38px !important; }
+.beta-app .topbar-btn:hover { background: var(--elev) !important; }
+.beta-app .topbar-select { background: var(--elev); border-color: var(--sb-border); min-height: 38px; border-radius: 9px; }
+.beta-app .app-content-frame { margin-top: 0 !important; border: 1px solid var(--sb-border) !important; border-radius: 22px !important; box-shadow: 0 3px 16px oklch(30% 0.01 240 / .035) !important; }
+.beta-app .app-page-content { padding: 24px 40px 84px !important; max-width: 1480px !important; }
+.beta-context { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 30px; font-size: 12px; color: var(--ink-500); }
+.beta-context-label { display: flex; align-items: center; gap: 10px; }
+.beta-mark { border: 1px solid var(--ink-200); border-radius: 5px; padding: 2px 6px; font-size: 9px; font-weight: 700; letter-spacing: .1em; color: var(--ink-700); }
+.beta-context a { color: var(--ink-500); text-decoration: none; padding: 8px 0 8px 8px; }
+.beta-context a:hover { color: var(--primary); text-decoration: underline; }
+.beta-app .app-page-content h1 { font-size: 30px !important; font-weight: 700 !important; letter-spacing: -.035em; line-height: 1.2; }
+.beta-app .app-page-content h1 span { display: block; font-size: 14px !important; font-weight: 500 !important; letter-spacing: 0; margin-top: 10px; }
+.beta-app .app-page-content > .rise > header { margin-bottom: 26px !important; align-items: center !important; gap: 20px; }
+.beta-app .app-page-content .bg-white { background: var(--elev); border-radius: 14px; box-shadow: none; }
+.beta-app .app-page-content .p-5 { padding: 24px; }
+.beta-app .app-page-content .responsive-grid-4 { gap: 12px !important; }
+.beta-app .app-page-content .responsive-grid-2 { gap: 20px !important; margin-top: 20px; }
+.beta-app .app-page-content .eyebrow { letter-spacing: .065em; line-height: 1.5; }
+.beta-app .rise { animation: none; }
+.beta-app :is(button, a, select, input, textarea):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+@media (min-width: 1200px) {
+  .beta-app .app-page-content .responsive-grid-2 { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) !important; }
+}
+@media (max-width: 1024px) {
+  .beta-app .app-page-content { padding: 24px 24px 84px !important; }
+}
+@media (max-width: 768px) {
+  .beta-app { --topbar-h: 64px; --gap: 8px; }
+  .beta-app .app-topbar { padding-right: 12px !important; }
+  .beta-app .app-content-frame { border-radius: 18px !important; }
+  .beta-app .app-page-content { padding: 18px 16px 36px !important; }
+  .beta-context { margin-bottom: 22px; font-size: 11px; }
+  .beta-context-label { gap: 6px; }
+  .beta-app .app-page-content h1 { font-size: 26px !important; }
+  .beta-app .app-page-content .p-5 { padding: 18px; }
+  .beta-app .mobile-bottom-nav__inner { background: var(--elev); border: 1px solid var(--sb-border); box-shadow: 0 4px 18px oklch(30% 0.01 240 / .08); }
+  .beta-app .mobile-bottom-nav__item { color: var(--ink-500); }
+  .beta-app .mobile-bottom-nav__item[aria-current] { color: var(--primary); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .beta-app *, .beta-app *::before, .beta-app *::after { transition: none !important; animation: none !important; }
+}
+
+/* Each direction changes the navigation as well as its atmosphere. */
+.beta-app.beta-v1 {
+  --sb: oklch(91% .052 235) !important;
+  --sb-border: oklch(81% .065 235) !important;
+  --content: oklch(98% .009 235) !important;
+  --primary: oklch(48% .105 245) !important;
+  --primary-dark: oklch(38% .095 245) !important;
+  --primary-soft: oklch(93% .035 235) !important;
+  --primary-soft-border: oklch(83% .055 235) !important;
+  --accent: oklch(53% .11 245) !important;
+}
+.beta-app.beta-v2 {
+  --sb: oklch(91% .05 55) !important;
+  --sb-border: oklch(82% .045 55) !important;
+  --sb-text: oklch(37% .04 45) !important;
+  --sb-strong: oklch(30% .04 45) !important;
+  --sb-section: oklch(44% .045 45) !important;
+  --sb-icon-fg: oklch(44% .045 45) !important;
+  --content: oklch(98% .012 70) !important;
+  --elev: oklch(99% .006 70) !important;
+  --ink-100: oklch(89% .018 55) !important;
+  --primary: oklch(48% .115 42) !important;
+  --primary-dark: oklch(37% .085 42) !important;
+  --primary-soft: oklch(94% .035 55) !important;
+  --primary-soft-border: oklch(83% .055 55) !important;
+  --accent: oklch(53% .12 42) !important;
+}
+.beta-app.beta-v3 {
+  --sb: oklch(91% .055 150) !important;
+  --sb-border: oklch(81% .055 150) !important;
+  --sb-text: oklch(36% .035 155) !important;
+  --sb-strong: oklch(28% .035 155) !important;
+  --sb-section: oklch(43% .04 155) !important;
+  --sb-icon-fg: oklch(43% .04 155) !important;
+  --content: oklch(98% .012 135) !important;
+  --elev: oklch(99% .005 135) !important;
+  --ink-100: oklch(89% .016 150) !important;
+  --primary: oklch(45% .085 155) !important;
+  --primary-dark: oklch(35% .065 155) !important;
+  --primary-soft: oklch(94% .035 150) !important;
+  --primary-soft-border: oklch(83% .055 150) !important;
+  --accent: oklch(50% .095 155) !important;
+}
+.beta-app:is(.beta-v1, .beta-v2, .beta-v3) {
+  --sb-icon-active-bg: var(--primary) !important;
+  --sb-icon-active-fg: var(--elev) !important;
+  --primary-field: var(--primary-dark) !important;
+  --primary-label: var(--sb) !important;
+  --primary-on-dark: var(--primary-soft) !important;
+}
+.beta-version-shortcut { border: 0; background: none; padding: 8px 0; color: var(--ink-500); font: inherit; cursor: pointer; }
+.beta-app .app-main, .beta-app .app-topbar { transition: none !important; }
+.beta-version-shortcut:hover { color: var(--primary); }
+.beta-app .beta-mark { border-color: var(--primary-soft-border); color: var(--primary); background: var(--primary-soft); }
+.beta-variants { margin-bottom: 40px; }
+.beta-variants-heading { max-width: 65ch; margin-bottom: 24px; }
+.beta-variants-heading h2 { font-size: 26px; line-height: 1.25; letter-spacing: -.035em; font-weight: 700; margin: 16px 0 8px; }
+.beta-variants-heading p { font-size: 14px; color: var(--ink-500); }
+.beta-variant-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.beta-variant-option { display: flex; flex-direction: column; text-align: left; padding: 12px; border: 1px solid var(--ink-200); border-radius: 16px; background: var(--elev); cursor: pointer; color: var(--ink-900); transition: border-color 160ms, box-shadow 160ms; min-width: 0; }
+.beta-variant-option:hover { border-color: var(--preview-accent); }
+.beta-variant-option[aria-pressed="true"] { border-color: var(--preview-accent); box-shadow: 0 0 0 2px var(--preview-accent); }
+.beta-preview { display: flex; gap: 8px; height: 128px; padding: 12px; border-radius: 9px; background: var(--preview-canvas); overflow: hidden; }
+.beta-preview-nav { display: flex; flex-direction: column; gap: 7px; width: 24%; padding-top: 10px; }
+.beta-preview-nav i { height: 7px; border-radius: 3px; background: var(--preview-accent); opacity: .35; }
+.beta-preview-nav i:first-child { opacity: 1; }
+.beta-preview-content { flex: 1; background: var(--preview-paper); border-radius: 8px; padding: 16px 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.beta-preview-content span { border-radius: 4px; background: var(--preview-canvas); }
+.beta-preview-content span:last-child { grid-column: 1 / -1; }
+.beta-preview-v2 .beta-preview { flex-direction: column; }
+.beta-preview-v2 .beta-preview-nav { width: 100%; flex-direction: row; padding: 0; }
+.beta-preview-v2 .beta-preview-nav i { width: 24%; }
+.beta-preview-v3 .beta-preview-nav { width: 12%; gap: 10px; }
+.beta-preview-v3 .beta-preview-nav i { height: 14px; border-radius: 4px; }
+.beta-option-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 16px 4px 8px; color: var(--preview-accent); font-size: 14px; }
+.beta-option-detail { font-size: 12px; line-height: 1.6; margin: 0 4px 16px; color: var(--ink-500); }
+.beta-option-layout { margin: auto 4px 6px; font-size: 11px; font-weight: 600; }
+.beta-variant-note { margin-top: 16px; color: var(--ink-500); font-size: 12px; }
+.beta-top-nav { display: none; }
+@media (min-width: 1025px) {
+  .beta-v2 .app-sidebar { display: none !important; }
+  .beta-v2 .app-topbar { left: 0 !important; }
+  .beta-v2 .app-topbar-menu-button { display: none !important; }
+  .beta-v2 .app-main { left: 0 !important; top: 132px !important; }
+  .beta-v2 .beta-top-nav { position: fixed; display: flex; top: 72px; left: 24px; right: 24px; height: 48px; gap: 4px; align-items: stretch; overflow-x: auto; z-index: 20; }
+  .beta-top-nav button { border: 0; background: transparent; color: var(--sb-text); display: flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border-radius: 10px; flex-shrink: 0; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .beta-top-nav button:hover { background: var(--primary-soft); }
+  .beta-top-nav button[aria-current] { background: var(--elev); color: var(--primary); font-weight: 700; }
+  .beta-v2 .app-content-frame { margin-right: 24px !important; margin-left: 24px !important; }
+  .beta-v3 { --sb-w: 148px; }
+  .beta-v3 .app-sidebar > div:first-child { padding: 0 12px !important; }
+  .beta-v3 .app-sidebar > div:first-child > div { gap: 3px !important; }
+  .beta-v3 .app-sidebar > div:first-child p { font-size: 12px !important; }
+  .beta-v3 .app-sidebar > div:first-child img { width: 36px !important; }
+  .beta-v3 .app-sidebar nav { padding: 18px 10px !important; }
+  .beta-v3 .nav-item { flex-direction: column; gap: 5px !important; padding: 12px 5px !important; border-radius: 14px !important; }
+  .beta-v3 .nav-item-2 { padding: 8px 5px !important; gap: 5px !important; }
+  .beta-v3 .nav-item-2 span { font-size: 11px !important; }
+  .beta-v3 .app-sidebar .nav-footer { padding: 9px 6px !important; gap: 5px !important; }
+  .beta-v3 .app-sidebar .nav-footer span { font-size: 11px !important; }
+  .beta-v3 .app-content-frame { border-radius: 28px !important; }
+}
+@media (max-width: 768px) {
+  .beta-variant-options { grid-template-columns: 1fr; gap: 14px; }
+  .beta-preview { height: 110px; }
+  .beta-variants-heading h2 { font-size: 23px; }
+  .beta-context { flex-wrap: wrap; gap: 4px 12px; }
+}
