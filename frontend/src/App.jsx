@@ -1,4 +1,3 @@
-import { LegalLinks } from './pages/Legal.jsx';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { THEMES, ThemeContext, MIcon, LogoIcon } from './shared/ui.jsx';
 import { EstadoConsulta } from './shared/dataUi.jsx';
@@ -383,10 +382,23 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
         </button>
 
         <div className="mobile-topbar-title" aria-label={`Página atual: ${tituloPagina}`}>
-          <LogoIcon size={42} />
+          <LogoIcon size={32} />
           <div>
-            <p>{tituloPagina}</p>
-            <span>{page === 'internacoes' || (page === 'visao-geral' && visaoEstadual) ? 'Estado de São Paulo' : municipio ? `${municipio.nome} · ${municipio.uf}` : 'Carregando municípios…'}</span>
+            <p>SusPredict</p>
+            {page === 'internacoes' ? <span>Estado de São Paulo</span> : <select
+              className="mobile-territory-select"
+              aria-label="Território em análise"
+              value={page === 'visao-geral' && visaoEstadual ? 'TODOS' : municipio?.ibge6 || ''}
+              disabled={!municipios.length}
+              onChange={event => {
+                onVisaoEstadual(event.target.value === 'TODOS');
+                if (event.target.value !== 'TODOS') onTrocarMunicipio(municipios.find(m => m.ibge6 === event.target.value));
+              }}
+            >
+              {!municipios.length && <option value="">Carregando municípios…</option>}
+              {page === 'visao-geral' && <option value="TODOS">São Paulo (estado)</option>}
+              {municipios.map(m => <option key={m.ibge6} value={m.ibge6}>{m.nome} · {m.uf}</option>)}
+            </select>}
           </div>
         </div>
 
@@ -504,11 +516,25 @@ function MobileMoreSheet({ current, aberta, onClose, onNav }) {
 
   useEffect(() => {
     if (!aberta) return;
+    const anterior = document.querySelector('[aria-controls="mobile-more-sheet"]');
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    ref.current?.querySelector('button')?.focus({ preventScroll: true });
     const fechar = event => {
       if (event.key === 'Escape') onClose();
+      if (event.key === 'Tab') {
+        const botoes = [...ref.current.querySelectorAll('button:not([disabled])')];
+        const primeiro = botoes[0], ultimo = botoes.at(-1);
+        if (event.shiftKey && document.activeElement === primeiro) { event.preventDefault(); ultimo?.focus(); }
+        else if (!event.shiftKey && document.activeElement === ultimo) { event.preventDefault(); primeiro?.focus(); }
+      }
     };
     window.addEventListener('keydown', fechar);
-    return () => window.removeEventListener('keydown', fechar);
+    return () => {
+      window.removeEventListener('keydown', fechar);
+      document.body.style.overflow = overflow;
+      anterior?.focus({ preventScroll: true });
+    };
   }, [aberta, onClose]);
 
   return (
@@ -592,7 +618,8 @@ export default function App() {
   const [betaVariant, setBetaVariant] = useState(readBetaVariant);
   const betaScrollRef = useRef(null);
   useEffect(() => {
-    if (beta && betaScrollRef.current) betaScrollRef.current.scrollTop = 0;
+    if (betaScrollRef.current) betaScrollRef.current.scrollTop = 0;
+    if (window.matchMedia('(max-width: 768px)').matches) window.scrollTo(0, 0);
   }, [beta, page]);
   function changeBetaVariant(value) {
     setBetaVariant(value);
@@ -773,7 +800,7 @@ export default function App() {
     <ThemeContext.Provider value={{ themeId, setThemeId }}>
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
           (esquerda da sidebar, gap central, respiro do painel da Clara). */}
-      <div className={beta ? `beta-app beta-${betaVariant}` : undefined} style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
+      <div className={`app-shell${beta ? ` beta-app beta-${betaVariant}` : ''}`} style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
         <a className="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
         <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} user={authUser} />
         {viewportCompacto && sidebarAberta && (
@@ -835,7 +862,6 @@ export default function App() {
                 <Suspense fallback={<CarregandoPagina />}>
                   {render()}
                 </Suspense>
-                <LegalLinks />
               </div>
             </div>
           </div>

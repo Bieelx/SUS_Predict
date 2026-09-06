@@ -31,7 +31,7 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -75,14 +75,45 @@ from api.core.prediction import PROPHET_OK, gerar_predicao
 from api.core.susbot_router import router as susbot_router
 from api.core.susbot_access import avisar_se_protecao_desativada
 from api.core.channel_router import router as channel_router
-from api.core.admin_router import router as admin_router
+from api.core.admin_router import router as admin_router, require_admin
+from api.core.permissoes import Acesso, require_acesso
+from api.core.rate_limit import identidade_requisicao, limitar
 
 if PYSUS_OK:
     from api.core.download import baixar_ano, baixar_sinan, limpar_cache_pysus
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="SUS Predict API", version="2.1.0")
+# /docs e /openapi.json entregam o mapa completo da API a quem não está logado.
+# Fechados por padrão; ligue SUS_PREDICT_DOCS=1 apenas em desenvolvimento.
+DOCS_LIBERADAS = os.getenv("SUS_PREDICT_DOCS", "").strip().lower() in {"1", "true", "yes", "on"}
+
+app = FastAPI(
+    title="SUS Predict API",
+    version="2.1.0",
+    docs_url="/docs" if DOCS_LIBERADAS else None,
+    redoc_url="/redoc" if DOCS_LIBERADAS else None,
+    openapi_url="/openapi.json" if DOCS_LIBERADAS else None,
+)
+
+
+@app.middleware("http")
+async def cabecalhos_de_seguranca(request: Request, call_next):
+    """Cabeçalhos de defesa em toda resposta: clickjacking, sniffing e HTTPS.
+
+    O header `server: uvicorn` não sai daqui — ele é escrito pelo protocolo. Suba
+    o serviço com `uvicorn --no-server-header` para removê-lo.
+    """
+
+    resposta = await call_next(request)
+    resposta.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resposta.headers.setdefault("X-Frame-Options", "DENY")
+    resposta.headers.setdefault("Referrer-Policy", "no-referrer")
+    resposta.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    if not DOCS_LIBERADAS:
+        # A API só devolve JSON. Com as docs ligadas isto quebraria o Swagger UI.
+        resposta.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+    return resposta
 cors_origins = [
     origem.strip()
     for origem in (
@@ -280,6 +311,11 @@ class AuthRequest(BaseModel):
     nome:     str = ""
 
 
+class CodigoRequest(BaseModel):
+    email:  str
+    codigo: str
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -316,28 +352,79 @@ def health():
     return {"status": "ok"}
 
 
+# Resposta única do cadastro: nunca revela se o e-mail já tem conta (isso deixaria
+# qualquer um levantar a lista de usuários) e nunca devolve o registro do GoTrue.
+RESPOSTA_CADASTRO = {
+    "ok": True,
+    "mensagem": (
+        "Se o e-mail for válido, enviamos as instruções de confirmação. "
+        "Confirme o e-mail e faça login para continuar."
+    ),
+}
+SENHA_MINIMA = 8
+
+
 @app.post("/api/auth/signup")
-def auth_signup(req: AuthRequest):
+def auth_signup(req: AuthRequest, request: Request):
+    limitar("signup", identidade_requisicao(request), limite=5)
+
+    # Validado aqui para que erros de formulário não sejam engolidos pela resposta
+    # genérica logo abaixo — o usuário precisa saber que a senha é curta demais.
+    if "@" not in req.email or len(req.email.strip()) < 5:
+        raise HTTPException(400, "Informe um e-mail válido.")
+    if len(req.password) < SENHA_MINIMA:
+        raise HTTPException(400, f"A senha precisa ter pelo menos {SENHA_MINIMA} caracteres.")
+
     # Só o nome. Cargo/papel nunca é auto-declarado: perfil de acesso vem do
     # armazenamento de permissões (docs/09), não de user_metadata.
     metadata = {"nome": req.nome} if req.nome else {}
-    return auth_core.signup(req.email, req.password, metadata or None)
+    try:
+        auth_core.signup(req.email, req.password, metadata or None)
+    except HTTPException as exc:
+        # Recusa do GoTrue (e-mail já cadastrado, domínio bloqueado) devolve a mesma
+        # resposta do sucesso: de fora, os dois casos são indistinguíveis.
+        if exc.status_code in (400, 401, 422):
+            log.info("signup recusado pelo GoTrue: %s", exc.detail)
+            return RESPOSTA_CADASTRO
+        raise
+    return RESPOSTA_CADASTRO
 
 
 @app.post("/api/auth/login")
-def auth_login(req: AuthRequest):
-    return auth_core.login(req.email, req.password)
+def auth_login(req: AuthRequest, request: Request):
+    """Primeiro fator. A senha correta não devolve sessão: dispara o código por e-mail."""
+
+    limitar("login", identidade_requisicao(request), limite=8)
+    sessao = auth_core.login(req.email, req.password)
+
+    if auth_core.is_dev_token(sessao.get("access_token", "")):
+        # Demonstração local: não existe caixa de entrada para receber o código.
+        return auth_core.sessao_publica(sessao)
+
+    # A sessão emitida pela senha é descartada aqui, sem chegar ao navegador. O
+    # token só é entregue em /api/auth/verificar-codigo, contra o código do e-mail.
+    auth_core.enviar_codigo_email(req.email)
+    return {"codigo_enviado": True, "email": req.email}
+
+
+@app.post("/api/auth/verificar-codigo")
+def auth_verificar_codigo(req: CodigoRequest, request: Request):
+    """Segundo fator: troca o código de 6 dígitos recebido por e-mail pela sessão."""
+
+    limitar("verificar-codigo", identidade_requisicao(request), limite=10)
+    sessao = auth_core.verificar_codigo_email(req.email, req.codigo.strip())
+    return auth_core.sessao_publica(sessao)
 
 
 @app.post("/api/auth/refresh")
 def auth_refresh(req: RefreshRequest):
-    return auth_core.refresh_session(req.refresh_token)
+    return auth_core.sessao_publica(auth_core.refresh_session(req.refresh_token))
 
 
 @app.post("/api/auth/dev-login")
 def auth_dev_login(req: AuthRequest | None = None):
     email = (req.email if req else "") or "marcia.oliveira@dev.local"
-    return auth_core.dev_login(email)
+    return auth_core.sessao_publica(auth_core.dev_login(email))
 
 
 @app.get("/api/auth/me")
@@ -347,7 +434,10 @@ def auth_me(user: dict = Depends(auth_core.require_user)):
     from api.core.db import get_acesso
     from api.core.identidade import usuario_referencia
     linha = get_acesso(usuario_referencia(user))
-    return {**user, "acesso": {"perfil": linha.get("perfil"), "ativo": bool(linha.get("ativo"))} if linha else None}
+    return {
+        **auth_core.usuario_publico(user),
+        "acesso": {"perfil": linha.get("perfil"), "ativo": bool(linha.get("ativo"))} if linha else None,
+    }
 
 
 @app.post("/api/auth/logout", status_code=204)
@@ -358,7 +448,7 @@ def auth_logout(authorization: str = Header(default="")):
 
 
 @app.get("/api/sistemas")
-def get_sistemas():
+def get_sistemas(_acesso: Acesso = Depends(require_acesso())):
     return [
         {"codigo":"SIM",   "nome":"SIM — Mortalidade",          "descricao":"Óbitos com causa básica (CID-10)",             "icone":"💀"},
         {"codigo":"SIH",   "nome":"SIH — Internações",          "descricao":"Internações hospitalares financiadas pelo SUS", "icone":"🏥"},
@@ -369,7 +459,7 @@ def get_sistemas():
 
 
 @app.get("/api/doencas")
-def get_doencas():
+def get_doencas(_acesso: Acesso = Depends(require_acesso())):
     if not PYSUS_OK:
         raise HTTPException(503, "PySUS não disponível. Inicie com Python 3.12 (venv do projeto).")
     try:
@@ -382,12 +472,12 @@ def get_doencas():
 
 
 @app.get("/api/capacidades")
-def get_capacidades():
+def get_capacidades(_acesso: Acesso = Depends(require_acesso())):
     return {"pysus_ok": PYSUS_OK, "prophet_ok": PROPHET_OK}
 
 
 @app.get("/api/ano_limite")
-def get_ano_limite():
+def get_ano_limite(_acesso: Acesso = Depends(require_acesso())):
     defasagens = {s: 1 for s in ANO_MAXIMO_CONFIAVEL}
     return {
         sistema: {
@@ -403,18 +493,18 @@ def get_ano_limite():
 
 
 @app.get("/api/estados")
-def get_estados_endpoint():
+def get_estados_endpoint(_acesso: Acesso = Depends(require_acesso())):
     base = list(_PYSUS_EST) if PYSUS_OK else [(e["sigla"], e["nome"]) for e in ESTADOS_FALLBACK]
     return [{"sigla": s, "nome": n} for s, n in base]
 
 
 @app.get("/api/cidades/{uf}")
-def get_cidades(uf: str):
+def get_cidades(uf: str, _acesso: Acesso = Depends(require_acesso())):
     return buscar_municipios(uf.upper())
 
 
 @app.post("/api/download")
-def iniciar_download(req: DownloadRequest, background_tasks: BackgroundTasks):
+def iniciar_download(req: DownloadRequest, background_tasks: BackgroundTasks, _acesso: Acesso = Depends(require_acesso())):
     req_dict = req.model_dump()
 
     if req.usar_cache:
@@ -444,7 +534,7 @@ def iniciar_download(req: DownloadRequest, background_tasks: BackgroundTasks):
 
 
 @app.get("/api/status/{job_id}")
-def get_status(job_id: str):
+def get_status(job_id: str, _acesso: Acesso = Depends(require_acesso())):
     if job_id not in jobs:
         raise HTTPException(404, "Job não encontrado")
     j = jobs[job_id]
@@ -452,7 +542,7 @@ def get_status(job_id: str):
 
 
 @app.get("/api/resultado/{job_id}")
-def get_resultado(job_id: str):
+def get_resultado(job_id: str, _acesso: Acesso = Depends(require_acesso())):
     if job_id not in jobs:
         raise HTTPException(404, "Job não encontrado")
     if jobs[job_id]["status"] != "done":
@@ -461,7 +551,7 @@ def get_resultado(job_id: str):
 
 
 @app.get("/api/overview/{ibge}")
-def get_city_overview(ibge: str):
+def get_city_overview(ibge: str, _acesso: Acesso = Depends(require_acesso())):
     """Aggregates latest cached resultado of each system for a city."""
     ibge6 = str(ibge)[:6]
     result = {}
@@ -473,7 +563,7 @@ def get_city_overview(ibge: str):
 
 
 @app.get("/api/runs")
-def get_runs(sistema: str | None = None, limit: int = 200):
+def get_runs(_acesso: Acesso = Depends(require_acesso()), sistema: str | None = None, limit: int = 200):
     try:
         runs = list_runs(sistema=sistema, limit=limit)
         return {"ok": True, "runs": runs}
@@ -482,7 +572,7 @@ def get_runs(sistema: str | None = None, limit: int = 200):
 
 
 @app.get("/api/export/{job_id}")
-def export_xlsx_endpoint(job_id: str):
+def export_xlsx_endpoint(job_id: str, _acesso: Acesso = Depends(require_acesso())):
     if job_id not in jobs:
         raise HTTPException(404, "Job não encontrado")
     if jobs[job_id]["status"] != "done":
@@ -508,7 +598,7 @@ def export_xlsx_endpoint(job_id: str):
 
 
 @app.delete("/api/cleanup/{job_id}")
-def cleanup(job_id: str):
+def cleanup(job_id: str, _admin: dict = Depends(require_admin)):
     if job_id not in jobs:
         raise HTTPException(404, "Job não encontrado")
     pasta = jobs[job_id].get("pasta")

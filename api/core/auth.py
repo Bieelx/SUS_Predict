@@ -168,6 +168,66 @@ def login(email: str, password: str) -> dict:
     return _gotrue_request("token?grant_type=password", {"email": email, "password": password})
 
 
+def enviar_codigo_email(email: str) -> None:
+    """Dispara o código de verificação por e-mail (GoTrue `POST /auth/v1/otp`).
+
+    `create_user: False` garante que este caminho nunca cria conta: quem não tem
+    cadastro não vira usuário por tentar entrar. Não devolve nada — a resposta ao
+    navegador é sempre a mesma, exista ou não o e-mail.
+
+    O e-mail sai com o código de 6 dígitos apenas se o template "Magic Link" do
+    projeto usar `{{ .Token }}`. Ver docs/10-autenticacao-2fa.md.
+    """
+
+    if not _supabase_configurado():
+        raise HTTPException(503, "Supabase Auth não configurado")
+    _gotrue_request("otp", {"email": email, "create_user": False})
+
+
+def verificar_codigo_email(email: str, codigo: str) -> dict:
+    """Troca o código de 6 dígitos pela sessão real (GoTrue `POST /auth/v1/verify`)."""
+
+    if not _supabase_configurado():
+        raise HTTPException(503, "Supabase Auth não configurado")
+    return _gotrue_request("verify", {"email": email, "token": codigo, "type": "email"})
+
+
+# Campos que o frontend realmente lê do usuário (App.jsx, Perfil.jsx). Tudo que o
+# GoTrue manda além disso — identities, app_metadata, aud, phone, is_anonymous —
+# fica no backend e nunca chega à aba Network.
+_CAMPOS_USUARIO = ("id", "email", "created_at", "last_sign_in_at")
+_CAMPOS_METADATA = ("nome", "full_name", "name")
+
+
+def usuario_publico(usuario: dict | None) -> dict:
+    """Recorta o usuário do GoTrue para os campos que a interface usa."""
+
+    usuario = usuario or {}
+    metadata = usuario.get("user_metadata") or {}
+    recorte = {campo: usuario.get(campo) for campo in _CAMPOS_USUARIO if usuario.get(campo)}
+    recorte.setdefault("id", usuario.get("sub") or "")
+    recorte["user_metadata"] = {
+        campo: metadata[campo] for campo in _CAMPOS_METADATA if metadata.get(campo)
+    }
+    return recorte
+
+
+def sessao_publica(sessao: dict) -> dict:
+    """Recorta a sessão do GoTrue: tokens + usuário enxuto, nada além disso."""
+
+    sessao = sessao or {}
+    publica = {
+        "access_token": sessao.get("access_token") or "",
+        "token_type": sessao.get("token_type") or "bearer",
+        "user": usuario_publico(sessao.get("user")),
+    }
+    if sessao.get("refresh_token"):
+        publica["refresh_token"] = sessao["refresh_token"]
+    if sessao.get("expires_in"):
+        publica["expires_in"] = sessao["expires_in"]
+    return publica
+
+
 def refresh_session(refresh_token: str) -> dict:
     if is_dev_token(refresh_token):
         usuario = _dev_validar_token(refresh_token)

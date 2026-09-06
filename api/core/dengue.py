@@ -2,12 +2,18 @@
 
 Somente leitura (sb_select). Nenhuma escrita é feita nessas tabelas.
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.core.db import sb_select, supabase_configured
+from api.core.permissoes import require_acesso
 from api.core.prediction import gerar_predicao
 
-router = APIRouter(prefix="/api/dengue", tags=["dengue"])
+# Painel de demonstração: exige usuário autenticado e ativo, como o resto dos dados.
+router = APIRouter(
+    prefix="/api/dengue",
+    tags=["dengue"],
+    dependencies=[Depends(require_acesso())],
+)
 
 PERIODOS = {"Trimestre", "Semestre", "12 Meses", "3 Anos", "5 Anos"}
 

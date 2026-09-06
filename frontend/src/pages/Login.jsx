@@ -14,6 +14,8 @@ export default function LoginScreen({ onEnter }) {
   const [nome, setNome] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [aviso, setAviso] = useState('');
+  const [etapa, setEtapa] = useState('credenciais'); // 'credenciais' | 'codigo'
+  const [codigo, setCodigo] = useState('');
 
   async function concluirLogin(resp) {
     const data = await resp.json().catch(() => ({}));
@@ -41,10 +43,12 @@ export default function LoginScreen({ onEnter }) {
 
   function trocarModo(novo) {
     setModo(novo);
+    setEtapa('credenciais');
     setErro('');
     setAviso('');
     setSenha('');
     setConfirmaSenha('');
+    setCodigo('');
   }
 
   async function handleSignup(e) {
@@ -55,8 +59,8 @@ export default function LoginScreen({ onEnter }) {
       setErro('Informe nome, e-mail e senha para criar a conta.');
       return;
     }
-    if (senha.length < 6) {
-      setErro('A senha precisa ter pelo menos 6 caracteres.');
+    if (senha.length < 8) {
+      setErro('A senha precisa ter pelo menos 8 caracteres.');
       return;
     }
     if (senha !== confirmaSenha) {
@@ -72,16 +76,10 @@ export default function LoginScreen({ onEnter }) {
         body: JSON.stringify({ email: email.trim(), password: senha, nome: nome.trim() }),
       });
       const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(data.detail || data.msg || 'Não foi possível criar a conta.');
-      if (data.access_token) {
-        // Supabase devolveu sessão: entra direto. Perfil inicial é visitante (docs/09).
-        saveSession(data);
-        onEnter(data.user || null);
-        return;
-      }
-      // Confirmação de e-mail ligada no Supabase: sem sessão até confirmar.
+      if (!resp.ok) throw new Error(data.detail || 'Não foi possível criar a conta.');
+      // A API responde igual para e-mail novo e já cadastrado, de propósito.
       trocarModo('entrar');
-      setAviso('Conta criada. Confirme o e-mail recebido e depois entre com suas credenciais. O acesso aos dados é liberado por um administrador.');
+      setAviso(data.mensagem || 'Verifique seu e-mail para confirmar a conta.');
     } catch (err) {
       setErro(err.message || 'Não foi possível criar a conta.');
     } finally {
@@ -104,9 +102,65 @@ export default function LoginScreen({ onEnter }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password: senha }),
       });
-      await concluirLogin(resp);
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || 'Não foi possível autenticar com os dados informados.');
+
+      if (data.codigo_enviado) {
+        // Segundo fator: a senha certa ainda não devolve sessão.
+        setEtapa('codigo');
+        setCodigo('');
+        setAviso(`Enviamos um código de verificação para ${data.email || email.trim()}.`);
+        return;
+      }
+
+      // Demonstração local (sem Supabase): entra direto, não há e-mail para o código.
+      saveSession(data);
+      onEnter(data.user || null);
     } catch (err) {
       setErro(err.message || 'Não foi possível autenticar.');
+    } finally {
+      setAcaoCarregando('');
+    }
+  }
+
+  async function handleCodigo(e) {
+    e.preventDefault();
+    setErro('');
+    const informado = codigo.replace(/\D/g, '');
+    if (informado.length < 6) {
+      setErro('Digite os 6 dígitos do código enviado por e-mail.');
+      return;
+    }
+
+    setAcaoCarregando('codigo');
+    try {
+      const resp = await fetch(`${API_BASE}/api/auth/verificar-codigo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), codigo: informado }),
+      });
+      await concluirLogin(resp);
+    } catch (err) {
+      setErro(err.message || 'Código inválido ou expirado.');
+    } finally {
+      setAcaoCarregando('');
+    }
+  }
+
+  async function reenviarCodigo() {
+    setErro('');
+    setAcaoCarregando('reenvio');
+    try {
+      const resp = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password: senha }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || 'Não foi possível reenviar o código.');
+      setAviso('Código reenviado. Verifique o e-mail.');
+    } catch (err) {
+      setErro(err.message || 'Não foi possível reenviar o código.');
     } finally {
       setAcaoCarregando('');
     }
@@ -134,48 +188,64 @@ export default function LoginScreen({ onEnter }) {
 
       <a className="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
       <main id="conteudo-principal" tabIndex={-1} className="login-main">
-        <section className="login-context" aria-labelledby="login-context-title">
-          <p className="login-eyebrow">Plataforma de trabalho municipal</p>
-          <h1 id="login-context-title">Inteligência operacional para a saúde pública</h1>
-          <p className="login-context__intro">
-            Acompanhe alertas, evidências e necessidades de insumos em um ambiente orientado à decisão. Cada recomendação identifica fonte, competência e limitações.
-          </p>
-
-          <dl className="login-institution">
-            <div>
-              <dt>Organização</dt>
-              <dd>Secretaria Municipal de Saúde</dd>
-            </div>
-            <div>
-              <dt>Escopo operacional</dt>
-              <dd>Vigilância epidemiológica, aquisições e planejamento</dd>
-            </div>
-            <div>
-              <dt>Rastreabilidade</dt>
-              <dd>Fontes, cálculos e competências visíveis na análise</dd>
-            </div>
-          </dl>
-
-          <div className="login-assurance">
-            <MIcon m="verified_user" size={19} />
-            <p>
-              O sistema diferencia dados observados, simulações e informações indisponíveis antes de apoiar uma decisão.
-            </p>
-          </div>
-        </section>
-
         <section className="login-access" aria-labelledby="login-access-title">
           <div className="login-access__heading">
             <p className="login-eyebrow">Acesso institucional</p>
-            <h2 id="login-access-title">{modo === 'criar' ? 'Criar conta de acesso' : 'Entrar no ambiente de trabalho'}</h2>
-            <p>{modo === 'criar' ? 'Novas contas entram como visitante até a liberação por um administrador.' : 'Use as credenciais fornecidas pela sua organização.'}</p>
+            <h2 id="login-access-title">
+              {etapa === 'codigo'
+                ? 'Verificação em duas etapas'
+                : modo === 'criar' ? 'Criar conta de acesso' : 'Entrar no SusPredict'}
+            </h2>
+            <p>
+              {etapa === 'codigo'
+                ? 'Digite o código de 6 dígitos que enviamos para o seu e-mail.'
+                : modo === 'criar'
+                  ? 'Novas contas entram como visitante até a liberação por um administrador.'
+                  : 'Acesse seu ambiente de análise em saúde pública.'}
+            </p>
           </div>
 
-          <div className="login-tabs" role="group" aria-label="Modo de acesso">
-            <button type="button" aria-pressed={modo === 'entrar'} className="login-tab" onClick={() => trocarModo('entrar')} disabled={carregando}>Entrar</button>
-            <button type="button" aria-pressed={modo === 'criar'} className="login-tab" onClick={() => trocarModo('criar')} disabled={carregando}>Criar conta</button>
-          </div>
+          {etapa === 'credenciais' && (
+            <div className="login-tabs" role="group" aria-label="Modo de acesso">
+              <button type="button" aria-pressed={modo === 'entrar'} className="login-tab" onClick={() => trocarModo('entrar')} disabled={carregando}>Entrar</button>
+              <button type="button" aria-pressed={modo === 'criar'} className="login-tab" onClick={() => trocarModo('criar')} disabled={carregando}>Criar conta</button>
+            </div>
+          )}
 
+          {etapa === 'codigo' ? (
+            <form onSubmit={handleCodigo} className="login-form" aria-busy={carregando}>
+              <div className="login-field">
+                <label htmlFor="login-codigo">Código de verificação</label>
+                <input
+                  id="login-codigo"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  value={codigo}
+                  onChange={e => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  className="login-input-codigo"
+                  disabled={carregando}
+                />
+              </div>
+
+              <button type="submit" disabled={carregando} className="login-submit touch-target">
+                {acaoCarregando === 'codigo' ? 'Verificando código…' : 'Confirmar e entrar'}
+              </button>
+
+              <div className="login-codigo-acoes">
+                <button type="button" className="login-link" onClick={() => trocarModo('entrar')} disabled={carregando}>
+                  Usar outro e-mail
+                </button>
+                <button type="button" className="login-link" onClick={reenviarCodigo} disabled={carregando}>
+                  {acaoCarregando === 'reenvio' ? 'Reenviando…' : 'Reenviar código'}
+                </button>
+              </div>
+            </form>
+          ) : (
           <form onSubmit={modo === 'criar' ? handleSignup : handleSubmit} className="login-form" aria-busy={carregando}>
             {modo === 'criar' && (
               <div className="login-field">
@@ -211,7 +281,7 @@ export default function LoginScreen({ onEnter }) {
               <label htmlFor="login-senha">Senha</label>
               <input
                 id="login-senha"
-                minLength={modo === 'criar' ? 6 : undefined}
+                minLength={modo === 'criar' ? 8 : undefined}
                 aria-describedby={modo === 'criar' ? 'signup-privacy' : undefined}
                 type="password"
                 required
@@ -238,7 +308,7 @@ export default function LoginScreen({ onEnter }) {
             )}
 
             {modo === 'criar' && <p id="signup-privacy" className="form-privacy">
-              Use ao menos 6 caracteres na senha. Nome e e-mail identificam sua conta e seu acesso institucional.
+              Use ao menos 8 caracteres na senha. Nome e e-mail identificam sua conta e seu acesso institucional.
               Consulte os <a href="/termos" target="_blank" rel="noopener noreferrer">termos de uso (nova aba)</a> e a <a href="/privacidade" target="_blank" rel="noopener noreferrer">política de privacidade (nova aba)</a> antes de criar a conta.
             </p>}
             <button type="submit" disabled={carregando} className="login-submit touch-target">
@@ -247,6 +317,7 @@ export default function LoginScreen({ onEnter }) {
                 : (acaoCarregando === 'login' ? 'Verificando credenciais…' : 'Entrar com credenciais')}
             </button>
           </form>
+          )}
 
           {aviso && (
             <div className="login-feedback login-feedback--ok" role="status" aria-live="polite">
@@ -262,35 +333,32 @@ export default function LoginScreen({ onEnter }) {
             </div>
           )}
 
-          <div className="login-demo">
-            <div className="login-demo__copy">
-              <div>
-                <span className="login-demo__badge">Ambiente de demonstração</span>
-                <h3>Explorar sem credenciais institucionais</h3>
-              </div>
-              <p>Acesso local de demonstração, quando habilitado. Os painéis consultam as mesmas fontes de dados; esta entrada não cria estoques ou preços fictícios.</p>
+          {etapa === 'credenciais' && (
+            <div className="login-demo">
+              <p className="login-demo__description">Conheça a plataforma sem uma conta institucional.</p>
+              <button
+                type="button"
+                onClick={loginDemonstracao}
+                disabled={carregando}
+                className="login-demo__button touch-target"
+              >
+                {acaoCarregando === 'demo' ? 'Preparando demonstração…' : 'Acessar demonstração'}
+                <MIcon m="arrow_forward" size={17} />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={loginDemonstracao}
-              disabled={carregando}
-              className="login-demo__button touch-target"
-            >
-              {acaoCarregando === 'demo' ? 'Preparando demonstração…' : 'Acessar demonstração'}
-              <MIcon m="arrow_forward" size={17} />
-            </button>
-          </div>
+          )}
 
-          <p className="login-access__footer">
-            Acesso restrito. As ações realizadas no ambiente institucional devem seguir os fluxos de revisão e aprovação do município.
-          </p>
+          <p className="login-access__footer">A demonstração depende de habilitação neste ambiente.</p>
+          <details className="login-useful-links">
+            <summary>Links úteis</summary>
+            <LegalLinks />
+          </details>
         </section>
       </main>
 
       <footer className="login-footer">
         <span>Projeto acadêmico FIAP 2026</span>
         <span>Fontes públicas DATASUS</span>
-        <LegalLinks />
       </footer>
     </div>
   );

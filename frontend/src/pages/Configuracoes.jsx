@@ -1,4 +1,5 @@
 import { Card } from '../shared/ui.jsx';
+import { LegalLinks } from './Legal.jsx';
 import AdminUsuarios from './AdminUsuarios.jsx';
 
 // ─── Page: Configurações ───────────────────────────────────────────────────────
@@ -79,6 +80,11 @@ export default function PageConfiguracoes({ municipio, authUser }) {
           </div>
         </Card>
       </div>
+      <section className="settings-useful-links" aria-labelledby="useful-links-title">
+        <h2 id="useful-links-title">Links úteis</h2>
+        <p>Consulte as condições de uso, a privacidade e os dados salvos neste dispositivo.</p>
+        <LegalLinks />
+      </section>
     </div>
   );
 }

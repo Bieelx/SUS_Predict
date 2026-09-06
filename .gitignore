@@ -111,6 +111,8 @@ docs/superpowers/specs/
 frontend/tests/*
 !frontend/tests/beta-interface.spec.js
 !frontend/tests/auditoria-interface.spec.js
+!frontend/tests/mobile-interface.spec.js
+!frontend/tests/mobile-rework.spec.js
 
 # estado dos hooks do plugin ruflo (regravado a cada comando)
 .claude-flow/

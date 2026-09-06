@@ -57,19 +57,22 @@ export function FonteReal({ meta, detalhe }) {
   if (!meta) return null;
   const data = dataBr(meta.data_referencia);
   return (
-    <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--ink-500)', marginBottom: 18 }}>
+    <>
+    <details className="source-mobile"><summary>Fonte e período <span>{data}</span></summary><div><p>Fonte: {meta.fonte}</p><p>Atualização da fonte: {data}</p>{detalhe && <p>{detalhe}</p>}{meta.tabelas?.length > 0 && <><strong>Tabelas de origem</strong><ul>{meta.tabelas.map(tabela => <li key={tabela}>{tabela}</li>)}</ul></>}</div></details>
+    <div className="source-desktop" role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--ink-500)', marginBottom: 18 }}>
       <span>Fonte: {meta.fonte}</span>
       <span aria-hidden="true">·</span>
       <span>Atualização da fonte: {data}</span>
       {detalhe && <><span aria-hidden="true">·</span><span>{detalhe}</span></>}
       {meta.tabelas?.length > 0 && <details style={{ flexBasis: '100%' }}><summary style={{ cursor: 'pointer' }}>Ver tabelas de origem</summary><ul style={{ paddingLeft: 18, overflowWrap: 'anywhere' }}>{meta.tabelas.map(tabela => <li key={tabela}>{tabela}</li>)}</ul></details>}
     </div>
+    </>
   );
 }
 
 export function SeletorPeriodo({ value, onChange, carregando }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+    <label className="period-select" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <span className="eyebrow">Período</span>
       <select value={value} onChange={event => onChange(event.target.value)} disabled={carregando} style={select}>
         {PERIODOS_REAIS.map(periodo => <option key={periodo} value={periodo}>{periodo.toLocaleLowerCase('pt-BR').replace(/^./, letra => letra.toUpperCase())}</option>)}
@@ -80,9 +83,9 @@ export function SeletorPeriodo({ value, onChange, carregando }) {
 
 export function Kpi({ rotulo, valor, detalhe, tom = 'var(--primary)' }) {
   return (
-    <Card className="p-5">
+    <Card className="p-5 metric-card">
       <p className="eyebrow" style={{ marginBottom: 9 }}>{rotulo}</p>
-      <p style={{ fontFamily: 'JetBrains Mono, monospace', color: tom, fontSize: 27, fontWeight: 800, margin: 0 }}>{valor}</p>
+      <p style={{ fontFamily: 'JetBrains Mono, monospace', color: tom, fontSize: 27, fontWeight: 800, margin: 0 }}>{typeof valor === 'string' && valor.startsWith('R$') ? <><span className="metric-currency">R$ </span><span className="metric-amount">{valor.slice(2).trimStart()}</span></> : valor}</p>
       {detalhe && <p style={{ color: 'var(--ink-400)', fontSize: 11.5, lineHeight: 1.45, margin: '7px 0 0' }}>{detalhe}</p>}
     </Card>
   );
