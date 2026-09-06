@@ -20,17 +20,14 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>Seu Link Mágico para Acesso</h1>
+      <h1>Seu código de acesso</h1>
     </div>
     <div class="content">
-      <p>Use o botão abaixo para entrar na sua conta com segurança, sem precisar de senha.</p>
-      <a href="{{ .ConfirmationURL }}" class="button">Fazer Login Agora</a>
-      
-      <p>Ou, se preferir, use este código de acesso (OTP):</p>
+      <p>Digite este código na tela de login do SusPredict para concluir o acesso:</p>
       <div class="token-box">{{ .Token }}</div>
     </div>
     <div class="footer">
-      <p>Este link é válido por um curto período de tempo. Se você não solicitou este acesso, ignore este e-mail.</p>
+      <p>O código vale por pouco tempo e só pode ser usado uma vez. Nunca compartilhe este código com ninguém. Se você não tentou entrar, ignore este e-mail e troque a sua senha.</p>
     </div>
   </div>
 </body>

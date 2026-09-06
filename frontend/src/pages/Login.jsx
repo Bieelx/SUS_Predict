@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LogoIcon, API_BASE, MIcon, THEMES } from '../shared/ui.jsx';
+import './login.css';
 import { LegalLinks } from './Legal.jsx';
 import { saveSession } from '../shared/auth.js';
 
@@ -16,6 +17,7 @@ export default function LoginScreen({ onEnter }) {
   const [aviso, setAviso] = useState('');
   const [etapa, setEtapa] = useState('credenciais'); // 'credenciais' | 'codigo'
   const [codigo, setCodigo] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
 
   async function concluirLogin(resp) {
     const data = await resp.json().catch(() => ({}));
@@ -168,52 +170,56 @@ export default function LoginScreen({ onEnter }) {
 
   const carregando = !!acaoCarregando;
   const temaLogin = THEMES.teal.vars;
+  const tipoSenha = mostrarSenha ? 'text' : 'password';
+
+  const titulo = etapa === 'codigo'
+    ? 'Confirme o código'
+    : modo === 'criar' ? 'Criar sua conta' : 'Entrar no SusPredict';
+  const subtitulo = etapa === 'codigo'
+    ? 'Digite os 6 dígitos que enviamos para o seu e-mail.'
+    : modo === 'criar'
+      ? 'Novas contas entram como visitante até a liberação por um administrador.'
+      : 'Use o e-mail institucional da sua secretaria.';
 
   return (
     <div className="login-page" style={temaLogin}>
-      <header className="login-masthead">
-        <div className="login-masthead__brand">
-          <LogoIcon size={56} />
-          <div>
-            <p className="login-masthead__name">SusPredict</p>
-            <p className="login-masthead__descriptor">Inteligência municipal em saúde</p>
-          </div>
-        </div>
-        <div className="login-masthead__meta">
-          <span>Dados públicos</span>
-          <span aria-hidden="true">·</span>
-          <span>Decisão auditável</span>
-        </div>
-      </header>
-
       <a className="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
+
+      <aside className="login-brand" aria-label="Sobre o SusPredict">
+        <div className="login-brand__mark">
+          <span className="login-brand__logo"><LogoIcon size={30} /></span>
+          <span>SusPredict</span>
+        </div>
+
+        <div className="login-brand__copy">
+          <h1>Prever antes de reagir.</h1>
+          <p>Séries do DATASUS, previsões e alertas reunidos para a gestão municipal saber onde agir hoje.</p>
+        </div>
+
+        <PrevisaoIlustrativa />
+
+        <div className="login-brand__foot">
+          <span>Projeto acadêmico FIAP 2026</span>
+          <span>Fontes públicas DATASUS</span>
+        </div>
+      </aside>
+
       <main id="conteudo-principal" tabIndex={-1} className="login-main">
         <section className="login-access" aria-labelledby="login-access-title">
           <div className="login-access__heading">
-            <p className="login-eyebrow">Acesso institucional</p>
-            <h2 id="login-access-title">
-              {etapa === 'codigo'
-                ? 'Verificação em duas etapas'
-                : modo === 'criar' ? 'Criar conta de acesso' : 'Entrar no SusPredict'}
-            </h2>
-            <p>
-              {etapa === 'codigo'
-                ? 'Digite o código de 6 dígitos que enviamos para o seu e-mail.'
-                : modo === 'criar'
-                  ? 'Novas contas entram como visitante até a liberação por um administrador.'
-                  : 'Acesse seu ambiente de análise em saúde pública.'}
-            </p>
+            <h2 id="login-access-title">{titulo}</h2>
+            <p>{subtitulo}</p>
           </div>
 
           {etapa === 'credenciais' && (
-            <div className="login-tabs" role="group" aria-label="Modo de acesso">
+            <div className="login-tabs" role="group" aria-label="Modo de acesso" data-modo={modo}>
               <button type="button" aria-pressed={modo === 'entrar'} className="login-tab" onClick={() => trocarModo('entrar')} disabled={carregando}>Entrar</button>
               <button type="button" aria-pressed={modo === 'criar'} className="login-tab" onClick={() => trocarModo('criar')} disabled={carregando}>Criar conta</button>
             </div>
           )}
 
           {etapa === 'codigo' ? (
-            <form onSubmit={handleCodigo} className="login-form" aria-busy={carregando}>
+            <form key="codigo" onSubmit={handleCodigo} className="login-form login-step" aria-busy={carregando}>
               <div className="login-field">
                 <label htmlFor="login-codigo">Código de verificação</label>
                 <input
@@ -226,14 +232,14 @@ export default function LoginScreen({ onEnter }) {
                   autoFocus
                   value={codigo}
                   onChange={e => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
+                  placeholder="······"
                   className="login-input-codigo"
                   disabled={carregando}
                 />
               </div>
 
               <button type="submit" disabled={carregando} className="login-submit touch-target">
-                {acaoCarregando === 'codigo' ? 'Verificando código…' : 'Confirmar e entrar'}
+                {acaoCarregando === 'codigo' ? 'Verificando…' : 'Confirmar e entrar'}
               </button>
 
               <div className="login-codigo-acoes">
@@ -246,10 +252,10 @@ export default function LoginScreen({ onEnter }) {
               </div>
             </form>
           ) : (
-          <form onSubmit={modo === 'criar' ? handleSignup : handleSubmit} className="login-form" aria-busy={carregando}>
+          <form key={modo} onSubmit={modo === 'criar' ? handleSignup : handleSubmit} className="login-form login-step" aria-busy={carregando}>
             {modo === 'criar' && (
               <div className="login-field">
-                <label htmlFor="login-nome">Nome de identificação</label>
+                <label htmlFor="login-nome">Nome</label>
                 <input
                   id="login-nome"
                   type="text"
@@ -279,17 +285,30 @@ export default function LoginScreen({ onEnter }) {
 
             <div className="login-field">
               <label htmlFor="login-senha">Senha</label>
-              <input
-                id="login-senha"
-                minLength={modo === 'criar' ? 8 : undefined}
-                aria-describedby={modo === 'criar' ? 'signup-privacy' : undefined}
-                type="password"
-                required
-                autoComplete={modo === 'criar' ? 'new-password' : 'current-password'}
-                value={senha}
-                onChange={e => setSenha(e.target.value)}
-                disabled={carregando}
-              />
+              <div className="login-password">
+                <input
+                  id="login-senha"
+                  minLength={modo === 'criar' ? 8 : undefined}
+                  aria-describedby={modo === 'criar' ? 'signup-privacy' : undefined}
+                  type={tipoSenha}
+                  required
+                  autoComplete={modo === 'criar' ? 'new-password' : 'current-password'}
+                  value={senha}
+                  onChange={e => setSenha(e.target.value)}
+                  placeholder={modo === 'criar' ? 'Mínimo de 8 caracteres' : undefined}
+                  disabled={carregando}
+                />
+                <button
+                  type="button"
+                  className="login-password__toggle"
+                  onClick={() => setMostrarSenha(v => !v)}
+                  aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  aria-pressed={mostrarSenha}
+                  disabled={carregando}
+                >
+                  <MIcon m={mostrarSenha ? 'visibility_off' : 'visibility'} size={20} />
+                </button>
+              </div>
             </div>
 
             {modo === 'criar' && (
@@ -297,7 +316,7 @@ export default function LoginScreen({ onEnter }) {
                 <label htmlFor="login-confirma">Confirmar senha</label>
                 <input
                   id="login-confirma"
-                  type="password"
+                  type={tipoSenha}
                   required
                   autoComplete="new-password"
                   value={confirmaSenha}
@@ -308,13 +327,13 @@ export default function LoginScreen({ onEnter }) {
             )}
 
             {modo === 'criar' && <p id="signup-privacy" className="form-privacy">
-              Use ao menos 8 caracteres na senha. Nome e e-mail identificam sua conta e seu acesso institucional.
-              Consulte os <a href="/termos" target="_blank" rel="noopener noreferrer">termos de uso (nova aba)</a> e a <a href="/privacidade" target="_blank" rel="noopener noreferrer">política de privacidade (nova aba)</a> antes de criar a conta.
+              Nome e e-mail identificam sua conta e seu acesso institucional.
+              Ao criar a conta você concorda com os <a href="/termos" target="_blank" rel="noopener noreferrer">termos de uso (nova aba)</a> e a <a href="/privacidade" target="_blank" rel="noopener noreferrer">política de privacidade (nova aba)</a>.
             </p>}
             <button type="submit" disabled={carregando} className="login-submit touch-target">
               {modo === 'criar'
                 ? (acaoCarregando === 'signup' ? 'Criando conta…' : 'Criar conta')
-                : (acaoCarregando === 'login' ? 'Verificando credenciais…' : 'Entrar com credenciais')}
+                : (acaoCarregando === 'login' ? 'Verificando…' : 'Entrar')}
             </button>
           </form>
           )}
@@ -334,8 +353,8 @@ export default function LoginScreen({ onEnter }) {
           )}
 
           {etapa === 'credenciais' && (
-            <div className="login-demo">
-              <p className="login-demo__description">Conheça a plataforma sem uma conta institucional.</p>
+            <>
+              <p className="login-demo">ou conheça a plataforma sem conta</p>
               <button
                 type="button"
                 onClick={loginDemonstracao}
@@ -343,23 +362,37 @@ export default function LoginScreen({ onEnter }) {
                 className="login-demo__button touch-target"
               >
                 {acaoCarregando === 'demo' ? 'Preparando demonstração…' : 'Acessar demonstração'}
-                <MIcon m="arrow_forward" size={17} />
+                <MIcon m="arrow_forward" size={18} />
               </button>
-            </div>
+              <p className="login-access__footer">A demonstração depende de habilitação neste ambiente.</p>
+            </>
           )}
 
-          <p className="login-access__footer">A demonstração depende de habilitação neste ambiente.</p>
           <details className="login-useful-links">
             <summary>Links úteis</summary>
             <LegalLinks />
           </details>
         </section>
       </main>
-
-      <footer className="login-footer">
-        <span>Projeto acadêmico FIAP 2026</span>
-        <span>Fontes públicas DATASUS</span>
-      </footer>
     </div>
+  );
+}
+
+// Curva ilustrativa: observado em traço contínuo, previsão tracejada com faixa
+// de confiança. Estática e decorativa; a animação de desenho vive no CSS.
+function PrevisaoIlustrativa() {
+  return (
+    <svg className="login-chart" viewBox="0 0 520 220" role="img" aria-label="Ilustração de uma série temporal com previsão">
+      {[40, 90, 140, 190].map(y => <line key={y} className="login-chart__grid" x1="0" x2="520" y1={y} y2={y} />)}
+      <line className="login-chart__grid" x1="372" x2="372" y1="20" y2="200" strokeDasharray="3 5" />
+      <path className="login-chart__band" d="M372 96 C400 90 430 80 460 74 L505 66 L505 110 L460 104 C430 100 400 100 372 96 Z" />
+      <path className="login-chart__real" pathLength="1"
+        d="M15 168 C45 165 60 150 85 152 S130 172 150 160 S185 118 210 126 S245 150 265 142 S300 106 320 96 S350 92 372 96" />
+      <path className="login-chart__prev" pathLength="1" d="M372 96 C400 94 430 88 460 84 L505 78" />
+      <circle className="login-chart__dot--halo" cx="372" cy="96" r="5" />
+      <circle className="login-chart__dot" cx="372" cy="96" r="5" />
+      <text className="login-chart__label" x="15" y="208">observado</text>
+      <text className="login-chart__label login-chart__label--prev" x="380" y="208">previsto</text>
+    </svg>
   );
 }

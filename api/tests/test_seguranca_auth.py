@@ -206,3 +206,49 @@ def test_cabecalhos_de_seguranca_em_toda_resposta(cliente):
     assert cabecalhos["Referrer-Policy"] == "no-referrer"
     assert "max-age=" in cabecalhos["Strict-Transport-Security"]
     assert "frame-ancestors 'none'" in cabecalhos["Content-Security-Policy"]
+
+
+# ── Verificação do código: tipo do GoTrue e mensagem de erro ──────────────────
+
+def test_verify_tenta_outro_tipo_quando_o_primeiro_falha(monkeypatch):
+    tentativas = []
+
+    def gotrue(path, body, token=None):
+        tentativas.append(body["type"])
+        if body["type"] != "magiclink":
+            raise HTTPException(403, "Token has expired or is invalid")
+        return SESSAO_GOTRUE
+
+    monkeypatch.setattr(auth_core, "_supabase_configurado", lambda: True)
+    monkeypatch.setattr(auth_core, "_gotrue_request", gotrue)
+
+    assert auth_core.verificar_codigo_email("marcia@saude.gov.br", "533058") == SESSAO_GOTRUE
+    assert tentativas[0] == "email", "o tipo mais comum deve ser tentado primeiro"
+    assert "magiclink" in tentativas
+
+
+def test_verify_falha_com_mensagem_util(monkeypatch):
+    def sempre_falha(path, body, token=None):
+        raise HTTPException(403, "Token has expired or is invalid")
+
+    monkeypatch.setattr(auth_core, "_supabase_configurado", lambda: True)
+    monkeypatch.setattr(auth_core, "_gotrue_request", sempre_falha)
+
+    with pytest.raises(HTTPException) as exc:
+        auth_core.verificar_codigo_email("marcia@saude.gov.br", "000000")
+
+    assert exc.value.status_code == 400
+    assert "mais recente" in exc.value.detail
+
+
+def test_email_do_codigo_nao_tem_link_clicavel():
+    """Link de auto-login num e-mail de 2FA é anulado por scanner (Outlook/Defender)
+    abre o link, gasta o código de uso único — e ainda derruba o segundo fator."""
+
+    from pathlib import Path
+    template = Path(__file__).resolve().parents[2] / "supabase_emails" / "magic_link.html"
+    corpo = template.read_text(encoding="utf-8")
+
+    assert "{{ .Token }}" in corpo
+    assert "{{ .ConfirmationURL }}" not in corpo
+    assert "<a href" not in corpo

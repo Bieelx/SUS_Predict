@@ -21,7 +21,7 @@
   .app-page-content .period-select { flex-direction: row !important; align-items: center; justify-content: space-between; width: 100%; gap: 12px !important; }
   .app-page-content input:not([type="checkbox"]):not([type="radio"]),
   .app-page-content select, .app-page-content textarea,
-  .login-access input, .susbot-composer textarea {
+  .login-access input:not(.login-input-codigo), .susbot-composer textarea {
     font-size: 16px !important; min-height: 44px; max-width: 100%; min-width: 0;
   }
   .app-page-content button { min-height: 44px; }

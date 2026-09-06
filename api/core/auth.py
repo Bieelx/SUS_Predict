@@ -17,6 +17,8 @@ import time
 
 from fastapi import Header, HTTPException
 
+log = logging.getLogger("sus_predict.auth")
+
 
 def _sb_url() -> str:
     url = os.getenv("SUPABASE_URL", "").strip()
@@ -184,12 +186,35 @@ def enviar_codigo_email(email: str) -> None:
     _gotrue_request("otp", {"email": email, "create_user": False})
 
 
+# O GoTrue guarda o código em colunas diferentes conforme quem o gerou: `/otp` para
+# usuário existente grava como magiclink, cadastro novo grava como signup. Verificar com
+# o tipo errado devolve "Token has expired or is invalid" mesmo com o código certo, então
+# tentamos os tipos em ordem em vez de fixar um.
+TIPOS_VERIFICACAO = ("email", "magiclink", "signup")
+
+
 def verificar_codigo_email(email: str, codigo: str) -> dict:
     """Troca o código de 6 dígitos pela sessão real (GoTrue `POST /auth/v1/verify`)."""
 
     if not _supabase_configurado():
         raise HTTPException(503, "Supabase Auth não configurado")
-    return _gotrue_request("verify", {"email": email, "token": codigo, "type": "email"})
+
+    ultimo_erro: HTTPException | None = None
+    for tipo in TIPOS_VERIFICACAO:
+        try:
+            return _gotrue_request("verify", {"email": email, "token": codigo, "type": tipo})
+        except HTTPException as exc:
+            ultimo_erro = exc
+            continue
+
+    # Mensagem própria: a do GoTrue ("Token has expired or is invalid") não ajuda quem
+    # acabou de receber o código e não sabe que pedir outro invalida o anterior.
+    log.info("verificação de código falhou para %s: %s", email, getattr(ultimo_erro, "detail", ""))
+    raise HTTPException(
+        400,
+        "Código inválido ou expirado. Vale o código do e-mail mais recente, uma vez só. "
+        "Peça um novo código se precisar.",
+    )
 
 
 # Campos que o frontend realmente lê do usuário (App.jsx, Perfil.jsx). Tudo que o

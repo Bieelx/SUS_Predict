@@ -58,20 +58,33 @@ de entrada: o login devolve a sessão direto, sem segunda etapa.
 
 ## Configuração obrigatória no Supabase
 
-O GoTrue manda **magic link** por padrão. Para o e-mail trazer o código de 6 dígitos,
-o template precisa conter `{{ .Token }}`.
+O template precisa conter `{{ .Token }}` e **não pode conter link clicável**. Cole
+[`supabase_emails/magic_link.html`](../supabase_emails/magic_link.html) em
+**Authentication → Emails → Magic Link**.
 
-O repositório já tem os templates prontos em `supabase_emails/` — o de login em duas
-etapas é [`supabase_emails/magic_link.html`](../supabase_emails/magic_link.html), que
-mostra o botão de link **e** o código na `token-box`. Cole o conteúdo dele no painel:
+### Por que o link foi removido (06/09/2026)
 
-**Authentication → Emails → Magic Link**
+O template original trazia um botão `{{ .ConfirmationURL }}` junto do código. Resultado:
+o código chegava certo e a tela recusava com *"Token has expired or is invalid"*.
 
-Sem um template com `{{ .Token }}` o usuário recebe só o link e a segunda etapa trava.
+Causa: o token do GoTrue é de **uso único**, e o link e o código são o mesmo token.
+Filtros de segurança de e-mail — Microsoft Defender / Safe Links no Outlook, entre outros
+— **abrem os links da mensagem para escanear**, antes de a pessoa ler. Esse acesso
+consome o token. Quando a pessoa digita os 6 dígitos, já foram gastos.
 
-Confira também, em **Authentication → Providers → Email**: "Confirm email" ligado, e o
-limite de envio (o SMTP embutido do Supabase é limitado — para a banca, dá; para volume
-real, configure um SMTP próprio).
+Além do bug, um link de login automático dentro de um e-mail de segundo fator anula o
+próprio segundo fator: quem conseguir ler ou receber a mensagem encaminhada entra sem a
+senha. E-mail de 2FA leva código, nunca link.
+
+### Tipo de verificação
+
+`verificar_codigo_email` tenta `email`, depois `magiclink`, depois `signup`. O GoTrue
+guarda o código em colunas distintas conforme quem o gerou, e o tipo errado devolve
+exatamente a mesma mensagem de token inválido. Tentar em ordem elimina a adivinhação; o
+caminho comum (`email`) resolve na primeira chamada.
+
+Quando todos falham, a API responde com uma mensagem que explica o que fazer, em vez de
+repassar o texto do GoTrue: vale o código do e-mail mais recente, uma vez só.
 
 ---
 
