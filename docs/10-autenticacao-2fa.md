@@ -33,7 +33,7 @@ pela tela de administração de usuários.
 
 ```
 1. e-mail + senha   → POST /api/auth/login            → { "codigo_enviado": true }
-2. código (6 díg.)  → POST /api/auth/verificar-codigo → { access_token, refresh_token, user }
+2. código do e-mail → POST /api/auth/verificar-codigo → { access_token, refresh_token, user }
 ```
 
 **A senha correta não devolve sessão.** O backend valida a senha no GoTrue, descarta a
@@ -62,19 +62,38 @@ O template precisa conter `{{ .Token }}` e **não pode conter link clicável**. 
 [`supabase_emails/magic_link.html`](../supabase_emails/magic_link.html) em
 **Authentication → Emails → Magic Link**.
 
-### Por que o link foi removido (06/09/2026)
+### Tamanho do código — a causa do "Token has expired or is invalid"
 
-O template original trazia um botão `{{ .ConfirmationURL }}` junto do código. Resultado:
-o código chegava certo e a tela recusava com *"Token has expired or is invalid"*.
+**O código do Supabase não tem 6 dígitos necessariamente.** O tamanho vem de
+**Authentication → Providers → Email → OTP length**, entre 6 e 10. Este projeto está
+configurado com **8**.
 
-Causa: o token do GoTrue é de **uso único**, e o link e o código são o mesmo token.
-Filtros de segurança de e-mail — Microsoft Defender / Safe Links no Outlook, entre outros
-— **abrem os links da mensagem para escanear**, antes de a pessoa ler. Esse acesso
-consome o token. Quando a pessoa digita os 6 dígitos, já foram gastos.
+A tela limitava o campo a 6 dígitos e truncava silenciosamente. O usuário recebia um
+código de 8, digitava, e o Supabase recusava um código correto como inválido.
 
-Além do bug, um link de login automático dentro de um e-mail de segundo fator anula o
-próprio segundo fator: quem conseguir ler ou receber a mensagem encaminhada entra sem a
-senha. E-mail de 2FA leva código, nunca link.
+Comprovado contra o projeto real, via `POST /auth/v1/admin/generate_link`:
+
+| Enviado ao `/verify` | Resultado |
+|---|---|
+| Código truncado em 6 dígitos | `403 otp_expired` — "Token has expired or is invalid" |
+| Código completo de 8 dígitos | Sessão emitida |
+
+Correção: `CODIGO_MIN`/`CODIGO_MAX` em `frontend/src/pages/Login.jsx` aceitam de 6 a 10
+dígitos, e nenhum texto da interface promete um número fixo. Guardado por
+`frontend/src/pages/login.codigo.test.js`.
+
+Se o grupo quiser códigos de 6 dígitos, é só mudar o OTP length no painel — o código
+funciona com qualquer tamanho na faixa.
+
+### Link removido do e-mail (06/09/2026)
+
+Não era a causa do erro acima, mas foi corrigido junto por ser problema de segurança
+próprio: o template trazia um botão `{{ .ConfirmationURL }}` que faz login direto.
+
+Um link de login automático dentro de um e-mail de segundo fator anula o próprio segundo
+fator — quem ler a caixa de entrada ou receber a mensagem encaminhada entra sem a senha.
+Além disso, filtros que abrem links para escanear (Defender/Safe Links) podem consumir o
+token de uso único antes da pessoa. E-mail de 2FA leva código, nunca link.
 
 ### Tipo de verificação
 

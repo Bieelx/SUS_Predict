@@ -409,7 +409,7 @@ def auth_login(req: AuthRequest, request: Request):
 
 @app.post("/api/auth/verificar-codigo")
 def auth_verificar_codigo(req: CodigoRequest, request: Request):
-    """Segundo fator: troca o código de 6 dígitos recebido por e-mail pela sessão."""
+    """Segundo fator: troca o código recebido por e-mail pela sessão."""
 
     limitar("verificar-codigo", identidade_requisicao(request), limite=10)
     sessao = auth_core.verificar_codigo_email(req.email, req.codigo.strip())

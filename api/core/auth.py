@@ -177,7 +177,7 @@ def enviar_codigo_email(email: str) -> None:
     cadastro não vira usuário por tentar entrar. Não devolve nada — a resposta ao
     navegador é sempre a mesma, exista ou não o e-mail.
 
-    O e-mail sai com o código de 6 dígitos apenas se o template "Magic Link" do
+    O e-mail sai com o código apenas se o template "Magic Link" do
     projeto usar `{{ .Token }}`. Ver docs/10-autenticacao-2fa.md.
     """
 
@@ -194,7 +194,11 @@ TIPOS_VERIFICACAO = ("email", "magiclink", "signup")
 
 
 def verificar_codigo_email(email: str, codigo: str) -> dict:
-    """Troca o código de 6 dígitos pela sessão real (GoTrue `POST /auth/v1/verify`)."""
+    """Troca o código do e-mail pela sessão real (GoTrue `POST /auth/v1/verify`).
+
+    O tamanho do código vem da configuração do projeto (6 a 10 dígitos); nada aqui
+    depende dele.
+    """
 
     if not _supabase_configurado():
         raise HTTPException(503, "Supabase Auth não configurado")

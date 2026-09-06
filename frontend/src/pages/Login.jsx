@@ -6,6 +6,12 @@ import { saveSession } from '../shared/auth.js';
 
 // O acesso institucional usa autenticação real. A entrada de demonstração usa
 // uma sessão isolada emitida pelo backend quando SUS_PREDICT_DEV_AUTH está ativo.
+// O Supabase emite o código com o tamanho configurado no projeto (Authentication →
+// Providers → Email → OTP length), entre 6 e 10 dígitos. Fixar 6 aqui truncava um código
+// de 8 e o backend recusava um código correto como inválido.
+const CODIGO_MIN = 6;
+const CODIGO_MAX = 10;
+
 export default function LoginScreen({ onEnter }) {
   const [erro, setErro] = useState('');
   const [email, setEmail] = useState('');
@@ -129,8 +135,8 @@ export default function LoginScreen({ onEnter }) {
     e.preventDefault();
     setErro('');
     const informado = codigo.replace(/\D/g, '');
-    if (informado.length < 6) {
-      setErro('Digite os 6 dígitos do código enviado por e-mail.');
+    if (informado.length < CODIGO_MIN) {
+      setErro('Digite o código completo que enviamos por e-mail.');
       return;
     }
 
@@ -176,7 +182,7 @@ export default function LoginScreen({ onEnter }) {
     ? 'Confirme o código'
     : modo === 'criar' ? 'Criar sua conta' : 'Entrar no SusPredict';
   const subtitulo = etapa === 'codigo'
-    ? 'Digite os 6 dígitos que enviamos para o seu e-mail.'
+    ? 'Digite o código que enviamos para o seu e-mail.'
     : modo === 'criar'
       ? 'Novas contas entram como visitante até a liberação por um administrador.'
       : 'Use o e-mail institucional da sua secretaria.';
@@ -227,11 +233,11 @@ export default function LoginScreen({ onEnter }) {
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  maxLength={6}
+                  maxLength={CODIGO_MAX}
                   required
                   autoFocus
                   value={codigo}
-                  onChange={e => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={e => setCodigo(e.target.value.replace(/\D/g, '').slice(0, CODIGO_MAX))}
                   placeholder="······"
                   className="login-input-codigo"
                   disabled={carregando}
