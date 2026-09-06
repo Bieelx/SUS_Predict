@@ -1,1510 +1,986 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react';
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  ComposedChart, Legend,
+} from 'recharts';
 
-const API = 'http://localhost:8000'
+// ─── Mock data ──────────────────────────────────────────────────────────────
 
-const NAV_ITEMS = [
-  { key: 'overview', label: 'Visão Geral', icon: '🏠' },
-  { key: 'download', label: 'Baixar Dados', icon: '⬇️' },
-  { key: 'mapa', label: 'Mapa de Risco', icon: '🗺️' },
-  { key: 'superlotacao', label: 'Superlotação', icon: '🏥' },
-  { key: 'insumos', label: 'Ruptura de Insumos', icon: '💊' },
-  { key: 'financeiro', label: 'Pressão Financeira', icon: '💰' },
-  { key: 'alertas', label: 'Alertas', icon: '🔔' },
-  { key: 'config', label: 'Configurações', icon: '⚙️' },
-]
+const DENGUE_COMBINED = [
+  { mes: 'Jan/22', real: 180 }, { mes: 'Fev/22', real: 320 }, { mes: 'Mar/22', real: 410 },
+  { mes: 'Abr/22', real: 290 }, { mes: 'Mai/22', real: 140 }, { mes: 'Jun/22', real: 60 },
+  { mes: 'Jul/22', real: 30 },  { mes: 'Ago/22', real: 28 },  { mes: 'Set/22', real: 45 },
+  { mes: 'Out/22', real: 80 },  { mes: 'Nov/22', real: 130 }, { mes: 'Dez/22', real: 200 },
+  { mes: 'Jan/23', real: 240 }, { mes: 'Fev/23', real: 380 }, { mes: 'Mar/23', real: 460 },
+  { mes: 'Abr/23', real: 310 }, { mes: 'Mai/23', real: 160 }, { mes: 'Jun/23', real: 70 },
+  { mes: 'Jul/23', real: 35 },  { mes: 'Ago/23', real: 32 },  { mes: 'Set/23', real: 55 },
+  { mes: 'Out/23', real: 95 },  { mes: 'Nov/23', real: 150 }, { mes: 'Dez/23', real: 230 },
+  { mes: 'Jan/24', real: 290 }, { mes: 'Fev/24', real: 440 }, { mes: 'Mar/24', real: 510 },
+  { mes: 'Abr/24', real: 340 }, { mes: 'Mai/24', real: 185 }, { mes: 'Jun/24', real: 80 },
+  { mes: 'Jul/24', real: 40 },  { mes: 'Ago/24', real: 38 },  { mes: 'Set/24', real: 62 },
+  { mes: 'Out/24', real: 105 }, { mes: 'Nov/24', real: 175 }, { mes: 'Dez/24', real: 265 },
+  { mes: 'Jan/25', real: 310 }, { mes: 'Fev/25', real: 480 }, { mes: 'Mar/25', real: 560 },
+  { mes: 'Abr/25', real: 380 }, { mes: 'Mai/25', real: 200 }, { mes: 'Jun/25', real: 88 },
+  { mes: 'Jul/25', real: 44 },  { mes: 'Ago/25', real: 42 },  { mes: 'Set/25', real: 68 },
+  { mes: 'Out/25', real: 115 }, { mes: 'Nov/25', real: 190 }, { mes: 'Dez/25', real: 280 },
+  // previsão
+  { mes: 'Jan/26', prev: 340 }, { mes: 'Fev/26', prev: 520 }, { mes: 'Mar/26', prev: 485 },
+  { mes: 'Abr/26', prev: 415 }, { mes: 'Mai/26', prev: 218 }, { mes: 'Jun/26', prev: 96 },
+  { mes: 'Jul/26', prev: 48 },  { mes: 'Ago/26', prev: 46 },  { mes: 'Set/26', prev: 75 },
+  { mes: 'Out/26', prev: 128 }, { mes: 'Nov/26', prev: 210 }, { mes: 'Dez/26', prev: 300 },
+  { mes: 'Jan/27', prev: 355 }, { mes: 'Fev/27', prev: 430 }, { mes: 'Mar/27', prev: 485 },
+];
 
-const SISTEMA_META = {
-  SIM: { label: 'Mortalidade', metric: 'óbitos', icon: '💀', accent: '#DC2626', soft: '#FEE2E2' },
-  SIH: { label: 'Internações', metric: 'internações', icon: '🏥', accent: '#2563EB', soft: '#DBEAFE' },
-  SINASC: { label: 'Nascimentos', metric: 'nascimentos', icon: '👶', accent: '#16A34A', soft: '#DCFCE7' },
-  SIA: { label: 'Ambulatorial', metric: 'atendimentos', icon: '🩺', accent: '#0F766E', soft: '#CCFBF1' },
-  SINAN: { label: 'Vigilância Epidemiológica', metric: 'notificações', icon: '🦠', accent: '#D97706', soft: '#FEF3C7' },
-}
+const RISK_SUBSCORES = [
+  { label: 'Epidemiológico',   value: 82, level: 'alto' },
+  { label: 'Capacidade leitos', value: 68, level: 'medio' },
+  { label: 'Estoque crítico',   value: 74, level: 'alto' },
+  { label: 'Vacinação',         value: 58, level: 'medio' },
+];
 
-const STEP_LABELS = ['Base DATASUS', 'Localização', 'Confirmação']
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
-const fmtN = (n) => n?.toLocaleString('pt-BR') ?? '—'
-const fmtPct = (n) => (n == null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)}%`)
-const cx = (...classes) => classes.filter(Boolean).join(' ')
+const RUPTURA_DONUT = [
+  { name: 'Antibióticos',  value: 38, color: '#D94F4F' },
+  { name: 'Analgésicos',   value: 24, color: '#E8903A' },
+  { name: 'Antitérmicos',  value: 18, color: '#4A7FBF' },
+  { name: 'Insulina',      value: 12, color: '#7B6BBF' },
+  { name: 'Outros',        value: 8,  color: '#A8A39A' },
+];
 
-function AppShell({ activeView, onChangeView, topbar, children }) {
+const ALERTAS = [
+  { id: 1, titulo: 'Possível surto de Dengue nos próximos 60 dias', fonte: 'SINAN · Modelo Preditivo', tempo: 'há 12 min', tipo: 'Surto',   cor: '#D94F4F' },
+  { id: 2, titulo: 'Ruptura iminente — Dipirona 500mg',              fonte: 'Estoque · UBS Cotia Centro', tempo: 'há 38 min', tipo: 'Insumo',  cor: '#E8903A' },
+  { id: 3, titulo: 'Ocupação UTI Adulto acima de 90%',               fonte: 'CNES · Hospital Regional Oeste', tempo: 'há 1h 4min', tipo: 'Lotação', cor: '#D4883A' },
+];
+
+const EPI_SAZONALIDADE = [
+  { mes: 'Jan', atual2026: 310, ano2025: 260, media5anos: 220 },
+  { mes: 'Fev', atual2026: 520, ano2025: 440, media5anos: 380 },
+  { mes: 'Mar', atual2026: 485, ano2025: 430, media5anos: 370 },
+  { mes: 'Abr', atual2026: 415, ano2025: 370, media5anos: 310 },
+  { mes: 'Mai', atual2026: 218, ano2025: 190, media5anos: 165 },
+  { mes: 'Jun', atual2026: 96,  ano2025: 82,  media5anos: 72  },
+  { mes: 'Jul', atual2026: 48,  ano2025: 38,  media5anos: 32  },
+  { mes: 'Ago', atual2026: 46,  ano2025: 36,  media5anos: 30  },
+  { mes: 'Set', atual2026: 75,  ano2025: 62,  media5anos: 52  },
+  { mes: 'Out', atual2026: 128, ano2025: 110, media5anos: 95  },
+  { mes: 'Nov', atual2026: 210, ano2025: 178, media5anos: 155 },
+  { mes: 'Dez', atual2026: 300, ano2025: 258, media5anos: 220 },
+];
+
+const EPI_CIDADES = [
+  { name: 'Cotia',        value: 30.8, total: 3843, color: '#1B5E6E' },
+  { name: 'Barueri',      value: 23.4, total: 2921, color: '#4A7FBF' },
+  { name: 'Carapicuíba',  value: 17.5, total: 2184, color: '#7B6BBF' },
+  { name: 'Osasco',       value: 13.1, total: 1635, color: '#4A9B72' },
+  { name: 'Itapevi',      value: 9.5,  total: 1186, color: '#D4883A' },
+  { name: 'Jandira',      value: 5.8,  total: 724,  color: '#A8A39A' },
+];
+
+const EPI_FAIXA = [
+  { faixa: '0–4',   casos: 480  },
+  { faixa: '5–14',  casos: 1320 },
+  { faixa: '15–29', casos: 2780 },
+  { faixa: '30–44', casos: 3300 },
+  { faixa: '45–59', casos: 2620 },
+  { faixa: '60+',   casos: 1980 },
+];
+
+const EPI_GENERO = [
+  { name: 'Feminino',  value: 54.8, color: '#B85C6E' },
+  { name: 'Masculino', value: 45.2, color: '#4A7FBF' },
+];
+
+const EPI_DESFECHO = [
+  { ano: '2022', leves: 5200, hosp: 320, obitos: 18 },
+  { ano: '2023', leves: 6100, hosp: 380, obitos: 22 },
+  { ano: '2024', leves: 7200, hosp: 452, obitos: 26 },
+  { ano: '2025', leves: 8400, hosp: 540, obitos: 31 },
+  { ano: '2026', leves: 9820, hosp: 620, obitos: 40 },
+];
+
+const SIH_MENSAL = [
+  { mes: 'Jan', int: 118, custo: 890  }, { mes: 'Fev', int: 152, custo: 1120 },
+  { mes: 'Mar', int: 168, custo: 1240 }, { mes: 'Abr', int: 145, custo: 1080 },
+  { mes: 'Mai', int: 135, custo: 980  }, { mes: 'Jun', int: 128, custo: 920  },
+  { mes: 'Jul', int: 122, custo: 875  }, { mes: 'Ago', int: 119, custo: 860  },
+  { mes: 'Set', int: 130, custo: 940  }, { mes: 'Out', int: 142, custo: 1050 },
+  { mes: 'Nov', int: 155, custo: 1140 }, { mes: 'Dez', int: 208, custo: 1560 },
+];
+
+const SIH_CAUSAS = [
+  { grupo: 'A90 Dengue grave',    int: 482, custo: 'R$ 1.690' },
+  { grupo: 'J18 Pneumonia',       int: 364, custo: 'R$ 2.210' },
+  { grupo: 'I50 Insuf. cardíaca', int: 218, custo: 'R$ 3.490' },
+  { grupo: 'J44 DPOC',            int: 184, custo: 'R$ 1.980' },
+  { grupo: 'O80 Parto',           int: 162, custo: 'R$ 1.240' },
+  { grupo: 'K35 Apendicite',      int: 142, custo: 'R$ 2.891' },
+];
+
+const SIH_PERMANENCIA = [
+  { grupo: 'Dengue grave',    dias: 4.2, color: '#D94F4F' },
+  { grupo: 'Pneumonia',       dias: 5.8, color: '#E8903A' },
+  { grupo: 'Insuf. cardíaca', dias: 7.0, color: '#4A7FBF' },
+  { grupo: 'DPOC',            dias: 6.2, color: '#7B6BBF' },
+  { grupo: 'Parto',           dias: 2.4, color: '#4A9B72' },
+  { grupo: 'Apendicite',      dias: 3.1, color: '#B85C6E' },
+];
+
+const SIH_ORIGEM = [
+  { name: 'Pronto-socorro', value: 42, color: '#D94F4F' },
+  { name: 'Eletivo',        value: 26, color: '#4A7FBF' },
+  { name: 'Encam. UBS',     value: 18, color: '#4A9B72' },
+  { name: 'Transferência',  value: 14, color: '#E8903A' },
+];
+
+const HEX_REGIONS = [
+  { id: 'grande-sp',  label: 'Grande SP',   x: 230, y: 155, risk: 'alto',  casos: 13240, color: '#D94F4F' },
+  { id: 'sorocaba',   label: 'Sorocaba',    x: 148, y: 215, risk: 'medio', casos: 4180,  color: '#E8903A' },
+  { id: 'campinas',   label: 'Campinas',    x: 182, y: 98,  risk: 'medio', casos: 6820,  color: '#E8903A' },
+  { id: 'ribeirao',   label: 'Ribeirão P.', x: 268, y: 62,  risk: 'medio', casos: 5210,  color: '#E8903A' },
+  { id: 'sao-jose',   label: 'S.J.Campos',  x: 330, y: 98,  risk: 'baixo', casos: 3120,  color: '#4A9B6F' },
+  { id: 'vale-para',  label: 'Vale Paraíba',x: 370, y: 155, risk: 'baixo', casos: 2840,  color: '#4A9B6F' },
+  { id: 'baixada',    label: 'Baixada S.',  x: 278, y: 215, risk: 'alto',  casos: 7650,  color: '#D94F4F' },
+  { id: 'aracat',     label: 'Araraquara',  x: 218, y: 30,  risk: 'baixo', casos: 2110,  color: '#4A9B6F' },
+  { id: 'franca',     label: 'Franca',      x: 308, y: 22,  risk: 'baixo', casos: 1890,  color: '#4A9B6F' },
+  { id: 'marilia',    label: 'Marília',     x: 138, y: 78,  risk: 'baixo', casos: 2450,  color: '#4A9B6F' },
+  { id: 'bauru',      label: 'Bauru',       x: 128, y: 138, risk: 'medio', casos: 3640,  color: '#E8903A' },
+  { id: 'pres-prud',  label: 'Pres.Prud.',  x: 78,  y: 100, risk: 'baixo', casos: 1980,  color: '#4A9B6F' },
+];
+
+// ─── Shared components ────────────────────────────────────────────────────────
+
+function Card({ children, className = '', style = {} }) {
   return (
-    <div className="min-h-screen bg-[var(--bg-app)] text-slate-800">
-      <div className="flex min-h-screen flex-col lg:flex-row">
-        <aside className="w-full bg-[var(--navy)] text-white lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:flex-shrink-0">
-          <div className="flex h-full flex-col px-4 py-5">
-            <div className="mb-8 flex items-center gap-3 px-2">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/12 text-xl shadow-lg shadow-slate-950/20">
-                🏥
-              </div>
-              <div>
-                <p className="text-sm font-semibold tracking-wide text-white">SUS Predict</p>
-                <p className="text-xs text-sky-200/80">Monitoramento e previsão SUS</p>
-              </div>
-            </div>
-
-            <nav className="space-y-1.5">
-              {NAV_ITEMS.map((item) => {
-                const active = activeView === item.key
-                return (
-                  <button
-                    key={item.key}
-                    onClick={() => onChangeView(item.key)}
-                    className={cx(
-                      'relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all',
-                      active ? 'bg-[var(--blue-500)] text-white shadow-lg shadow-blue-950/25' : 'text-sky-200/80 hover:bg-white/8 hover:text-white',
-                    )}
-                  >
-                    {active && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-white" />}
-                    <span className="text-base">{item.icon}</span>
-                    <span className="font-medium">{item.label}</span>
-                  </button>
-                )
-              })}
-            </nav>
-
-            <div className="mt-auto rounded-2xl border border-white/10 bg-white/8 p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-sm font-semibold text-white">
-                  US
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">Usuário</p>
-                  <p className="text-xs text-sky-200/75">Gestor Municipal</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur md:px-6">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              {topbar}
-            </div>
-          </header>
-
-          <main className="flex-1 px-4 py-5 md:px-6 lg:px-8">{children}</main>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function SurfaceCard({ children, className = '' }) {
-  return (
-    <div className={cx('rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_2px_12px_rgba(15,23,42,0.06)]', className)}>
+    <div className={`bg-white rounded-xl border border-ink-100 ${className}`} style={style}>
       {children}
     </div>
-  )
+  );
 }
 
-function SectionLabel({ children }) {
-  return <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{children}</p>
-}
-
-function Badge({ children, tone = 'slate' }) {
-  const tones = {
-    slate: 'border-slate-200 bg-slate-100 text-slate-700',
-    blue: 'border-blue-200 bg-blue-50 text-blue-700',
-    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    yellow: 'border-amber-200 bg-amber-50 text-amber-700',
-    red: 'border-red-200 bg-red-50 text-red-700',
-  }
-  return <span className={cx('inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold', tones[tone])}>{children}</span>
-}
-
-function LightTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-
+function SectionTitle({ children, action }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-xl">
-      <p className="mb-1 font-semibold text-slate-700">{label}</p>
-      {payload.map((item) => (
-        <div key={item.dataKey} className="flex items-center gap-2 text-slate-600">
-          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-          <span>{item.name}: {fmtN(item.value)}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function StepPills({ step }) {
-  return (
-    <div className="mb-6 flex flex-wrap items-center gap-2">
-      {STEP_LABELS.map((label, index) => {
-        const current = index + 1
-        const active = current === step
-        const done = current < step
-        return (
-          <div key={label} className="flex items-center gap-2">
-            <div
-              className={cx(
-                'flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold',
-                done && 'border-emerald-200 bg-emerald-50 text-emerald-700',
-                active && 'border-blue-200 bg-blue-50 text-blue-700',
-                !done && !active && 'border-slate-200 bg-white text-slate-500',
-              )}
-            >
-              <span
-                className={cx(
-                  'flex h-5 w-5 items-center justify-center rounded-full text-[11px]',
-                  done && 'bg-emerald-500 text-white',
-                  active && 'bg-blue-600 text-white',
-                  !done && !active && 'bg-slate-100 text-slate-500',
-                )}
-              >
-                {done ? '✓' : current}
-              </span>
-              {label}
-            </div>
-            {index < STEP_LABELS.length - 1 && <span className="hidden h-px w-6 bg-slate-200 sm:block" />}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function CitySearch({ cidades, value, onSelect, disabled }) {
-  const [query, setQuery] = useState(value || '')
-  const [open, setOpen] = useState(false)
-  const ref = useState(null)
-
-  const filtered = cidades.length === 0
-    ? []
-    : query.trim().length === 0
-      ? cidades.slice(0, 8)
-      : cidades
-          .filter((c) => c.nome.toLowerCase().includes(query.toLowerCase()))
-          .slice(0, 10)
-
-  const handleSelect = (item) => {
-    setQuery(item.nome)
-    setOpen(false)
-    onSelect(item)
-  }
-
-  const inputCls =
-    'h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400'
-
-  return (
-    <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false) }}>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
-        onFocus={() => setOpen(true)}
-        disabled={disabled}
-        placeholder={disabled ? 'Selecione o estado primeiro' : 'Digite para buscar…'}
-        className={inputCls}
-        autoComplete="off"
-      />
-      {open && !disabled && filtered.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg" style={{ maxHeight: '220px' }}>
-          {filtered.map((item) => (
-            <button
-              key={item.ibge}
-              type="button"
-              tabIndex={0}
-              onMouseDown={(e) => { e.preventDefault(); handleSelect(item) }}
-              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-            >
-              <span>{item.nome}</span>
-              <span className="ml-2 text-xs text-slate-400">{item.ibge}</span>
-            </button>
-          ))}
-        </div>
+    <div className="flex items-baseline justify-between mb-4">
+      <h2 style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1814', margin: 0 }}>
+        {children}
+      </h2>
+      {action && (
+        <button style={{ fontSize: 11, fontWeight: 500, color: '#1B5E6E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          {action}
+        </button>
       )}
     </div>
-  )
+  );
 }
 
-function ExtractionWorkspace(props) {
-  const {
-    step,
-    sistema,
-    setSistema,
-    estados,
-    cidades,
-    uf,
-    setUf,
-    cidade,
-    setCidade,
-    ibge,
-    setIbge,
-    anoIni,
-    setAnoIni,
-    anoFim,
-    setAnoFim,
-    anoLimites,
-    doencas,
-    doenca,
-    setDoenca,
-    onLoadCidades,
-    onNext,
-    onBack,
-    onConfirm,
-    loading,
-  } = props
-
-  const sistemaInfo = SISTEMA_META[sistema] ?? null
-  const limiteInfo = anoLimites[sistema] ?? {}
-  const anoMaximo = limiteInfo.ano_maximo ?? 2025
-  const defasagem = limiteInfo.defasagem_anos ?? 1
-  const doencaNome = doencas.find((item) => item.codigo === doenca)?.nome ?? doenca
-
-  const handleSistema = (codigo) => {
-    setSistema(codigo)
-    setDoenca('')
-  }
-
-  const handleUf = (event) => {
-    const sigla = event.target.value
-    setUf(sigla)
-    setCidade('')
-    setIbge('')
-    if (sigla) onLoadCidades(sigla)
-  }
-
-  const handleCidade = (item) => {
-    setCidade(item.nome)
-    setIbge(item.ibge ?? '')
-  }
-
-  const handleAnoIni = (event) => {
-    const valor = Math.min(Number(event.target.value), anoMaximo)
-    setAnoIni(valor)
-    if (anoFim > anoMaximo) setAnoFim(anoMaximo)
-  }
-
-  const handleAnoFim = (event) => {
-    const valor = Math.min(Number(event.target.value), anoMaximo)
-    setAnoFim(valor)
-  }
-
-  const validBase = uf && cidade && anoIni >= 2000 && anoFim >= anoIni && anoFim <= anoMaximo && anoIni <= anoMaximo
-  const valid = sistema === 'SINAN' ? validBase && !!doenca : validBase
-  const inputCls = 'h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100'
-
+function Badge({ label, color }) {
   return (
-    <div className="grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
-      <SurfaceCard>
-        <SectionLabel>Nova análise</SectionLabel>
-        <h1 className="text-2xl font-bold text-slate-900">Configuração da extração DATASUS</h1>
-        <p className="mt-1 text-sm leading-6 text-slate-500">
-          O redesign já está alinhado com a nova identidade visual, mas o motor continua o mesmo:
-          selecionar, baixar, processar e transformar os dados públicos do SUS em análise rápida para o TCC.
+    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: color + '22', color }}>
+      {label}
+    </span>
+  );
+}
+
+function ChartTip({ active, payload, label, unit = '' }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E5E1D6', borderRadius: 8, padding: '8px 12px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+      <p style={{ fontWeight: 600, color: '#3D3A33', marginBottom: 4 }}>{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} style={{ color: p.color, margin: '2px 0', display: 'flex', gap: 8 }}>
+          <span style={{ color: '#6B665D' }}>{p.name}:</span>
+          <span style={{ fontWeight: 700 }}>{Number(p.value).toLocaleString('pt-BR')}{unit}</span>
         </p>
+      ))}
+    </div>
+  );
+}
 
-        <StepPills step={step} />
+function Sparkline({ data, color }) {
+  return (
+    <ResponsiveContainer width="100%" height={48}>
+      <LineChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
+        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
 
-        {step === 1 && (
-          <div>
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Escolha a base do DATASUS</h2>
-                <p className="text-sm text-slate-500">Cada módulo alimenta cards, alertas e visualizações do dashboard.</p>
-              </div>
-            </div>
+const SPARK_CASOS   = [42,55,48,62,70,58,80,75,90,84,96,88].map(v => ({ v }));
+const SPARK_RISCO   = [60,62,64,65,66,68,68,70,70,71,72,72].map(v => ({ v }));
+const SPARK_RUPTURA = [3,4,4,5,5,6,6,7,7,7,7,7].map(v => ({ v }));
+const SPARK_VACINAL = [85,84,84,83,83,83,82,82,82,82,81,81].map(v => ({ v }));
 
-            <div className="grid gap-3 md:grid-cols-2">
-              {Object.entries(SISTEMA_META).map(([codigo, meta]) => {
-                const active = sistema === codigo
-                return (
-                  <button
-                    key={codigo}
-                    onClick={() => handleSistema(codigo)}
-                    className={cx(
-                      'rounded-2xl border p-5 text-left transition-all',
-                      active ? 'border-blue-300 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
-                    )}
-                  >
-                    <div className="mb-4 flex items-center justify-between">
-                      <span className="text-3xl">{meta.icon}</span>
-                      <Badge tone={active ? 'blue' : 'slate'}>{codigo}</Badge>
-                    </div>
-                    <p className="font-semibold text-slate-900">{meta.label}</p>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
-                      Base orientada a {meta.metric}. Ideal para análise acadêmica e simulação de riscos operacionais.
-                    </p>
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={onNext}
-                disabled={!sistema}
-                className="rounded-xl bg-[var(--blue-500)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--blue-600)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Continuar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-5">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Localização e recorte temporal</h2>
-              <p className="text-sm text-slate-500">Defina município, período e, no caso do SINAN, o agravo a ser observado.</p>
-            </div>
-
-            {sistema === 'SINAN' && (
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Doença / Agravo</label>
-                <select value={doenca} onChange={(event) => setDoenca(event.target.value)} className={inputCls}>
-                  <option value="">Selecione a doença</option>
-                  {doencas.map((item) => (
-                    <option key={item.codigo} value={item.codigo}>{item.nome}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Estado</label>
-                <select value={uf} onChange={handleUf} className={inputCls}>
-                  <option value="">Selecione o estado</option>
-                  {estados.map((estado) => (
-                    <option key={estado.sigla} value={estado.sigla}>{estado.sigla} — {estado.nome}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Município</label>
-                <CitySearch
-                  cidades={cidades}
-                  value={cidade}
-                  onSelect={handleCidade}
-                  disabled={!uf}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Ano inicial</label>
-                <input type="number" min="2000" max={anoMaximo} value={anoIni} onChange={handleAnoIni} className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Ano final</label>
-                <input type="number" min={anoIni} max={anoMaximo} value={anoFim} onChange={handleAnoFim} className={inputCls} />
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              <strong>Dados consolidados:</strong> o sistema {sistema || 'selecionado'} trabalha melhor com dados até {anoMaximo},
-              considerando aproximadamente {defasagem} anos de defasagem no DATASUS.
-            </div>
-
-            {ibge && (
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                Código IBGE identificado: <strong>{ibge}</strong>
-              </div>
-            )}
-
-            <div className="flex flex-wrap justify-between gap-3">
-              <button
-                onClick={onBack}
-                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                Voltar
-              </button>
-              <button
-                onClick={onNext}
-                disabled={!valid}
-                className="rounded-xl bg-[var(--blue-500)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--blue-600)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Revisar parâmetros
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="space-y-5">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Confirmação da execução</h2>
-              <p className="text-sm text-slate-500">Revise os parâmetros antes de iniciar o job de download e análise.</p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50">
-              {[
-                ['Sistema', sistemaInfo ? `${sistemaInfo.icon} ${sistema} — ${sistemaInfo.label}` : '—'],
-                ['Estado', uf || '—'],
-                ['Município', cidade || '—'],
-                ['Código IBGE', ibge || '—'],
-                ['Período', `${anoIni} → ${anoFim}`],
-                ...(sistema === 'SINAN' ? [['Doença', doencaNome || '—']] : []),
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between border-b border-slate-200 px-4 py-3 text-sm last:border-b-0">
-                  <span className="text-slate-500">{label}</span>
-                  <span className="font-semibold text-slate-800">{value}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              A extração usa dados reais do DATASUS via backend FastAPI. Para recortes grandes, o FTP pode levar alguns minutos.
-            </div>
-
-            <div className="flex flex-wrap justify-between gap-3">
-              <button
-                onClick={onBack}
-                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                Ajustar filtros
-              </button>
-              <button
-                onClick={onConfirm}
-                disabled={loading}
-                className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? 'Iniciando...' : 'Iniciar extração'}
-              </button>
-            </div>
-          </div>
-        )}
-      </SurfaceCard>
-
-      <div className="space-y-5">
-        <SurfaceCard className="bg-[linear-gradient(145deg,#1A2E6B,#27417D)] text-white">
-          <SectionLabel>Resumo executivo</SectionLabel>
-          <h2 className="text-xl font-bold text-white">Painel pronto para o TCC</h2>
-          <p className="mt-2 text-sm leading-6 text-sky-100/85">
-            O objetivo aqui é unir uma navegação mais executiva, no estilo dashboard corporativo, ao fluxo real de ingestão
-            dos dados do SUS que você já tem funcionando.
+function KpiCard({ label, value, delta, deltaLabel, icon, iconColor, sparkData, rising }) {
+  const deltaColor = rising ? '#2A6B40' : '#8A2A38';
+  return (
+    <Card className="p-5 flex flex-col gap-3">
+      <div className="flex items-start justify-between">
+        <div>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6B665D', marginBottom: 4 }}>
+            {label}
           </p>
-
-          <div className="mt-5 space-y-3">
-            <div className="rounded-2xl bg-white/10 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-sky-100/70">Fluxo de produção</p>
-              <p className="mt-2 text-sm text-white">Seleciona → baixa → sobe no Supabase → mostra dashboard → compacta</p>
-            </div>
-            <div className="rounded-2xl bg-white/10 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-sky-100/70">Fluxo de teste</p>
-              <p className="mt-2 text-sm text-white">Seleciona → baixa simulado → mostra dashboard → deleta localmente</p>
-            </div>
-          </div>
-        </SurfaceCard>
-
-        <SurfaceCard>
-          <SectionLabel>Compatibilidade</SectionLabel>
-          <div className="space-y-3 text-sm text-slate-600">
-            <p><strong className="text-slate-800">Backend:</strong> FastAPI + PySUS com preferência por Python 3.12.</p>
-            <p><strong className="text-slate-800">Frontend:</strong> React + Tailwind + Recharts, agora com layout executivo e módulos internos.</p>
-            <p><strong className="text-slate-800">Perfil de uso:</strong> secretário ou gestor municipal que precisa bater o olho e decidir rápido.</p>
-          </div>
-        </SurfaceCard>
-      </div>
-    </div>
-  )
-}
-
-function LoadingState({ sistema, cidade, uf, progresso, mensagem }) {
-  const meta = SISTEMA_META[sistema] ?? SISTEMA_META.SIH
-  const steps = [
-    { label: 'Conectando ao FTP do DATASUS', done: progresso > 8 },
-    { label: 'Baixando arquivos e filtrando recorte', done: progresso > 35 },
-    { label: 'Processando distribuição e série temporal', done: progresso > 62 },
-    { label: 'Montando indicadores e previsões', done: progresso > 82 },
-    { label: 'Finalizando dashboard', done: progresso >= 100 },
-  ]
-
-  return (
-    <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-      <SurfaceCard className="bg-[linear-gradient(145deg,#1A2E6B,#27417D)] text-white">
-        <SectionLabel>Job em execução</SectionLabel>
-        <div className="flex items-start gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white/12 text-4xl">{meta.icon}</div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Processando dados do DATASUS</h1>
-            <p className="mt-1 text-sm text-sky-100/80">{meta.label} · {cidade || 'Município'} / {uf || 'UF'}</p>
-            <p className="mt-4 text-sm leading-6 text-sky-50">{mensagem || 'Organizando arquivos e consolidando indicadores.'}</p>
-          </div>
+          <p style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 22, fontWeight: 800, color: '#1A1814', lineHeight: 1 }}>
+            {value}
+          </p>
         </div>
-
-        <div className="mt-8">
-          <div className="mb-2 flex items-center justify-between text-sm text-sky-100">
-            <span>Progresso do job</span>
-            <span>{progresso}%</span>
-          </div>
-          <div className="h-3 overflow-hidden rounded-full bg-white/12">
-            <div
-              className="h-full rounded-full bg-[linear-gradient(90deg,#60A5FA,#34D399)] transition-all duration-700"
-              style={{ width: `${progresso}%` }}
-            />
-          </div>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: iconColor + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+          {icon}
         </div>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <SectionLabel>Pipeline</SectionLabel>
-        <div className="space-y-3">
-          {steps.map((item) => (
-            <div key={item.label} className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
-              <span className={cx('flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold', item.done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
-                {item.done ? '✓' : '•'}
-              </span>
-              <span className={cx('text-sm', item.done ? 'font-semibold text-slate-900' : 'text-slate-500')}>{item.label}</span>
-            </div>
-          ))}
-        </div>
-      </SurfaceCard>
-    </div>
-  )
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <SurfaceCard className="mx-auto max-w-2xl text-center">
-      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-3xl">⚠️</div>
-      <h1 className="text-2xl font-bold text-slate-900">O backend não respondeu</h1>
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">{message}</p>
-
-      <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-left">
-        <SectionLabel>Como iniciar o backend</SectionLabel>
-        <code className="block whitespace-pre-wrap text-xs leading-6 text-emerald-700">
-          cd api{'\n'}
-          pip install -r requirements_api.txt{'\n'}
-          uvicorn main:app --reload --port 8000
-        </code>
       </div>
-
-      <button onClick={onRetry} className="mt-6 rounded-xl bg-[var(--blue-500)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--blue-600)]">
-        Tentar novamente
-      </button>
-    </SurfaceCard>
-  )
-}
-
-function EmptyModule({ title, description }) {
-  return (
-    <SurfaceCard className="mx-auto max-w-3xl text-center">
-      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-3xl">📊</div>
-      <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">{description}</p>
-      <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-        Inicie uma extração na aba <strong>Visão Geral</strong> para popular este módulo com dados reais do seu fluxo DATASUS.
+      {sparkData && <Sparkline data={sparkData} color={iconColor} />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: deltaColor, fontSize: 11, fontWeight: 700 }}>
+          {rising ? '↑' : '↓'} {delta}
+        </span>
+        <span style={{ color: '#8A8579', fontSize: 11 }}>{deltaLabel}</span>
       </div>
-    </SurfaceCard>
-  )
+    </Card>
+  );
 }
 
-function BrazilMap({ runs, selectedRunId, onSelectRun }) {
-  // Brasil (aprox.) em equiretangular: bounds para posicionar pins.
-  const bounds = { minLon: -74.0, maxLon: -34.0, minLat: -34.0, maxLat: 6.0 }
-  const width = 760
-  const height = 520
+// ─── Risk Gauge ───────────────────────────────────────────────────────────────
 
-  const project = (lat, lon) => {
-    const x = ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * width
-    const y = ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * height
-    return { x, y }
-  }
-
+function RiskGauge({ value }) {
+  const r = 78;
+  const cx = 100, cy = 100;
+  const circumference = Math.PI * r;
+  const fillLen = (value / 100) * circumference;
+  const color = value >= 75 ? '#D94F4F' : value >= 55 ? '#E8903A' : '#4A9B6F';
+  const levelLabel = value >= 75 ? 'ALTO' : value >= 55 ? 'MÉDIO' : 'BAIXO';
+  const trackD = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
   return (
-    <div className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top,#dbeafe,transparent_38%),linear-gradient(180deg,#f8fbff_0%,#edf4fb_100%)]">
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-[520px] w-full">
-        {/* Silhueta simplificada (estilo) */}
-        <path
-          d="M224 86 L300 58 L360 70 L404 112 L450 120 L498 154 L550 176 L604 246 L594 304 L560 340 L548 398 L504 444 L454 464 L420 438 L380 446 L352 420 L326 420 L304 388 L266 392 L240 360 L214 330 L198 288 L172 248 L160 196 L182 152 Z"
-          fill="rgba(191,219,254,0.85)"
-          stroke="rgba(59,130,246,0.45)"
-          strokeWidth="2"
-        />
-
-        {/* Pins reais: só plota se tiver lat/lon */}
-        {runs
-          .filter((r) => r.lat != null && r.lon != null)
-          .map((r) => {
-            const { x, y } = project(r.lat, r.lon)
-            const active = r.run_id === selectedRunId
-            return (
-              <g key={r.run_id} transform={`translate(${x}, ${y})`} onClick={() => onSelectRun(r.run_id)} style={{ cursor: 'pointer' }}>
-                <circle r={active ? 9 : 7} fill={active ? '#ef4444' : '#2563eb'} stroke="#fff" strokeWidth="3" />
-                <circle r="18" fill={active ? 'rgba(239,68,68,0.12)' : 'rgba(37,99,235,0.12)'} />
-              </g>
-            )
-          })}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <svg viewBox="0 0 200 115" style={{ width: '100%', maxWidth: 210 }}>
+        <path d={trackD} fill="none" stroke="#E5E1D6" strokeWidth="14" strokeLinecap="round" />
+        <path d={trackD} fill="none" stroke={color} strokeWidth="14" strokeLinecap="round"
+          strokeDasharray={`${fillLen} ${circumference}`} />
+        <text x="100" y="88" textAnchor="middle" fontFamily="Inter Tight, Inter, sans-serif"
+          fontSize="26" fontWeight="800" fill="#1A1814">{value}%</text>
+        <text x="100" y="106" textAnchor="middle" fontFamily="Inter, sans-serif"
+          fontSize="9" fontWeight="700" letterSpacing="2" fill={color}>{levelLabel}</text>
       </svg>
     </div>
-  )
+  );
 }
 
-function toRealAnalytics(resultado, sistema, cidade, uf, anoIni, anoFim) {
-  if (!resultado) return null
+// ─── HexMap ──────────────────────────────────────────────────────────────────
 
-  const stats = resultado.stats ?? {}
-  const serie = Array.isArray(resultado.serie_com_previsao) ? resultado.serie_com_previsao : []
-  const faixaEtaria = Array.isArray(resultado.distribuicao_faixa_etaria) ? resultado.distribuicao_faixa_etaria : []
-  const sexo = Array.isArray(resultado.distribuicao_sexo) ? resultado.distribuicao_sexo : []
-  const topCausas = Array.isArray(resultado.top_causas) ? resultado.top_causas : []
-  const meta = SISTEMA_META[sistema] ?? null
-
-  const temPrevisao = serie.some((item) => item?.tipo === 'previsto')
-
-  const chartData = serie.map((item) => ({
-    ano: item.ano,
-    real: item.tipo === 'real' ? item.total : null,
-    previsto: item.tipo === 'previsto' ? item.total : null,
-    upper: item.tipo === 'previsto' ? (item.upper ?? null) : null,
-    lower: item.tipo === 'previsto' ? (item.lower ?? null) : null,
-  }))
-
-  const temIC = chartData.some((item) => item.upper != null || item.lower != null)
-  const prevCards = serie.filter((item) => item?.tipo === 'previsto')
-
-  const barsData = faixaEtaria.map((item, index) => ({
-    ...item,
-    fill: ['#1D4ED8', '#2563EB', '#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE'][index % 6],
-  }))
-
-  const pieData = sexo.map((item, index) => ({
-    ...item,
-    fill: index === 0 ? '#2563EB' : '#16A34A',
-  }))
-
-  return {
-    stats,
-    meta,
-    sistema,
-    cidade,
-    uf,
-    anoIni,
-    anoFim,
-    chartData,
-    temPrevisao,
-    temIC,
-    prevCards,
-    barsData,
-    pieData,
-    topCausas,
-  }
+function hexPoints(cx, cy, r) {
+  return Array.from({ length: 6 }, (_, i) => {
+    const a = (Math.PI / 180) * (60 * i - 30);
+    return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
+  }).join(' ');
 }
 
-function OverviewPage({ analytics, onCleanup, onExportXlsx, exportingXlsx, cleaningUp, jobId }) {
+function HexMap() {
+  const [hovered, setHovered] = useState(null);
+  const R = 32;
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+    <div>
+      <svg viewBox="0 0 450 260" style={{ width: '100%', maxHeight: 260 }}>
+        {HEX_REGIONS.map(reg => {
+          const pts = hexPoints(reg.x, reg.y, R);
+          const isH = hovered === reg.id;
+          return (
+            <g key={reg.id} onMouseEnter={() => setHovered(reg.id)} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }}>
+              <polygon points={pts} fill={reg.color} fillOpacity={isH ? 0.95 : 0.7} stroke="white" strokeWidth="2"
+                style={{ transition: 'fill-opacity 0.15s' }} />
+              <text x={reg.x} y={reg.y - 3} textAnchor="middle" fontFamily="Inter, sans-serif"
+                fontSize="7" fontWeight="700" fill="white">{reg.label}</text>
+              <text x={reg.x} y={reg.y + 9} textAnchor="middle" fontFamily="JetBrains Mono, monospace"
+                fontSize="6.5" fill="rgba(255,255,255,0.85)">{reg.casos.toLocaleString('pt-BR')}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+        {[{ label: 'Alto', color: '#D94F4F' }, { label: 'Médio', color: '#E8903A' }, { label: 'Baixo', color: '#4A9B6F' }].map(l => (
+          <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: l.color }} />
+            <span style={{ fontSize: 11, color: '#6B665D' }}>{l.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Greeting Banner ─────────────────────────────────────────────────────────
+
+function GreetingBanner() {
+  return (
+    <div style={{ background: 'linear-gradient(135deg, #1E3C3C 0%, #1B5E6E 100%)', borderRadius: 12, padding: '20px 24px', marginBottom: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#4DB8A0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+          MO
+        </div>
         <div>
-          <SectionLabel>Visão geral</SectionLabel>
-          <h1 className="text-2xl font-bold text-slate-900">{analytics.meta?.icon ?? '📊'} {analytics.sistema} — {analytics.meta?.label ?? 'Análise DATASUS'}</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {analytics.cidade}, {analytics.uf} · série {analytics.anoIni}–{analytics.anoFim}
+          <p style={{ color: 'white', fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Boa tarde, Dr(a). Márcia 👋</p>
+          <p style={{ color: '#C8D8D5', fontSize: 13 }}>
+            O município apresenta <strong style={{ color: 'white' }}>4 alertas críticos</strong> e índice de risco{' '}
+            <strong style={{ color: '#D94F4F' }}>72%</strong>. Análise preditiva atualizada há 8 min.
           </p>
         </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <button style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'white', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.08)', cursor: 'pointer' }}>
+          Ver alertas
+        </button>
+        <button style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#1E3C3C', background: '#4DB8A0', border: 'none', cursor: 'pointer' }}>
+          Gerar ETP
+        </button>
+      </div>
+    </div>
+  );
+}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="green">Dados reais DATASUS</Badge>
-          <Badge tone="blue">Job {jobId}</Badge>
-          <button
-            onClick={onExportXlsx}
-            disabled={exportingXlsx}
-            className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {exportingXlsx ? 'Exportando...' : 'Exportar XLSX'}
-          </button>
-          <button
-            onClick={onCleanup}
-            disabled={cleaningUp}
-            className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {cleaningUp ? 'Limpando...' : 'Limpar dados locais'}
-          </button>
+// ─── Filter Bar ───────────────────────────────────────────────────────────────
+
+function FilterBar({ fields }) {
+  return (
+    <div style={{ background: '#1E3C3C', borderRadius: 12, padding: '16px 20px', marginBottom: 24, display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
+      {fields.map(f => (
+        <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6A9090' }}>{f.label}</label>
+          <input defaultValue={f.value} style={{ borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 500, border: 'none', outline: 'none', background: '#2A5050', color: '#C8D8D5', minWidth: f.width || 140 }} />
         </div>
+      ))}
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+        <button style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#1E3C3C', background: '#4DB8A0', border: 'none', cursor: 'pointer' }}>Recalcular</button>
+        <button style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#C8D8D5', background: 'transparent', border: '1px solid #2A5050', cursor: 'pointer' }}>Exportar</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page: Visão Geral ────────────────────────────────────────────────────────
+
+function PageVisaoGeral() {
+  return (
+    <div className="rise">
+      <GreetingBanner />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+        <KpiCard label="Casos Notificados (30D)" value="4.812" delta="+12,4%" deltaLabel="vs mês anterior" icon="📊" iconColor="#4A7FBF" sparkData={SPARK_CASOS} rising={false} />
+        <KpiCard label="Índice de Risco Regional" value="72%" delta="+8,0 p.p." deltaLabel="vs 30D anteriores" icon="⚠️" iconColor="#D94F4F" sparkData={SPARK_RISCO} rising={false} />
+        <KpiCard label="UBS em Ruptura ou Alerta" value="7" delta="+2" deltaLabel="vs semana anterior" icon="💊" iconColor="#E8903A" sparkData={SPARK_RUPTURA} rising={false} />
+        <KpiCard label="Cobertura Vacinal Média" value="81,3%" delta="-1,8 p.p." deltaLabel="vs trimestre anterior" icon="💉" iconColor="#4A9B72" sparkData={SPARK_VACINAL} rising={false} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-4">
-        <SurfaceCard className="p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-50 text-xl">📦</div>
-            <Badge tone="blue">{analytics.sistema}</Badge>
-          </div>
-          <p className="text-sm text-slate-500">Total de registros</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{fmtN(analytics.stats.total)}</p>
-        </SurfaceCard>
-
-        <SurfaceCard className="p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-50 text-xl">📈</div>
-            <Badge tone="slate">{fmtN(analytics.stats.anos_analisados)} anos</Badge>
-          </div>
-          <p className="text-sm text-slate-500">Média anual</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{fmtN(analytics.stats.media_anual)}</p>
-        </SurfaceCard>
-
-        <SurfaceCard className="p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-50 text-xl">🧭</div>
-            <Badge tone={(analytics.stats.variacao_pct ?? 0) >= 0 ? 'yellow' : 'green'}>{fmtPct(analytics.stats.variacao_pct)}</Badge>
-          </div>
-          <p className="text-sm text-slate-500">Variação no período</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{fmtPct(analytics.stats.variacao_pct)}</p>
-        </SurfaceCard>
-
-        <SurfaceCard className="p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-50 text-xl">🔮</div>
-            <Badge tone="blue">{analytics.temPrevisao ? 'Previsão' : 'Sem previsão'}</Badge>
-          </div>
-          <p className="text-sm text-slate-500">Próxima previsão</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{fmtN(analytics.stats.prox_previsao)}</p>
-        </SurfaceCard>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1.65fr_0.95fr]">
-        <SurfaceCard>
-          <div className="mb-5 flex items-center justify-between">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+        {/* Dengue forecast */}
+        <Card className="p-5">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
             <div>
-              <SectionLabel>Série temporal</SectionLabel>
-              <h2 className="text-lg font-bold text-slate-900">Histórico e previsão (se disponível)</h2>
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6B665D', marginBottom: 4 }}>Previsão de casos</p>
+              <h3 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 13, fontWeight: 700, color: '#1A1814' }}>Dengue (A90) · próximos 6 meses</h3>
             </div>
-            <Badge tone="blue">{analytics.temPrevisao ? 'Real + previsto' : 'Apenas real'}</Badge>
+            <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#8A8579', background: '#F0EDE6', padding: '4px 8px', borderRadius: 6, textAlign: 'right', lineHeight: 1.4 }}>
+              Prophet + XGBoost<br />confiança 89%
+            </div>
           </div>
-
-          {analytics.chartData.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-              O backend não retornou série temporal para essa extração.
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={analytics.chartData} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
-                <XAxis dataKey="ano" tick={{ fill: '#64748B', fontSize: 12 }} stroke="#CBD5E1" />
-                <YAxis tick={{ fill: '#64748B', fontSize: 12 }} stroke="#CBD5E1" />
-                <Tooltip content={<LightTooltip />} />
-                {analytics.temPrevisao && <ReferenceLine x={analytics.anoFim} stroke="#94A3B8" strokeDasharray="6 4" />}
-                {analytics.temIC && (
-                  <>
-                    <Line type="monotone" dataKey="upper" name="limite superior" stroke="#D97706" strokeWidth={1.5} strokeOpacity={0.35} dot={false} legendType="none" />
-                    <Line type="monotone" dataKey="lower" name="limite inferior" stroke="#D97706" strokeWidth={1.5} strokeOpacity={0.35} dot={false} legendType="none" />
-                  </>
-                )}
-                <Line type="monotone" dataKey="real" name="real" stroke="#2563EB" strokeWidth={3} dot={{ r: 3 }} connectNulls={false} />
-                {analytics.temPrevisao && (
-                  <Line type="monotone" dataKey="previsto" name="previsto" stroke="#D97706" strokeWidth={3} strokeDasharray="6 4" dot={{ r: 3 }} connectNulls={false} />
-                )}
+          <div style={{ height: 220, marginTop: 12 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={DENGUE_COMBINED} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#A8A39A' }} tickLine={false} axisLine={false} interval={5} />
+                <YAxis tick={{ fontSize: 8, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <Tooltip content={<ChartTip unit=" casos" />} />
+                <Line type="monotone" dataKey="real" name="Casos reais" stroke="#1B5E6E" strokeWidth={2} dot={false} connectNulls={false} />
+                <Line type="monotone" dataKey="prev" name="Previsão" stroke="#4DB8A0" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
-          )}
+          </div>
+          <p style={{ fontSize: 10, color: '#8A8579', marginTop: 8, paddingTop: 8, borderTop: '1px solid #EFEBE0' }}>
+            Pico estimado em Mar/27 · ~485 casos · 218% acima da média 5 anos
+          </p>
+          <button style={{ marginTop: 6, fontSize: 11, fontWeight: 500, color: '#1B5E6E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            Detalhar SINAN →
+          </button>
+        </Card>
 
-          {analytics.prevCards.length > 0 && (
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {analytics.prevCards.map((item) => (
-                <div key={item.ano} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{item.ano}</p>
-                  <p className="mt-2 text-2xl font-bold text-slate-900">{fmtN(item.total)}</p>
-                  {item.lower != null && item.upper != null && (
-                    <p className="mt-1 text-xs text-slate-500">IC: {fmtN(item.lower)} – {fmtN(item.upper)}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </SurfaceCard>
-
-        <SurfaceCard>
-          <SectionLabel>Principais categorias</SectionLabel>
-          <h2 className="text-lg font-bold text-slate-900">Top causas / diagnósticos</h2>
-          {analytics.topCausas.length === 0 ? (
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-              O backend não retornou `top_causas` para este sistema/recorte.
-            </div>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {analytics.topCausas.map((item, index) => (
-                <div key={`${item.causa}-${index}`} className="rounded-2xl border border-slate-200 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-semibold text-slate-900">{item.causa}</p>
-                    <Badge tone="blue">{item.pct}%</Badge>
+        {/* Risk gauge */}
+        <Card className="p-5">
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6B665D', marginBottom: 12 }}>Índice de Risco Regional</p>
+          <RiskGauge value={72} />
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {RISK_SUBSCORES.map(s => {
+              const c = s.level === 'alto' ? '#D94F4F' : s.level === 'medio' ? '#E8903A' : '#4A9B6F';
+              return (
+                <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 12, color: '#6B665D', width: 130, flexShrink: 0 }}>{s.label}</span>
+                  <div style={{ flex: 1, height: 5, borderRadius: 99, background: '#EFEBE0', overflow: 'hidden' }}>
+                    <div style={{ width: `${s.value}%`, height: '100%', background: c, borderRadius: 99, transition: 'width 0.6s' }} />
                   </div>
-                  <div className="mt-3 h-2 rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${clamp(Number(item.pct ?? 0), 0, 100)}%` }} />
-                  </div>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: '#3D3A33', width: 24, textAlign: 'right' }}>{s.value}</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '2px 6px', borderRadius: 4, color: c, background: c + '18', width: 40, textAlign: 'center' }}>{s.level}</span>
                 </div>
-              ))}
-            </div>
-          )}
-        </SurfaceCard>
+              );
+            })}
+          </div>
+        </Card>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <SurfaceCard>
-          <SectionLabel>Distribuições</SectionLabel>
-          <h2 className="text-lg font-bold text-slate-900">Faixa etária</h2>
-          {analytics.barsData.length === 0 ? (
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-              O backend não retornou `distribuicao_faixa_etaria` para este sistema/recorte.
-            </div>
-          ) : (
-            <div className="mt-4">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={analytics.barsData}>
-                  <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
-                  <XAxis dataKey="faixa" tick={{ fill: '#64748B', fontSize: 10 }} stroke="#CBD5E1" />
-                  <YAxis tick={{ fill: '#64748B', fontSize: 11 }} stroke="#CBD5E1" />
-                  <Tooltip content={<LightTooltip />} />
-                  <Bar dataKey="pct" name="%">
-                    {analytics.barsData.map((item) => (
-                      <Cell key={item.faixa} fill={item.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </SurfaceCard>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
+        <Card className="p-5">
+          <SectionTitle>Risco por Região · SP</SectionTitle>
+          <HexMap />
+        </Card>
 
-        <SurfaceCard>
-          <SectionLabel>Distribuições</SectionLabel>
-          <h2 className="text-lg font-bold text-slate-900">Sexo</h2>
-          {analytics.pieData.length === 0 ? (
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-              O backend não retornou `distribuicao_sexo` para este sistema/recorte.
-            </div>
-          ) : (
-            <div className="mt-4 flex flex-col items-center gap-4 md:flex-row md:justify-between">
-              <ResponsiveContainer width="100%" height={220}>
+        <Card className="p-5">
+          <SectionTitle action="Ver insumos →">Ruptura por Categoria</SectionTitle>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <div style={{ width: 148, height: 148, flexShrink: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={analytics.pieData} dataKey="pct" nameKey="sexo" outerRadius={78} innerRadius={46}>
-                    {analytics.pieData.map((item) => (
-                      <Cell key={item.sexo} fill={item.fill} />
-                    ))}
+                  <Pie data={RUPTURA_DONUT} cx="50%" cy="50%" innerRadius={42} outerRadius={68} dataKey="value" strokeWidth={0}>
+                    {RUPTURA_DONUT.map((e, i) => <Cell key={i} fill={e.color} />)}
                   </Pie>
-                  <Tooltip content={<LightTooltip />} />
+                  <Tooltip content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return <div style={{ background: '#fff', border: '1px solid #E5E1D6', borderRadius: 8, padding: '6px 10px', fontSize: 11, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                      <p style={{ fontWeight: 600, color: '#3D3A33' }}>{d.name}</p>
+                      <p style={{ color: d.color, fontWeight: 700 }}>{d.value}%</p>
+                    </div>;
+                  }} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="space-y-2">
-                {analytics.pieData.map((item) => (
-                  <div key={item.sexo} className="flex items-center gap-3">
-                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.fill }} />
-                    <div>
-                      <p className="text-base font-semibold text-slate-900">{item.pct}%</p>
-                      <p className="text-xs text-slate-500">{item.sexo}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
-          )}
-        </SurfaceCard>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {RUPTURA_DONUT.map(d => (
+                <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: '#3D3A33', flex: 1 }}>{d.name}</span>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: '#1A1814' }}>{d.value}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-5">
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1814' }}>Alertas Recentes</h2>
+          <button style={{ fontSize: 11, fontWeight: 500, color: '#1B5E6E', background: 'none', border: 'none', cursor: 'pointer' }}>Ver todos (6) →</button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {ALERTAS.map((a, i) => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 0', borderBottom: i < ALERTAS.length - 1 ? '1px solid #EFEBE0' : 'none' }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: a.cor, marginTop: 6, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: '#1A1814', lineHeight: 1.4, marginBottom: 2 }}>{a.titulo}</p>
+                <p style={{ fontSize: 11, color: '#8A8579' }}>{a.fonte} · {a.tempo}</p>
+              </div>
+              <Badge label={a.tipo} color={a.cor} />
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Page: Epidemiologia ──────────────────────────────────────────────────────
+
+function PageEpidemiologia() {
+  return (
+    <div className="rise">
+      <FilterBar fields={[
+        { label: 'Agravo / CID', value: 'A90 Dengue', width: 160 },
+        { label: 'Período', value: 'Últimos 12 meses', width: 180 },
+        { label: 'Cidade / Região', value: 'Cotia', width: 140 },
+      ]} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
+        <KpiCard label="Total Casos Notificados" value="12.480" delta="+18,2%" deltaLabel="vs ano anterior" icon="📋" iconColor="#D4883A" sparkData={SPARK_CASOS} rising={false} />
+        <KpiCard label="Taxa de Hospitalização" value="6,4%" delta="+0,9 p.p." deltaLabel="vs ano anterior" icon="🏥" iconColor="#4A7FBF" sparkData={SPARK_RISCO} rising={false} />
+        <KpiCard label="Taxa de Óbito" value="0,18%" delta="-0,0 p.p." deltaLabel="estável" icon="📉" iconColor="#2A6B40" sparkData={SPARK_VACINAL} rising={true} />
+        <KpiCard label="Incidência /100mil hab." value="432" delta="+24,0%" deltaLabel="vs ano anterior" icon="📍" iconColor="#D94F4F" sparkData={SPARK_RISCO} rising={false} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+        <Card className="p-5">
+          <SectionTitle>Sazonalidade · Dengue (A90)</SectionTitle>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={EPI_SAZONALIDADE} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <Tooltip content={<ChartTip />} />
+                <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+                <Line type="monotone" dataKey="atual2026" name="2026 (atual)" stroke="#1B5E6E" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="ano2025" name="2025" stroke="#D4883A" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="media5anos" name="Média 5 anos" stroke="#A8A39A" strokeWidth={1} strokeDasharray="4 2" dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <SectionTitle>Distribuição por Cidade</SectionTitle>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            <div style={{ width: 148, height: 148, flexShrink: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={EPI_CIDADES} cx="50%" cy="50%" innerRadius={38} outerRadius={66} dataKey="value" strokeWidth={0}>
+                    {EPI_CIDADES.map((c, i) => <Cell key={i} fill={c.color} />)}
+                  </Pie>
+                  <Tooltip content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return <div style={{ background: '#fff', border: '1px solid #E5E1D6', borderRadius: 8, padding: '6px 10px', fontSize: 11, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                      <p style={{ fontWeight: 600, color: '#3D3A33' }}>{d.name}</p>
+                      <p style={{ color: d.color }}>{d.value}% · {d.total.toLocaleString('pt-BR')} casos</p>
+                    </div>;
+                  }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {EPI_CIDADES.map(c => (
+                <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: '#3D3A33', flex: 1 }}>{c.name}</span>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#6B665D' }}>{c.total.toLocaleString('pt-BR')}</span>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: '#1A1814', width: 36, textAlign: 'right' }}>{c.value}%</span>
+                </div>
+              ))}
+              <p style={{ fontSize: 10, color: '#8A8579', paddingTop: 6, borderTop: '1px solid #EFEBE0', marginTop: 2 }}>Total: 12.480 casos</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+        <Card className="p-5">
+          <SectionTitle>Distribuição por Faixa Etária</SectionTitle>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={EPI_FAIXA} layout="vertical" margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
+                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <YAxis dataKey="faixa" type="category" tick={{ fontSize: 10, fill: '#6B665D' }} tickLine={false} axisLine={false} width={36} />
+                <Tooltip content={<ChartTip unit=" casos" />} />
+                <Bar dataKey="casos" name="Casos" fill="#1B5E6E" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <SectionTitle>Distribuição por Gênero</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ width: 180, height: 180 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={EPI_GENERO} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" strokeWidth={0}>
+                    {EPI_GENERO.map((g, i) => <Cell key={i} fill={g.color} />)}
+                  </Pie>
+                  <Tooltip content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return <div style={{ background: '#fff', border: '1px solid #E5E1D6', borderRadius: 8, padding: '6px 10px', fontSize: 11 }}>
+                      <p style={{ color: d.color, fontWeight: 700 }}>{d.name}: {d.value}%</p>
+                    </div>;
+                  }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ display: 'flex', gap: 24, marginTop: 8 }}>
+              {EPI_GENERO.map(g => (
+                <div key={g.name} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: g.color }} />
+                  <span style={{ fontSize: 12, color: '#3D3A33' }}>{g.name}</span>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: '#1A1814' }}>{g.value}%</span>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: 10, color: '#8A8579', marginTop: 10 }}>Total: 12.480 casos</p>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-5">
+        <SectionTitle>Desfecho Clínico por Ano</SectionTitle>
+        <div style={{ height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={EPI_DESFECHO} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+              <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="ano" tick={{ fontSize: 10, fill: '#6B665D' }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+              <Tooltip content={<ChartTip />} />
+              <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+              <Bar dataKey="leves" name="Casos leves" stackId="a" fill="#4A9B6F" />
+              <Bar dataKey="hosp" name="Hospitalizações" stackId="a" fill="#E8903A" />
+              <Bar dataKey="obitos" name="Óbitos" stackId="a" fill="#D94F4F" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Page: Internações ────────────────────────────────────────────────────────
+
+function PageInternacoes() {
+  return (
+    <div className="rise">
+      <FilterBar fields={[
+        { label: 'Agravo / CID', value: 'Dengue', width: 140 },
+        { label: 'Período', value: 'Últimos 12 meses', width: 180 },
+        { label: 'Hospital', value: 'Todos', width: 140 },
+      ]} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
+        <KpiCard label="Internações no Período" value="1.742" delta="+14,8%" deltaLabel="vs ano anterior" icon="🏥" iconColor="#4A7FBF" sparkData={SPARK_CASOS} rising={false} />
+        <KpiCard label="Permanência Média" value="4,2 dias" delta="-0,3 d." deltaLabel="vs ano anterior" icon="📅" iconColor="#4A9B72" sparkData={SPARK_VACINAL} rising={true} />
+        <KpiCard label="Reinternações em 30D" value="8,6%" delta="+1,2 p.p." deltaLabel="vs ano anterior" icon="🔄" iconColor="#D94F4F" sparkData={SPARK_RISCO} rising={false} />
+        <KpiCard label="Custo Total SIH" value="12,84 mi BRL" delta="-18,6 p.p." deltaLabel="vs ano anterior" icon="💰" iconColor="#2A6B40" sparkData={SPARK_VACINAL} rising={true} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+        <Card className="p-5">
+          <SectionTitle>Internações e Custo Mensal</SectionTitle>
+          <div style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={SIH_MENSAL} margin={{ top: 4, right: 36, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} />
+                <Tooltip content={<ChartTip />} />
+                <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+                <Bar yAxisId="left" dataKey="int" name="Internações" fill="#1B5E6E" radius={[3, 3, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="custo" name="Custo (R$ mil)" stroke="#D94F4F" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <SectionTitle>Principais Grupos de Causa</SectionTitle>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #E5E1D6' }}>
+                <th style={{ textAlign: 'left', padding: '8px 0', fontSize: 11, fontWeight: 600, color: '#6B665D' }}>Grupo</th>
+                <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 600, color: '#6B665D' }}>Internações</th>
+                <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 600, color: '#6B665D' }}>Custo médio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SIH_CAUSAS.map((c, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #F5F2EB' }}>
+                  <td style={{ padding: '9px 0', color: '#3D3A33', fontWeight: 500 }}>{c.grupo}</td>
+                  <td style={{ padding: '9px 0', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: '#1A1814' }}>{c.int}</td>
+                  <td style={{ padding: '9px 0', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: '#6B665D' }}>{c.custo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <Card className="p-5">
+          <SectionTitle>Permanência Média por Grupo</SectionTitle>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={SIH_PERMANENCIA} layout="vertical" margin={{ top: 0, right: 24, left: 64, bottom: 0 }}>
+                <CartesianGrid stroke="#E5E1D6" strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 9, fill: '#A8A39A' }} tickLine={false} axisLine={false} unit="d" />
+                <YAxis dataKey="grupo" type="category" tick={{ fontSize: 9.5, fill: '#6B665D' }} tickLine={false} axisLine={false} width={92} />
+                <Tooltip content={<ChartTip unit=" dias" />} />
+                <Bar dataKey="dias" name="Dias" radius={[0, 3, 3, 0]}>
+                  {SIH_PERMANENCIA.map((e, i) => <Cell key={i} fill={e.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <SectionTitle>Origem das AIH</SectionTitle>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <div style={{ width: 158, height: 158, flexShrink: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={SIH_ORIGEM} cx="50%" cy="50%" innerRadius={44} outerRadius={70} dataKey="value" strokeWidth={0}>
+                    {SIH_ORIGEM.map((o, i) => <Cell key={i} fill={o.color} />)}
+                  </Pie>
+                  <Tooltip content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return <div style={{ background: '#fff', border: '1px solid #E5E1D6', borderRadius: 8, padding: '6px 10px', fontSize: 11 }}>
+                      <p style={{ color: d.color, fontWeight: 700 }}>{d.name}: {d.value}%</p>
+                    </div>;
+                  }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {SIH_ORIGEM.map(o => (
+                <div key={o.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, background: o.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: '#3D3A33', flex: 1 }}>{o.name}</span>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 800, color: '#1A1814' }}>{o.value}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
-  )
+  );
 }
 
-function MapPage({ analytics }) {
-  const [runs, setRuns] = useState([])
-  const [loadingRuns, setLoadingRuns] = useState(false)
-  const [runsError, setRunsError] = useState(null)
-  const [category, setCategory] = useState(analytics?.sistema ?? '')
-  const [selectedRunId, setSelectedRunId] = useState(null)
+// ─── Placeholder ──────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let mounted = true
-    const fetchRuns = async () => {
-      setLoadingRuns(true)
-      setRunsError(null)
-      try {
-        const q = category ? `?sistema=${encodeURIComponent(category)}` : ''
-        const r = await fetch(`${API}/api/runs${q}`)
-        const d = await r.json().catch(() => null)
-        if (!mounted) return
-        if (!d?.ok && d?.error) {
-          setRunsError(String(d.error))
-        }
-        const list = d?.runs && Array.isArray(d.runs) ? d.runs : []
-        setRuns(list)
-        setSelectedRunId(list[0]?.run_id ?? null)
-      } catch {
-        if (!mounted) return
-        setRunsError('Falha ao carregar runs do Supabase.')
-        setRuns([])
-      }
-      setLoadingRuns(false)
-    }
-    fetchRuns()
-    return () => { mounted = false }
-  }, [category])
-
-  const visibleRuns = runs.filter((r) => r.lat != null && r.lon != null)
-  const selected = runs.find((r) => r.run_id === selectedRunId) ?? null
-
+function PagePlaceholder({ icon, title, description }) {
   return (
-    <div className="grid gap-5 xl:grid-cols-[1.55fr_0.85fr]">
-      <SurfaceCard>
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <SectionLabel>Mapa de risco</SectionLabel>
-            <h1 className="text-2xl font-bold text-slate-900">Brasil: cidades com dados carregados</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Pins são gerados somente a partir de execuções reais salvas no Supabase.
-            </p>
-          </div>
+    <div className="rise" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 440 }}>
+      <div style={{ width: 64, height: 64, borderRadius: 16, background: '#F0EDE6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, marginBottom: 20 }}>
+        {icon}
+      </div>
+      <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 20, fontWeight: 700, color: '#1A1814', marginBottom: 8 }}>{title}</h2>
+      <p style={{ fontSize: 13, color: '#8A8579', textAlign: 'center', maxWidth: 320, lineHeight: 1.6 }}>{description}</p>
+      <span style={{ marginTop: 20, display: 'inline-flex', alignItems: 'center', padding: '6px 14px', borderRadius: 99, fontSize: 11, fontWeight: 600, background: '#D6E9EE', color: '#1B5E6E' }}>
+        Em desenvolvimento · FIAP 2026
+      </span>
+    </div>
+  );
+}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-            >
-              <option value="">Todas as categorias</option>
-              {Object.keys(SISTEMA_META).map((cod) => (
-                <option key={cod} value={cod}>{cod} — {SISTEMA_META[cod].label}</option>
-              ))}
-            </select>
-            <Badge tone="blue">{loadingRuns ? 'Carregando...' : `${visibleRuns.length} cidade(s)`}</Badge>
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+
+const NAV = [
+  {
+    section: 'ANÁLISES',
+    items: [
+      { id: 'visao-geral',   label: 'Visão Geral',        sub: null,   badge: null,
+        icon: <svg viewBox="0 0 16 16" fill="currentColor" width="15" height="15"><path d="M1 2h6v7H1V2zm8 0h6v3H9V2zm0 5h6v7H9V7zm-8 4h6v3H1v-3z"/></svg> },
+      { id: 'epidemiologia', label: 'Epidemiologia',       sub: 'SINAN', badge: null,
+        icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path d="M1 12 5 7l3 3 3-5 3 2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+      { id: 'internacoes',   label: 'Internações',         sub: 'SIH',   badge: null,
+        icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><rect x="2" y="4" width="12" height="10" rx="1.5"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M8 7v4M6 9h4" strokeLinecap="round"/></svg> },
+      { id: 'vacinal',       label: 'Cobertura Vacinal',   sub: null,   badge: null,
+        icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+      { id: 'superlotacao',  label: 'Superlotação',        sub: 'CNES',  badge: null,
+        icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path d="M8 2v7M2 9h12M4 9v5h8V9" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+    ],
+  },
+  {
+    section: 'SISTEMA',
+    items: [
+      { id: 'insumos',  label: 'Ruptura de Insumos', sub: null, badge: null,
+        icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" strokeLinecap="round"/></svg> },
+      { id: 'alertas',  label: 'Alertas',             sub: null, badge: 4,
+        icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="15" height="15"><path d="M8 1.5L14 13H2L8 1.5z" strokeLinejoin="round"/><path d="M8 6v3M8 10.5v.5" strokeLinecap="round"/></svg> },
+    ],
+  },
+];
+
+function Sidebar({ current, onNav }) {
+  return (
+    <aside style={{ position: 'fixed', left: 0, top: 0, width: 220, height: '100vh', background: '#1E3C3C', display: 'flex', flexDirection: 'column', zIndex: 30 }}>
+      {/* Logo */}
+      <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: '#4DB8A0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="#1E3C3C" strokeWidth="2.2">
+              <path d="M2 13 6 8l4 4 3-6 3 3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <p style={{ fontFamily: 'Inter Tight, sans-serif', fontWeight: 700, fontSize: 15, color: 'white', lineHeight: 1.1 }}>SusPredict</p>
+            <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#6A9090' }}>v1.0 · FIAP 2026</p>
           </div>
         </div>
+      </div>
 
-        {runsError ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
-            {runsError}
+      {/* Nav */}
+      <nav style={{ flex: 1, paddingTop: 16, overflowY: 'auto' }}>
+        {NAV.map(group => (
+          <div key={group.section} style={{ marginBottom: 20 }}>
+            <p style={{ padding: '0 20px', marginBottom: 4, fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', color: '#6A9090' }}>{group.section}</p>
+            {group.items.map(item => {
+              const active = current === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onNav(item.id)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '9px 20px', textAlign: 'left', background: active ? '#2A5050' : 'transparent',
+                    color: active ? '#FFFFFF' : '#C8D8D5', border: 'none', cursor: 'pointer',
+                    position: 'relative', transition: 'background 0.12s',
+                  }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(77,184,160,0.07)'; }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {active && (
+                    <span style={{ position: 'absolute', left: 0, top: '20%', bottom: '20%', width: 2.5, borderRadius: '0 2px 2px 0', background: '#4DB8A0' }} />
+                  )}
+                  <span style={{ color: active ? '#4DB8A0' : '#7EB8B0', opacity: active ? 1 : 0.75, flexShrink: 0 }}>{item.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{item.label}</span>
+                  {item.sub && <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#6A9090' }}>{item.sub}</span>}
+                  {item.badge && (
+                    <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#D94F4F', color: 'white', fontSize: 9, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-        ) : visibleRuns.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-            Nenhuma cidade com coordenadas disponível ainda. Por enquanto o backend só conhece as coordenadas de São Paulo.
-          </div>
-        ) : (
-          <BrazilMap runs={visibleRuns} selectedRunId={selectedRunId} onSelectRun={setSelectedRunId} />
-        )}
-      </SurfaceCard>
+        ))}
+      </nav>
 
-      <SurfaceCard className="flex flex-col">
-        <SectionLabel>Detalhes do pin</SectionLabel>
-        {!selected ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-            Selecione um pin no mapa para ver os detalhes do run.
+      {/* Footer */}
+      <div style={{ padding: '12px 20px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4DB8A0', flexShrink: 0, animation: 'dot-pulse 2.4s ease-in-out infinite' }} />
+          <span style={{ fontSize: 10, color: '#6A9090' }}>Dados em sincronia · há 8 min</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#4A7FBF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'white', flexShrink: 0 }}>MO</div>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: 'white', lineHeight: 1.2 }}>Márcia Oliveira</p>
+            <p style={{ fontSize: 9, color: '#6A9090' }}>SMS · ADMIN</p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Cidade</p>
-              <p className="mt-2 text-lg font-bold text-slate-900">{selected.cidade} — {selected.uf}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Badge tone="blue">{selected.sistema}</Badge>
-                {selected.doenca_cod ? <Badge tone="yellow">{selected.doenca_cod}</Badge> : <Badge tone="slate">—</Badge>}
-                <Badge tone="slate">{selected.ano_ini}–{selected.ano_fim}</Badge>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+// ─── Topbar ───────────────────────────────────────────────────────────────────
+
+const CRUMBS = {
+  'visao-geral':   ['Início', 'Visão Geral'],
+  'epidemiologia': ['Análises', 'Epidemiologia SINAN'],
+  'internacoes':   ['Análises', 'Internações SIH'],
+  'vacinal':       ['Análises', 'Cobertura Vacinal'],
+  'superlotacao':  ['Análises', 'Superlotação CNES'],
+  'insumos':       ['Sistema', 'Ruptura de Insumos'],
+  'alertas':       ['Sistema', 'Alertas'],
+};
+
+function Topbar({ current }) {
+  const crumbs = CRUMBS[current] || ['Início'];
+  return (
+    <header style={{ position: 'fixed', top: 0, right: 0, left: 220, height: 60, background: '#F6F5F2', borderBottom: '1px solid #E5E1D6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 36px', zIndex: 20 }}>
+      <nav style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {crumbs.map((c, i) => (
+          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {i > 0 && <span style={{ color: '#C9C4BA', fontSize: 12 }}>/</span>}
+            <span style={{ fontSize: 12, fontWeight: i === crumbs.length - 1 ? 600 : 400, color: i === crumbs.length - 1 ? '#1A1814' : '#8A8579' }}>{c}</span>
+          </span>
+        ))}
+      </nav>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            placeholder="Buscar dados, relatórios..."
+            style={{ width: 260, padding: '6px 12px 6px 32px', fontSize: 12, borderRadius: 8, border: '1px solid #E5E1D6', background: '#FFFFFF', color: '#3D3A33', outline: 'none' }}
+          />
+          <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="#A8A39A" strokeWidth="1.5">
+            <circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <button style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #E5E1D6', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#6B665D" strokeWidth="1.5">
+            <rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/>
+            <rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>
+          </svg>
+        </button>
+        <button style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #E5E1D6', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}>
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#6B665D" strokeWidth="1.5">
+            <path d="M8 1a4 4 0 014 4v3l1.5 2.5h-11L4 8V5a4 4 0 014-4zM6.5 13.5a1.5 1.5 0 003 0"/>
+          </svg>
+          <span style={{ position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: '50%', background: '#D94F4F', color: 'white', fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>4</span>
+        </button>
+      </div>
+    </header>
+  );
+}
+
+// ─── Floating chat ────────────────────────────────────────────────────────────
+
+function FloatingChat() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      {open && (
+        <div style={{ position: 'fixed', bottom: 76, right: 24, width: 280, borderRadius: 16, border: '1px solid #E5E1D6', background: '#FFFFFF', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', zIndex: 50, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', background: '#1E3C3C', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>🤖</span>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 600, color: 'white', lineHeight: 1 }}>Assistente DATASUS</p>
+                <p style={{ fontSize: 9, color: '#6A9090' }}>powered by Gemini</p>
               </div>
             </div>
-
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Run</p>
-              <p className="mt-2 font-mono text-sm text-slate-700">{selected.run_id}</p>
-              <p className="mt-2 text-sm text-slate-500">Modelo: <strong className="text-slate-800">{selected.modelo ?? '—'}</strong></p>
-            </div>
-
-            <div className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-900">
-              Dica: para popular mais pins, rode novas extrações na aba <strong>Baixar Dados</strong>.
-            </div>
+            <button onClick={() => setOpen(false)} style={{ color: '#A8A39A', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
           </div>
-        )}
-      </SurfaceCard>
-    </div>
-  )
-}
-
-function SuperlotacaoPage({ analytics }) {
-  return (
-    <EmptyModule
-      title="Superlotação Hospitalar"
-      description="Sem dados fictícios: este módulo só será exibido quando o backend expor métricas reais de ocupação (ex: SIH + CNES com cálculo de leitos e taxa de ocupação)."
-    />
-  )
-}
-
-function AlertasPage({ analytics }) {
-  return (
-    <EmptyModule
-      title="Central de Alertas"
-      description="Sem dados fictícios: este módulo só será exibido quando o backend retornar alertas reais (ex: regras/thresholds calculados a partir dos dados extraídos)."
-    />
-  )
-}
-
-function ConfigPage({ sistema, jobStatus, cidade, uf, anoIni, anoFim }) {
-  return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      <SurfaceCard>
-        <SectionLabel>Status do projeto</SectionLabel>
-        <h1 className="text-2xl font-bold text-slate-900">Contexto acadêmico do SUS Predict</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-500">
-          Projeto de TCC da FIAP com foco em monitoramento e previsão baseados em dados públicos do SUS.
-          A interface foi redesenhada para transmitir leitura executiva sem perder o caráter demonstrativo e técnico.
-        </p>
-
-        <div className="mt-6 grid gap-3">
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Situação atual</p>
-            <p className="mt-2 text-sm font-semibold text-slate-900">{jobStatus === 'done' ? 'Análise concluída' : 'Aguardando nova extração'}</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Recorte ativo</p>
-            <p className="mt-2 text-sm font-semibold text-slate-900">{sistema || 'Sistema'} · {cidade || 'Município'}, {uf || 'UF'} · {anoIni}–{anoFim}</p>
+          <div style={{ padding: 16 }}>
+            <p style={{ fontSize: 12, color: '#6B665D', marginBottom: 10 }}>Faça perguntas sobre os dados do município de Cotia.</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="text" placeholder="Ex: tendência de dengue?" style={{ flex: 1, fontSize: 12, padding: '7px 10px', borderRadius: 8, border: '1px solid #E5E1D6', color: '#3D3A33', outline: 'none' }} />
+              <button style={{ padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, color: 'white', background: '#1B5E6E', border: 'none', cursor: 'pointer' }}>→</button>
+            </div>
+            <p style={{ fontSize: 10, color: '#C9C4BA', marginTop: 8, textAlign: 'center' }}>Em breve — integração Gemini</p>
           </div>
         </div>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <SectionLabel>Stack</SectionLabel>
-        <div className="space-y-4 text-sm text-slate-600">
-          <p><strong className="text-slate-900">Backend:</strong> Python, FastAPI e PySUS.</p>
-          <p><strong className="text-slate-900">Frontend:</strong> React, Tailwind e Recharts.</p>
-          <p><strong className="text-slate-900">Restrições:</strong> Python 3.12 para PySUS e latência variável no FTP do DATASUS.</p>
-          <p><strong className="text-slate-900">Objetivo:</strong> reduzir o tempo até a decisão visual em menos de 30 segundos.</p>
-        </div>
-      </SurfaceCard>
-    </div>
-  )
+      )}
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Assistente DATASUS"
+        style={{ position: 'fixed', bottom: 24, right: 24, width: 48, height: 48, borderRadius: '50%', background: '#1E3C3C', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', zIndex: 50, transition: 'transform 0.15s' }}
+        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+      >
+        🤖
+      </button>
+    </>
+  );
 }
+
+// ─── App ─────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [activeView, setActiveView] = useState('overview')
+  const [page, setPage] = useState('visao-geral');
 
-  const [step, setStep] = useState(1)
-  const [sistema, setSistema] = useState('')
-  // Foco atual do projeto: São Paulo/SP (município 355030)
-  const [uf, setUf] = useState('SP')
-  const [cidade, setCidade] = useState('São Paulo')
-  const [ibge, setIbge] = useState('3550308')
-  const [anoIni, setAnoIni] = useState(2019)
-  const [anoFim, setAnoFim] = useState(2025)
-  const [doenca, setDoenca] = useState('')
-
-  const [estados, setEstados] = useState([])
-  const [cidades, setCidades] = useState([])
-  const [doencas, setDoencas] = useState([])
-  const [anoLimites, setAnoLimites] = useState({})
-
-  const [jobId, setJobId] = useState(null)
-  const [jobStatus, setJobStatus] = useState('idle')
-  const [progresso, setProgresso] = useState(0)
-  const [mensagem, setMensagem] = useState('')
-  const [resultado, setResultado] = useState(null)
-
-  const [startingJob, setStartingJob] = useState(false)
-  const [cleaningUp, setCleaningUp] = useState(false)
-  const [exportingXlsx, setExportingXlsx] = useState(false)
-  const [backendError, setBackendError] = useState(null)
-  const [supabaseRuns, setSupabaseRuns] = useState([])
-  const [bootstrapTried, setBootstrapTried] = useState(false)
-
-  useEffect(() => {
-    const fetchJson = async (url) => {
-      const response = await fetch(url)
-      const data = await response.json().catch(() => null)
-      if (!response.ok) {
-        const message = (data && (data.detail || data.message)) ? (data.detail || data.message) : `HTTP ${response.status}`
-        throw new Error(message)
-      }
-      return data
+  function render() {
+    switch (page) {
+      case 'visao-geral':   return <PageVisaoGeral />;
+      case 'epidemiologia': return <PageEpidemiologia />;
+      case 'internacoes':   return <PageInternacoes />;
+      case 'vacinal':       return <PagePlaceholder icon="💉" title="Cobertura Vacinal" description="Painel de cobertura vacinal por imunobiológico, faixa etária e UBS. Integração com SIPNI em desenvolvimento." />;
+      case 'superlotacao':  return <PagePlaceholder icon="🏥" title="Superlotação CNES" description="Monitoramento em tempo real de ocupação de leitos, UTI e pronto-socorros. Módulo em desenvolvimento." />;
+      case 'insumos':       return <PagePlaceholder icon="💊" title="Ruptura de Insumos" description="Rastreamento de estoque de medicamentos essenciais e alertas de ruptura por UBS." />;
+      case 'alertas':       return <PagePlaceholder icon="🔔" title="Central de Alertas" description="Todos os alertas ativos, histórico de notificações e configuração de thresholds." />;
+      default:              return <PageVisaoGeral />;
     }
-
-    ;(async () => {
-      try {
-        const lista = await fetchJson(`${API}/api/estados`)
-        setEstados(Array.isArray(lista) ? lista : [])
-      } catch (e) {
-        setBackendError(String(e?.message ?? e) || 'Não foi possível conectar ao backend. Verifique se o servidor FastAPI está rodando na porta 8000.')
-      }
-    })()
-
-    ;(async () => {
-      try {
-        const limites = await fetchJson(`${API}/api/ano_limite`)
-        setAnoLimites(limites || {})
-      } catch {
-        // silencioso: o frontend tem fallback seguro de ano máximo
-      }
-    })()
-  }, [])
-
-  useEffect(() => {
-    if (sistema === 'SINAN' && doencas.length === 0) {
-      fetch(`${API}/api/doencas`)
-        .then(async (response) => {
-          const data = await response.json().catch(() => null)
-          if (!response.ok) return []
-          return Array.isArray(data) ? data : []
-        })
-        .then(setDoencas)
-        .catch(() => setDoencas([]))
-    }
-  }, [sistema, doencas.length])
-
-  useEffect(() => {
-    if (!jobId || jobStatus === 'done' || jobStatus === 'error') return
-
-    const intervalId = setInterval(async () => {
-      try {
-        const statusResponse = await fetch(`${API}/api/status/${jobId}`)
-        const statusData = await statusResponse.json()
-        setProgresso(statusData.progresso)
-        setMensagem(statusData.mensagem)
-
-        if (statusData.status === 'done') {
-          setJobStatus('done')
-          const resultResponse = await fetch(`${API}/api/resultado/${jobId}`)
-          setResultado(await resultResponse.json())
-          setActiveView('overview')
-        } else if (statusData.status === 'error') {
-          setJobStatus('error')
-          setMensagem(statusData.mensagem)
-        }
-      } catch {
-        clearInterval(intervalId)
-      }
-    }, 800)
-
-    return () => clearInterval(intervalId)
-  }, [jobId, jobStatus])
-
-  const analytics = toRealAnalytics(resultado, sistema, cidade, uf, anoIni, anoFim)
-  const notificationCount = 0
-
-  const loadCidades = async (sigla) => {
-    try {
-      const response = await fetch(`${API}/api/cidades/${sigla}`)
-      const data = await response.json().catch(() => null)
-      if (!response.ok) throw new Error((data && data.detail) ? data.detail : `HTTP ${response.status}`)
-      setCidades(Array.isArray(data) ? data : [])
-    } catch (e) {
-      setCidades([])
-      setBackendError(String(e?.message ?? e))
-    }
-  }
-
-  const handleConfirm = async () => {
-    setStartingJob(true)
-    try {
-      const response = await fetch(`${API}/api/download`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sistema,
-          uf,
-          cidade,
-          ibge,
-          ano_ini: anoIni,
-          ano_fim: anoFim,
-          doenca_cod: sistema === 'SINAN' ? doenca : '',
-        }),
-      })
-      const data = await response.json()
-      setJobId(data.job_id)
-      setJobStatus('running')
-      setResultado(null)
-      setActiveView('overview')
-    } catch {
-      window.alert('Erro ao iniciar o job. Verifique se o backend está rodando.')
-    }
-    setStartingJob(false)
-  }
-
-  const handleCleanup = async () => {
-    if (!jobId) return
-
-    setCleaningUp(true)
-    try {
-      await fetch(`${API}/api/cleanup/${jobId}`, { method: 'DELETE' })
-      setStep(1)
-      setSistema('')
-      setUf('')
-      setCidade('')
-      setIbge('')
-      setAnoIni(2019)
-      setAnoFim(2025)
-      setDoenca('')
-      setJobId(null)
-      setJobStatus('idle')
-      setResultado(null)
-      setProgresso(0)
-      setMensagem('')
-      setActiveView('overview')
-    } catch {}
-    setCleaningUp(false)
-  }
-
-  const handleExportXlsx = async () => {
-    if (!jobId) return
-    setExportingXlsx(true)
-    try {
-      const response = await fetch(`${API}/api/export/${jobId}`)
-      if (!response.ok) {
-        const text = await response.text().catch(() => '')
-        throw new Error(text || `Falha ao exportar (HTTP ${response.status})`)
-      }
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `sus_predict_${jobId}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      window.URL.revokeObjectURL(url)
-    } catch (e) {
-      window.alert(`Não foi possível exportar XLSX.\n\n${String(e?.message ?? e)}`)
-    }
-    setExportingXlsx(false)
-  }
-
-  const loadFromCacheRun = async (run) => {
-    if (!run?.sistema) return false
-    setSistema(run.sistema)
-    setUf(run.uf || 'SP')
-    setCidade(run.cidade || 'São Paulo')
-    setIbge(run.ibge6 ? `${run.ibge6}00` : (ibge || ''))
-    setAnoIni(Number(run.ano_ini || anoIni))
-    setAnoFim(Number(run.ano_fim || anoFim))
-    setDoenca(run.doenca_cod || '')
-
-    setStartingJob(true)
-    try {
-      const response = await fetch(`${API}/api/download`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sistema: run.sistema,
-          uf: run.uf || uf,
-          cidade: run.cidade || cidade,
-          ibge: run.ibge6 ? `${run.ibge6}00` : ibge,
-          ano_ini: Number(run.ano_ini || anoIni),
-          ano_fim: Number(run.ano_fim || anoFim),
-          doenca_cod: run.doenca_cod || '',
-          usar_cache: true,
-        }),
-      })
-      const data = await response.json()
-      setJobId(data.job_id)
-      if (data.cache) {
-        setJobStatus('done')
-        const r2 = await fetch(`${API}/api/resultado/${data.job_id}`)
-        setResultado(await r2.json())
-      } else {
-        setJobStatus('running')
-      }
-      setActiveView('overview')
-      return true
-    } catch {
-      return false
-    } finally {
-      setStartingJob(false)
-    }
-  }
-
-  // Bootstrap: ao entrar no app, tenta carregar o run mais recente do Supabase.
-  useEffect(() => {
-    if (backendError) return
-    if (bootstrapTried) return
-    if (jobStatus === 'running') return
-    if (resultado) return
-
-    let mounted = true
-    const bootstrap = async () => {
-      try {
-        const r = await fetch(`${API}/api/runs?limit=200`)
-        const d = await r.json().catch(() => null)
-        const list = d?.runs && Array.isArray(d.runs) ? d.runs : []
-        if (!mounted) return
-        setSupabaseRuns(list)
-        if (list.length > 0) {
-          await loadFromCacheRun(list[0])
-        }
-      } catch {
-        if (!mounted) return
-        setSupabaseRuns([])
-      } finally {
-        if (mounted) setBootstrapTried(true)
-      }
-    }
-    bootstrap()
-    return () => { mounted = false }
-  }, [backendError, bootstrapTried, jobStatus, resultado])
-
-  const handleChangeCategory = async (nextSistema) => {
-    if (!nextSistema) return
-    // Preferência: se já existe run no Supabase para a categoria, carrega ele.
-    const match = supabaseRuns.find((r) => r.sistema === nextSistema)
-    if (match) {
-      const ok = await loadFromCacheRun(match)
-      if (!ok) window.alert('Não foi possível carregar do Supabase. Verifique o backend e tente novamente.')
-      return
-    }
-
-    // Fallback: abre a aba de download para gerar dados reais dessa categoria.
-    setSistema(nextSistema)
-    setActiveView('download')
-  }
-
-  const topbar = (
-    <>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{NAV_ITEMS.find((item) => item.key === activeView)?.label ?? 'SUS Predict'}</p>
-        <h2 className="text-lg font-bold text-slate-900">
-          {activeView === 'overview' ? 'Visão Geral' : NAV_ITEMS.find((item) => item.key === activeView)?.label}
-        </h2>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={sistema || ''}
-          onChange={(e) => handleChangeCategory(e.target.value)}
-          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-        >
-          <option value="" disabled>Categoria</option>
-          {Object.keys(SISTEMA_META).map((cod) => (
-            <option key={cod} value={cod}>{cod} — {SISTEMA_META[cod].label}</option>
-          ))}
-        </select>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          {cidade && uf ? `${cidade} — ${uf}` : 'Selecione um município'}
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          {anoIni}–{anoFim}
-        </div>
-        <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg">
-          🔔
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-            {notificationCount}
-          </span>
-        </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white">US</div>
-      </div>
-    </>
-  )
-
-  let content = null
-
-  if (backendError) {
-    content = <ErrorState message={backendError} onRetry={() => { setBackendError(null); window.location.reload() }} />
-  } else if (jobStatus === 'running') {
-    content = <LoadingState sistema={sistema} cidade={cidade} uf={uf} progresso={progresso} mensagem={mensagem} />
-  } else if (jobStatus === 'error') {
-    content = (
-      <SurfaceCard className="mx-auto max-w-2xl text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-3xl">❌</div>
-        <h1 className="text-2xl font-bold text-slate-900">Erro no processamento</h1>
-        <p className="mt-2 text-sm text-slate-500">{mensagem}</p>
-        <button onClick={() => { setJobStatus('idle'); setStep(3) }} className="mt-6 rounded-xl bg-[var(--blue-500)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--blue-600)]">
-          Tentar novamente
-        </button>
-      </SurfaceCard>
-    )
-  } else if (!analytics) {
-    content = (
-      <ExtractionWorkspace
-        step={step}
-        sistema={sistema}
-        setSistema={setSistema}
-        estados={estados}
-        cidades={cidades}
-        uf={uf}
-        setUf={setUf}
-        cidade={cidade}
-        setCidade={setCidade}
-        ibge={ibge}
-        setIbge={setIbge}
-        anoIni={anoIni}
-        setAnoIni={setAnoIni}
-        anoFim={anoFim}
-        setAnoFim={setAnoFim}
-        anoLimites={anoLimites}
-        doencas={doencas}
-        doenca={doenca}
-        setDoenca={setDoenca}
-        onLoadCidades={loadCidades}
-        onNext={() => setStep((value) => Math.min(value + 1, 3))}
-        onBack={() => setStep((value) => Math.max(value - 1, 1))}
-        onConfirm={handleConfirm}
-        loading={startingJob}
-      />
-    )
-  } else if (activeView === 'overview') {
-    content = (
-      <OverviewPage
-        analytics={analytics}
-        onCleanup={handleCleanup}
-        onExportXlsx={handleExportXlsx}
-        exportingXlsx={exportingXlsx}
-        cleaningUp={cleaningUp}
-        jobId={jobId}
-      />
-    )
-  } else if (activeView === 'download') {
-    content = (
-      <ExtractionWorkspace
-        step={step}
-        sistema={sistema}
-        setSistema={setSistema}
-        estados={estados}
-        cidades={cidades}
-        uf={uf}
-        setUf={setUf}
-        cidade={cidade}
-        setCidade={setCidade}
-        ibge={ibge}
-        setIbge={setIbge}
-        anoIni={anoIni}
-        setAnoIni={setAnoIni}
-        anoFim={anoFim}
-        setAnoFim={setAnoFim}
-        anoLimites={anoLimites}
-        doencas={doencas}
-        doenca={doenca}
-        setDoenca={setDoenca}
-        onLoadCidades={loadCidades}
-        onNext={() => setStep((value) => Math.min(value + 1, 3))}
-        onBack={() => setStep((value) => Math.max(value - 1, 1))}
-        onConfirm={handleConfirm}
-        loading={startingJob}
-      />
-    )
-  } else if (activeView === 'mapa') {
-    content = <MapPage analytics={analytics} />
-  } else if (activeView === 'superlotacao') {
-    content = <SuperlotacaoPage analytics={analytics} />
-  } else if (activeView === 'alertas') {
-    content = <AlertasPage analytics={analytics} />
-  } else if (activeView === 'config') {
-    content = <ConfigPage sistema={sistema} jobStatus={jobStatus} cidade={cidade} uf={uf} anoIni={anoIni} anoFim={anoFim} />
-  } else {
-    content = (
-      <EmptyModule
-        title={NAV_ITEMS.find((item) => item.key === activeView)?.label ?? 'Módulo'}
-        description="Sem dados fictícios: este módulo só será mostrado quando o backend expuser métricas reais para ele."
-      />
-    )
   }
 
   return (
-    <AppShell activeView={activeView} onChangeView={setActiveView} topbar={topbar}>
-      {content}
-    </AppShell>
-  )
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#F6F5F2' }}>
+      <Sidebar current={page} onNav={setPage} />
+      <div style={{ marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Topbar current={page} />
+        <main style={{ paddingTop: 60, flex: 1 }}>
+          <div style={{ padding: '28px 36px', maxWidth: 1280 }}>
+            {render()}
+          </div>
+        </main>
+      </div>
+      <FloatingChat />
+    </div>
+  );
 }
