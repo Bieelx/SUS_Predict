@@ -1,3 +1,4 @@
+import ChartData from '../shared/ChartData.jsx';
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import { Badge, Card, SectionTitle } from '../shared/ui.jsx';
@@ -46,13 +47,15 @@ export default function Vacinacao({ municipio }) {
               </ScatterChart>
             </ResponsiveContainer>
             <p style={nota}>Cada ponto representa um município. A relação visual é exploratória e não demonstra efeito causal.</p>
+          <ChartData title="Vacinação e incidência por município" rows={comparativo} columns={[['nome', 'Município'], ['doses', 'Doses', inteiro], ['incidencia', 'Incidência por 100 mil', decimal], ['casos', 'Casos', inteiro]]} />
           </Card>
           <Card className="p-5">
             <SectionTitle>Casos × doses por faixa etária</SectionTitle>
             <ResponsiveContainer width="100%" height={290}>
-              <BarChart data={faixas}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="faixa" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="casos" name="Casos" fill="var(--risk-medio)" /><Bar dataKey="doses" name="Doses" fill="var(--primary)" radius={[4, 4, 0, 0]} /></BarChart>
+              <BarChart accessibilityLayer data={faixas}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="faixa" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="casos" name="Casos" fill="var(--risk-medio)" /><Bar dataKey="doses" name="Doses" fill="var(--primary)" radius={[4, 4, 0, 0]} /></BarChart>
             </ResponsiveContainer>
             <p style={nota}>As duas medidas compartilham faixa etária, município e período, mas possuem escalas e origens distintas.</p>
+          <ChartData title="Casos e doses por faixa etária" rows={faixas} columns={[['faixa', 'Faixa etária'], ['casos', 'Casos', inteiro], ['doses', 'Doses', inteiro]]} />
           </Card>
         </div>
 

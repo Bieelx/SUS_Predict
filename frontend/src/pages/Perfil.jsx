@@ -101,7 +101,7 @@ export default function PagePerfil({ onLogout }) {
                 <p style={{ fontSize: 13, fontWeight: 700, color: '#1A1814', marginBottom: 2 }}>Sair do SusPredict</p>
                 <p style={{ fontSize: 11, color: 'var(--ink-400)', lineHeight: 1.4 }}>Sua sessão neste navegador será encerrada.</p>
               </div>
-              <button onClick={onLogout} style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#D94F4F', background: '#D94F4F12', border: '1px solid #D94F4F33', cursor: 'pointer', flexShrink: 0 }}>
+              <button onClick={onLogout} style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#8A2A38', background: '#D94F4F12', border: '1px solid #D94F4F33', cursor: 'pointer', flexShrink: 0 }}>
                 Sair
               </button>
             </div>

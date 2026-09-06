@@ -1538,6 +1538,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
 
             {/* Input */}
             <div style={{ padding: '10px 12px 12px', flexShrink: 0 }}>
+              <p id="clara-privacy" className="form-privacy" style={{ margin: '0 0 8px', fontSize: 11 }}>As conversas podem ser salvas. Não envie dados identificáveis de pacientes. <a href="/privacidade" target="_blank" rel="noopener noreferrer">Privacidade (nova aba)</a></p>
               <div className="susbot-composer" style={{ padding: '10px 10px 8px 12px' }}>
                   <textarea
                   ref={inputRef}
@@ -1552,8 +1553,9 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                   }}
                     placeholder="Pergunte sobre este município…"
                     aria-label="Mensagem para a Clara"
+                    aria-describedby="clara-privacy"
                   style={{
-                    width: '100%', fontSize: 13, border: 'none', outline: 'none', padding: 0,
+                    width: '100%', fontSize: 13, border: 'none', padding: 0,
                     color: 'var(--ink-900)', background: 'transparent', resize: 'none',
                     overflow: 'hidden', lineHeight: 1.5, minHeight: 22, maxHeight: 120,
                   }}

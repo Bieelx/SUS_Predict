@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -360,6 +359,39 @@
   font-size: 12.5px;
 }
 
+.login-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border: 1px solid var(--login-border, oklch(0.88 0.01 84));
+  border-radius: 10px;
+  background: var(--login-canvas);
+}
+.login-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--login-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.login-tab[aria-pressed="true"] {
+  background: var(--login-surface);
+  color: var(--login-ink);
+  border-color: var(--login-border, oklch(0.88 0.01 84));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.login-tab:disabled { cursor: not-allowed; opacity: 0.6; }
+.login-feedback--ok {
+  border-color: oklch(0.72 0.09 160);
+  background: oklch(0.95 0.03 160);
+  color: oklch(0.35 0.08 160);
+}
 .login-form {
   margin-top: 25px;
 }
@@ -389,7 +421,7 @@
 }
 
 .login-field input::placeholder {
-  color: oklch(0.63 0.014 72);
+  color: oklch(0.50 0.014 72);
 }
 
 .login-field input:hover:not(:disabled) {
@@ -1141,3 +1173,27 @@ textarea:focus-visible,
     scroll-behavior: auto !important;
   }
 }
+
+/* Pré-lançamento: acesso público e navegação por teclado. */
+.skip-link { position: fixed; top: 8px; left: 8px; z-index: 10000; padding: 12px 18px; background: var(--elev); color: var(--ink-900); border: 2px solid var(--ink-900); border-radius: 8px; transform: translateY(-160%); }
+.skip-link:focus { transform: translateY(0); }
+.legal-links { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 24px; font-size: 13px; }
+.legal-links a, .legal-page a, .form-privacy a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.legal-links a { padding-block: 6px; }
+.login-footer .legal-links { margin-top: 0; }
+.form-privacy { color: var(--ink-500); font-size: 13px; line-height: 1.6; margin: 16px 0; }
+.legal-page { max-width: 880px; padding: 32px 24px 64px; margin: auto; }
+.legal-page main { margin-top: 36px; }
+.legal-page h1 { font-size: 2rem; line-height: 1.2; font-weight: 800; }
+.legal-page h2 { font-size: 1.2rem; font-weight: 700; margin: 28px 0 8px; }
+.legal-page p { max-width: 72ch; margin: 12px 0; }
+.legal-table { overflow-x: auto; }
+.legal-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.legal-table caption { text-align: left; margin-bottom: 12px; }
+.legal-table th, .legal-table td { text-align: left; vertical-align: top; padding: 12px; border: 1px solid var(--ink-200); overflow-wrap: anywhere; }
+
+.chart-data { margin-top: 16px; font-size: 13px; color: var(--ink-700); }
+.chart-data summary { cursor: pointer; padding: 8px 0; color: var(--primary); }
+.chart-data summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.legal-table table { min-width: 580px; }

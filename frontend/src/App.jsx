@@ -1,3 +1,4 @@
+import { LegalLinks } from './pages/Legal.jsx';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { THEMES, ThemeContext, MIcon, LogoIcon } from './shared/ui.jsx';
 import { EstadoConsulta } from './shared/dataUi.jsx';
@@ -773,6 +774,7 @@ export default function App() {
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
           (esquerda da sidebar, gap central, respiro do painel da Clara). */}
       <div className={beta ? `beta-app beta-${betaVariant}` : undefined} style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
+        <a className="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
         <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} user={authUser} />
         {viewportCompacto && sidebarAberta && (
           <button
@@ -798,7 +800,7 @@ export default function App() {
             canvas, com o mesmo respiro do painel da Clara. Abrir o chat mexe
             em uma propriedade só (`right`) — o card não muda de identidade, e o
             FAB flutua sobre a calha, não sobre texto rolável. */}
-        <main className={`app-main${chatAberto ? ' app-main--chat-open' : ''}`} style={{
+        <main id="conteudo-principal" tabIndex={-1} className={`app-main${chatAberto ? ' app-main--chat-open' : ''}`} style={{
           position: 'fixed', top: 'var(--topbar-h)', bottom: 0, background: SB,
           left: sidebarAberta ? 'var(--sb-w)' : 0,
           right: chatAberto ? 'var(--chat-inset)' : 0,
@@ -833,6 +835,7 @@ export default function App() {
                 <Suspense fallback={<CarregandoPagina />}>
                   {render()}
                 </Suspense>
+                <LegalLinks />
               </div>
             </div>
           </div>

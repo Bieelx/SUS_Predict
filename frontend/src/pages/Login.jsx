@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LogoIcon, API_BASE, MIcon, THEMES } from '../shared/ui.jsx';
+import { LegalLinks } from './Legal.jsx';
 import { saveSession } from '../shared/auth.js';
 
 // O acesso institucional usa autenticação real. A entrada de demonstração usa
@@ -9,6 +10,10 @@ export default function LoginScreen({ onEnter }) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [acaoCarregando, setAcaoCarregando] = useState('');
+  const [modo, setModo] = useState('entrar'); // 'entrar' | 'criar'
+  const [nome, setNome] = useState('');
+  const [confirmaSenha, setConfirmaSenha] = useState('');
+  const [aviso, setAviso] = useState('');
 
   async function concluirLogin(resp) {
     const data = await resp.json().catch(() => ({}));
@@ -29,6 +34,56 @@ export default function LoginScreen({ onEnter }) {
       await concluirLogin(resp);
     } catch (err) {
       setErro(err.message || 'Não foi possível acessar a demonstração.');
+    } finally {
+      setAcaoCarregando('');
+    }
+  }
+
+  function trocarModo(novo) {
+    setModo(novo);
+    setErro('');
+    setAviso('');
+    setSenha('');
+    setConfirmaSenha('');
+  }
+
+  async function handleSignup(e) {
+    e.preventDefault();
+    setErro('');
+    setAviso('');
+    if (!nome.trim() || !email.trim() || !senha) {
+      setErro('Informe nome, e-mail e senha para criar a conta.');
+      return;
+    }
+    if (senha.length < 6) {
+      setErro('A senha precisa ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (senha !== confirmaSenha) {
+      setErro('As senhas não coincidem.');
+      return;
+    }
+
+    setAcaoCarregando('signup');
+    try {
+      const resp = await fetch(`${API_BASE}/api/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password: senha, nome: nome.trim() }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || data.msg || 'Não foi possível criar a conta.');
+      if (data.access_token) {
+        // Supabase devolveu sessão: entra direto. Perfil inicial é visitante (docs/09).
+        saveSession(data);
+        onEnter(data.user || null);
+        return;
+      }
+      // Confirmação de e-mail ligada no Supabase: sem sessão até confirmar.
+      trocarModo('entrar');
+      setAviso('Conta criada. Confirme o e-mail recebido e depois entre com suas credenciais. O acesso aos dados é liberado por um administrador.');
+    } catch (err) {
+      setErro(err.message || 'Não foi possível criar a conta.');
     } finally {
       setAcaoCarregando('');
     }
@@ -77,7 +132,8 @@ export default function LoginScreen({ onEnter }) {
         </div>
       </header>
 
-      <main className="login-main">
+      <a className="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
+      <main id="conteudo-principal" tabIndex={-1} className="login-main">
         <section className="login-context" aria-labelledby="login-context-title">
           <p className="login-eyebrow">Plataforma de trabalho municipal</p>
           <h1 id="login-context-title">Inteligência operacional para a saúde pública</h1>
@@ -111,11 +167,32 @@ export default function LoginScreen({ onEnter }) {
         <section className="login-access" aria-labelledby="login-access-title">
           <div className="login-access__heading">
             <p className="login-eyebrow">Acesso institucional</p>
-            <h2 id="login-access-title">Entrar no ambiente de trabalho</h2>
-            <p>Use as credenciais fornecidas pela sua organização.</p>
+            <h2 id="login-access-title">{modo === 'criar' ? 'Criar conta de acesso' : 'Entrar no ambiente de trabalho'}</h2>
+            <p>{modo === 'criar' ? 'Novas contas entram como visitante até a liberação por um administrador.' : 'Use as credenciais fornecidas pela sua organização.'}</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="login-form" noValidate>
+          <div className="login-tabs" role="group" aria-label="Modo de acesso">
+            <button type="button" aria-pressed={modo === 'entrar'} className="login-tab" onClick={() => trocarModo('entrar')} disabled={carregando}>Entrar</button>
+            <button type="button" aria-pressed={modo === 'criar'} className="login-tab" onClick={() => trocarModo('criar')} disabled={carregando}>Criar conta</button>
+          </div>
+
+          <form onSubmit={modo === 'criar' ? handleSignup : handleSubmit} className="login-form" aria-busy={carregando}>
+            {modo === 'criar' && (
+              <div className="login-field">
+                <label htmlFor="login-nome">Nome de identificação</label>
+                <input
+                  id="login-nome"
+                  type="text"
+                  required
+                  autoComplete="name"
+                  value={nome}
+                  onChange={e => setNome(e.target.value)}
+                  placeholder="Como devemos chamar você"
+                  disabled={carregando}
+                />
+              </div>
+            )}
+
             <div className="login-field">
               <label htmlFor="login-email">E-mail institucional</label>
               <input
@@ -134,19 +211,49 @@ export default function LoginScreen({ onEnter }) {
               <label htmlFor="login-senha">Senha</label>
               <input
                 id="login-senha"
+                minLength={modo === 'criar' ? 6 : undefined}
+                aria-describedby={modo === 'criar' ? 'signup-privacy' : undefined}
                 type="password"
                 required
-                autoComplete="current-password"
+                autoComplete={modo === 'criar' ? 'new-password' : 'current-password'}
                 value={senha}
                 onChange={e => setSenha(e.target.value)}
                 disabled={carregando}
               />
             </div>
 
+            {modo === 'criar' && (
+              <div className="login-field">
+                <label htmlFor="login-confirma">Confirmar senha</label>
+                <input
+                  id="login-confirma"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  value={confirmaSenha}
+                  onChange={e => setConfirmaSenha(e.target.value)}
+                  disabled={carregando}
+                />
+              </div>
+            )}
+
+            {modo === 'criar' && <p id="signup-privacy" className="form-privacy">
+              Use ao menos 6 caracteres na senha. Nome e e-mail identificam sua conta e seu acesso institucional.
+              Consulte os <a href="/termos" target="_blank" rel="noopener noreferrer">termos de uso (nova aba)</a> e a <a href="/privacidade" target="_blank" rel="noopener noreferrer">política de privacidade (nova aba)</a> antes de criar a conta.
+            </p>}
             <button type="submit" disabled={carregando} className="login-submit touch-target">
-              {acaoCarregando === 'login' ? 'Verificando credenciais…' : 'Entrar com credenciais'}
+              {modo === 'criar'
+                ? (acaoCarregando === 'signup' ? 'Criando conta…' : 'Criar conta')
+                : (acaoCarregando === 'login' ? 'Verificando credenciais…' : 'Entrar com credenciais')}
             </button>
           </form>
+
+          {aviso && (
+            <div className="login-feedback login-feedback--ok" role="status" aria-live="polite">
+              <MIcon m="check_circle" size={19} />
+              <span>{aviso}</span>
+            </div>
+          )}
 
           {erro && (
             <div className="login-feedback" role="alert" aria-live="assertive">
@@ -183,6 +290,7 @@ export default function LoginScreen({ onEnter }) {
       <footer className="login-footer">
         <span>Projeto acadêmico FIAP 2026</span>
         <span>Fontes públicas DATASUS</span>
+        <LegalLinks />
       </footer>
     </div>
   );

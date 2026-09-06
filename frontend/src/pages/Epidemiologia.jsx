@@ -1,3 +1,4 @@
+import ChartData from '../shared/ChartData.jsx';
 import { useMemo, useState } from 'react';
 import {
   Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart,
@@ -88,9 +89,9 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
             <MIcon m="history" size={18} />
             <span><strong>Esta não é uma previsão do mês atual.</strong> {previsao.aviso}</span>
           </div>}
-          {serieAnalitica.length ? <div role="img" aria-label="Série mensal de casos observados, média histórica, ano anterior, previsão de três meses e intervalo de incerteza de 80 por cento">
+          {serieAnalitica.length ? <div role="group" aria-label="Série mensal de casos observados, média histórica, ano anterior, previsão de três meses e intervalo de incerteza de 80 por cento">
             <ResponsiveContainer width="100%" height={290}>
-            <ComposedChart data={serieAnalitica} margin={{ top: 14, right: 12, bottom: 0, left: 0 }}>
+            <ComposedChart accessibilityLayer data={serieAnalitica} margin={{ top: 14, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="var(--ink-100)" vertical={false} />
               <XAxis dataKey="mes" tick={{ fontSize: 10, fill: 'var(--ink-400)' }} />
               <YAxis tick={{ fontSize: 10, fill: 'var(--ink-400)' }} width={50} />
@@ -104,6 +105,7 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
             </ComposedChart>
           </ResponsiveContainer></div> : <Vazio texto="Sem série mensal para este município." />}
 
+          <ChartData title="Série mensal de casos" rows={serieAnalitica} columns={[['mes', 'Mês'], ['atual', 'Observado', inteiro], ['anterior', 'Ano anterior', inteiro], ['media', 'Média histórica', decimal], ['previsto', 'Previsão', inteiro]]} />
           {previsao?.disponivel ? <>
             <div className="responsive-grid-3" style={forecastValues}>
               {previsao.serie.map((item, index) => <div key={item.mes} style={forecastValue}>
@@ -127,8 +129,9 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
           <Card className="p-5">
             <SectionTitle>Casos por faixa etária</SectionTitle>
             {faixa.length ? <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={faixa}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="faixa" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="casos" fill="var(--primary)" radius={[4, 4, 0, 0]} /></BarChart>
+              <BarChart accessibilityLayer data={faixa}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="faixa" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="casos" fill="var(--primary)" radius={[4, 4, 0, 0]} /></BarChart>
             </ResponsiveContainer> : <Vazio texto="Distribuição etária indisponível." />}
+          <ChartData title="Casos por faixa etária" rows={faixa} columns={[['faixa', 'Faixa etária'], ['casos', 'Casos', inteiro]]} />
           </Card>
           <Card className="p-5">
             <SectionTitle>Distribuição por gênero</SectionTitle>
@@ -137,15 +140,17 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
                 {genero.map((item, index) => <Cell key={item.nome} fill={index % 2 ? 'var(--accent)' : 'var(--primary)'} />)}
               </Pie><Tooltip formatter={valor => `${decimal(valor)}%`} /></PieChart>
             </ResponsiveContainer> : <Vazio texto="Distribuição por gênero indisponível." />}
+          <ChartData title="Distribuição por gênero" rows={genero} columns={[['nome', 'Gênero'], ['valor', 'Percentual', percentual]]} />
           </Card>
         </div>
 
         <Card className="p-5" style={{ marginTop: 18 }}>
           <SectionTitle>Desfecho clínico anual</SectionTitle><p style={descricao}>Série anual completa da fonte, independente do filtro de período.</p>
           {desfecho.length ? <ResponsiveContainer width="100%" height={245}>
-            <BarChart data={desfecho}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="ano" /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="leves" name="Casos leves" stackId="a" fill="var(--risk-baixo)" /><Bar dataKey="hospitalizacoes" name="Hospitalizações" stackId="a" fill="var(--risk-medio)" /><Bar dataKey="obitos" name="Óbitos" stackId="a" fill="var(--risk-alto)" radius={[4, 4, 0, 0]} /></BarChart>
+            <BarChart accessibilityLayer data={desfecho}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="ano" /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="leves" name="Casos leves" stackId="a" fill="var(--risk-baixo)" /><Bar dataKey="hospitalizacoes" name="Hospitalizações" stackId="a" fill="var(--risk-medio)" /><Bar dataKey="obitos" name="Óbitos" stackId="a" fill="var(--risk-alto)" radius={[4, 4, 0, 0]} /></BarChart>
           </ResponsiveContainer> : <Vazio texto="Desfechos anuais indisponíveis." />}
-        </Card>
+        <ChartData title="Desfechos por ano" rows={desfecho} columns={[['ano', 'Ano'], ['leves', 'Casos leves', inteiro], ['hospitalizacoes', 'Hospitalizações', inteiro], ['obitos', 'Óbitos', inteiro]]} />
+          </Card>
       </>}
     </div>
   );

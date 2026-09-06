@@ -1,3 +1,4 @@
+import ChartData from '../shared/ChartData.jsx';
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, SectionTitle } from '../shared/ui.jsx';
@@ -44,7 +45,7 @@ export default function Internacoes() {
           <Card className="p-5">
             <SectionTitle>Hospitais com mais internações no estado</SectionTitle>
             {hospitais.length ? <ResponsiveContainer width="100%" height={270}>
-              <BarChart data={hospitais} layout="vertical" margin={{ left: 16, right: 12 }}>
+              <BarChart accessibilityLayer data={hospitais} layout="vertical" margin={{ left: 16, right: 12 }}>
                 <CartesianGrid stroke="var(--ink-100)" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="nome" width={145} tick={{ fontSize: 10 }} />
@@ -52,12 +53,14 @@ export default function Internacoes() {
                 <Bar dataKey="internacoes" fill="var(--primary)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer> : <Vazio>Ranking hospitalar indisponível.</Vazio>}
+          <ChartData title="Internações por hospital" rows={hospitais} columns={[['nome', 'Hospital'], ['internacoes', 'Internações', inteiro]]} />
           </Card>
           <Card className="p-5">
             <SectionTitle>Internações por faixa etária no estado</SectionTitle>
             {faixas.length ? <ResponsiveContainer width="100%" height={270}>
-              <BarChart data={faixas}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="faixa" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="internacoes" fill="var(--accent)" radius={[4, 4, 0, 0]} /></BarChart>
+              <BarChart accessibilityLayer data={faixas}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="faixa" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="internacoes" fill="var(--accent)" radius={[4, 4, 0, 0]} /></BarChart>
             </ResponsiveContainer> : <Vazio>Distribuição etária indisponível.</Vazio>}
+          <ChartData title="Internações por faixa etária" rows={faixas} columns={[['faixa', 'Faixa etária'], ['internacoes', 'Internações', inteiro]]} />
           </Card>
         </div>
 

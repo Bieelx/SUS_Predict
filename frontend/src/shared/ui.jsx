@@ -11,8 +11,8 @@ export const THEMES = {
   teal: {
     label: 'Azul SusPredict', dot: '#336FA1',
     vars: {
-      '--sb': '#6FADD2', '--sb-border': '#4E8BB8', '--sb-text': '#1B3F5C',
-      '--sb-section': '#336FA1', '--sb-strong': '#14324A', '--sb-icon-bg': '#E9E9E9',
+      '--sb': '#6FADD2', '--sb-border': '#4E8BB8', '--sb-text': '#14324A',
+      '--sb-section': '#14324A', '--sb-strong': '#14324A', '--sb-icon-bg': '#E9E9E9',
       '--sb-icon-fg': '#5C656B', '--sb-icon-active-bg': '#336FA1', '--sb-icon-active-fg': '#FDFDFD',
       '--sb-accent-bar': '#336FA1',
       '--primary': '#336FA1', '--primary-dark': '#2A5980', '--accent': '#4E8BB8',
@@ -24,7 +24,7 @@ export const THEMES = {
     label: 'Verde-saúde', dot: '#2A6B40',
     vars: {
       '--sb': '#A6C2A0', '--sb-border': '#8FB089', '--sb-text': '#2E4A2C',
-      '--sb-section': '#517A4C', '--sb-strong': '#1A2E18', '--sb-icon-bg': '#E9E9E9',
+      '--sb-section': '#2E4A2C', '--sb-strong': '#1A2E18', '--sb-icon-bg': '#E9E9E9',
       '--sb-icon-fg': '#5C656B', '--sb-icon-active-bg': '#2D5436', '--sb-icon-active-fg': '#FDFDFD',
       '--sb-accent-bar': '#2D5436',
       '--primary': '#2A6B40', '--primary-dark': '#1F4A2E', '--accent': '#5FB87E',
@@ -36,7 +36,7 @@ export const THEMES = {
     label: 'Âmbar', dot: '#A6580F',
     vars: {
       '--sb': '#D8C4A0', '--sb-border': '#C2A878', '--sb-text': '#4A3A1E',
-      '--sb-section': '#8A6A3A', '--sb-strong': '#2E2415', '--sb-icon-bg': '#EDE6DA',
+      '--sb-section': '#4A3A1E', '--sb-strong': '#2E2415', '--sb-icon-bg': '#EDE6DA',
       '--sb-icon-fg': '#6B5C45', '--sb-icon-active-bg': '#6B451A', '--sb-icon-active-fg': '#FDFDFD',
       '--sb-accent-bar': '#A6580F',
       '--primary': '#A6580F', '--primary-dark': '#5C3410', '--accent': '#E0A040',
@@ -48,7 +48,7 @@ export const THEMES = {
     label: 'Grafite', dot: '#3D3A33',
     vars: {
       '--sb': '#B6BABF', '--sb-border': '#9DA1A8', '--sb-text': '#2E2D2B',
-      '--sb-section': '#5C5A56', '--sb-strong': '#1A1814', '--sb-icon-bg': '#E9E9E9',
+      '--sb-section': '#3D3A33', '--sb-strong': '#1A1814', '--sb-icon-bg': '#E9E9E9',
       '--sb-icon-fg': '#5C656B', '--sb-icon-active-bg': '#3D3A33', '--sb-icon-active-fg': '#FDFDFD',
       '--sb-accent-bar': '#3D3A33',
       '--primary': '#3D3A33', '--primary-dark': '#2A2825', '--accent': '#8A8579',
@@ -63,9 +63,9 @@ export const useTheme = () => useContext(ThemeContext);
 
 // ─── Shared components ────────────────────────────────────────────────────────
 
-export function Card({ children, className = '', style = {} }) {
+export function Card({ children, className = '', style = {}, ...props }) {
   return (
-    <div className={`bg-white rounded-xl border border-ink-100 ${className}`} style={style}>
+    <div {...props} className={`bg-white rounded-xl border border-ink-100 ${className}`} style={style}>
       {children}
     </div>
   );
