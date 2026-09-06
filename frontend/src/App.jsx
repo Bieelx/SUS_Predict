@@ -600,9 +600,10 @@ const SEMANTIC_TOKENS = {
 };
 
 // A lista de municípios vem de /api/dados/municipios (dimensão ibge_sp do
-// Supabase). Só a escolha inicial é preferência de interface: Cotia, município
-// de referência do grupo, e depois o último selecionado no posto.
-const MUNICIPIO_INICIAL = '351300';
+// Supabase). Só a escolha inicial é preferência de interface: São Paulo, que
+// tem volume de dados suficiente pra todas as telas, e depois o último
+// selecionado no posto.
+const MUNICIPIO_INICIAL = '355030';
 const CHAVE_MUNICIPIO = 'sus_predict_municipio';
 
 function lerMunicipioSalvo() {
@@ -860,7 +861,7 @@ export default function App() {
                   <a href={`${window.location.pathname.replace(/^\/beta/, '') || '/visao-geral'}${window.location.search}${window.location.hash}`}>Interface original <span aria-hidden="true">↗</span></a>
                 </div>}
                 <Suspense fallback={<CarregandoPagina />}>
-                  {render()}
+                  <div key={page} className="page-enter">{render()}</div>
                 </Suspense>
               </div>
             </div>

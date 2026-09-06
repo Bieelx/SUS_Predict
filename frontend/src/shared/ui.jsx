@@ -65,7 +65,7 @@ export const useTheme = () => useContext(ThemeContext);
 
 export function Card({ children, className = '', style = {}, ...props }) {
   return (
-    <div {...props} className={`bg-white rounded-xl border border-ink-100 ${className}`} style={style}>
+    <div {...props} className={`sp-card bg-white rounded-xl border border-ink-100 ${className}`} style={style}>
       {children}
     </div>
   );

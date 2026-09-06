@@ -287,6 +287,79 @@
   50%       { transform: scale(1.6); opacity: 0.6; }
 }
 
+/* ─── Tempero visual do shell ────────────────────────────────────────────────
+   Mesma linguagem da tela de login, em dose pequena: o canvas azul ganha
+   profundidade (gradiente + grade fina de papel milimetrado), os cards ganham
+   sombra em camadas em vez de só borda, e cada página entra com um único
+   movimento curto. Nada disso muda estrutura ou dado. */
+.app-shell {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.10) 1px, transparent 1px),
+    radial-gradient(90% 60% at 0% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--sb) 92%, #fff) 0%, var(--sb) 40%, color-mix(in srgb, var(--sb) 88%, var(--sb-border)) 100%) !important;
+  background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+}
+.app-sidebar, .app-topbar, .app-main { background: transparent !important; }
+.app-sidebar { border-right: 1px solid rgba(255, 255, 255, 0.18); }
+
+.app-content-frame {
+  border-radius: 20px !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 2px 6px rgba(20, 50, 74, 0.10),
+    0 18px 44px -18px rgba(20, 50, 74, 0.35) !important;
+}
+
+/* Controles da topbar: mesmo raio e sombra curta dos inputs do login. */
+.topbar-select, .topbar-btn {
+  border-radius: 10px !important;
+  box-shadow: 0 1px 2px rgba(20, 50, 74, 0.10);
+}
+.topbar-btn:hover { box-shadow: 0 2px 6px rgba(20, 50, 74, 0.14); }
+
+/* Item ativo do menu: leve profundidade; pressionar afunda 1px. */
+.nav-item, .nav-item-2, .nav-footer { transition: background 0.15s, box-shadow 0.15s, transform 0.12s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.nav-item[aria-current="page"] { box-shadow: 0 1px 2px rgba(20, 50, 74, 0.10), 0 6px 14px -6px rgba(20, 50, 74, 0.30) !important; }
+.nav-item:active, .nav-item-2:active, .nav-footer:active { transform: translateY(1px); }
+
+/* Cards: borda mais suave + sombra em camadas. */
+.sp-card {
+  border-radius: 14px !important;
+  border-color: color-mix(in srgb, var(--ink-100) 75%, transparent) !important;
+  box-shadow:
+    0 1px 2px rgba(26, 24, 20, 0.04),
+    0 10px 24px -16px rgba(20, 50, 74, 0.22);
+}
+.metric-card {
+  background: linear-gradient(180deg, var(--elev) 0%, var(--elev) 70%, color-mix(in srgb, var(--primary-soft) 55%, var(--elev)) 100%) !important;
+}
+
+/* Cabeçalho de página: mesmo peso e tracking do título do login. */
+.app-page-content h1 { letter-spacing: -0.03em !important; }
+
+/* Entrada de página: um só movimento, com os cards em leve escalonamento. */
+.page-enter { animation: page-rise 0.38s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.page-enter .sp-card { animation: page-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.page-enter .sp-card:nth-child(2) { animation-delay: 0.04s; }
+.page-enter .sp-card:nth-child(3) { animation-delay: 0.08s; }
+.page-enter .sp-card:nth-child(4) { animation-delay: 0.12s; }
+@keyframes page-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Celular: cabeçalho e barra inferior translúcidos com desfoque. */
+@media (max-width: 768px) {
+  .app-shell { background-image: none !important; }
+  .app-topbar, .mobile-bottom-nav {
+    background: color-mix(in srgb, var(--content) 86%, transparent) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    backdrop-filter: blur(14px) saturate(1.2);
+  }
+  .mobile-bottom-nav { box-shadow: 0 -8px 24px -12px rgba(20, 50, 74, 0.25); }
+  .mobile-bottom-nav__item { transition: background 0.15s, transform 0.12s; }
+  .mobile-bottom-nav__item:active { transform: scale(0.96); }
+}
+
 /* ─── Acessibilidade sistêmica (auditoria P1-4) ─────────────────────────────
    Anel de foco padrão para QUALQUER elemento interativo do app, não só o
    chrome do shell — cobre botões/links/inputs dentro das páginas que ainda
@@ -361,6 +434,8 @@ textarea:focus-visible,
 @media (max-width: 1024px) {
   .app-sidebar {
     width: min(var(--sb-w), calc(100vw - 48px)) !important;
+    /* Em overlay o menu cobre conteúdo: precisa de fundo sólido. */
+    background: var(--sb) !important;
     box-shadow: 10px 0 30px rgba(20, 50, 74, 0.2);
   }
 
