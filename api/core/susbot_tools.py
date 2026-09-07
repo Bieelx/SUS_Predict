@@ -9,6 +9,65 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timezone
 import sqlite3
+from contextvars import ContextVar
+from functools import wraps
+import hashlib
+import json
+import logging
+from pathlib import Path
+import uuid
+
+_LOG = logging.getLogger("sus_predict.clara.consultas")
+_REVISAO_TOOLS = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16]
+_CONSULTA = ContextVar("clara_consulta", default=None)
+
+
+def _log_consulta(evento: str, **campos) -> None:
+    contexto = _CONSULTA.get()
+    if contexto is None:
+        return
+    contexto.update(campos)
+    # JSON no corpo: funciona também com o formatter textual do Uvicorn/systemd.
+    _LOG.warning(json.dumps({"evento": evento, **contexto}, ensure_ascii=False))
+
+
+def _registrar_consulta(tabela, filtros_sql, linhas, filtros_pos_consulta=None,
+                        linhas_apos_filtros=None, origem="sqlite", **extra):
+    contexto = _CONSULTA.get()
+    if contexto is not None:
+        contexto.update(
+            tabela=tabela, origem=origem, filtros_sql=filtros_sql,
+            filtros_pos_consulta=filtros_pos_consulta or {},
+            linhas_retornadas=linhas, linhas_apos_filtros=linhas_apos_filtros,
+            **extra,
+        )
+
+
+def _instrumentar(nome, funcao, municipio_recebido, ibge):
+    @wraps(funcao)
+    def executar(*args, **kwargs):
+        token = _CONSULTA.set({
+            "consulta_id": uuid.uuid4().hex,
+            "revisao_tools": _REVISAO_TOOLS,
+            "ferramenta": nome,
+            "municipio_id_recebido": municipio_recebido,
+            "ibge6_consultado": ibge,
+            "origem": None, "tabela": None,
+            "filtros_sql": {}, "filtros_pos_consulta": {},
+            "linhas_retornadas": None, "linhas_apos_filtros": None,
+        })
+        try:
+            _log_consulta("clara_ferramenta_iniciada")
+            resultado = funcao(*args, **kwargs)
+            _log_consulta("clara_ferramenta_concluida", encontrado=resultado.get("encontrado"))
+            return resultado
+        except Exception as exc:
+            # Não registrar pergunta, SQL livre, credenciais ou conteúdo da exceção.
+            _log_consulta("clara_ferramenta_erro", erro_tipo=type(exc).__name__)
+            raise
+        finally:
+            _CONSULTA.reset(token)
+    return executar
 
 from api.core import db
 from api.core.prompts import TEXTO_SOBRE_O_PROJETO
@@ -107,6 +166,7 @@ def _enriquecer_estoque(rows: list[dict]) -> list[dict]:
 
 
 def _resposta_vazia(motivo: str, **extra) -> dict:
+    _log_consulta("clara_consulta_sem_resultado")
     payload = {"encontrado": False, "motivo": motivo}
     payload.update(extra)
     return payload
@@ -126,11 +186,13 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
         # Busca por substring (case-insensitive), não exata: o modelo tende a mandar
         # "dipirona" quando o item cadastrado é "Dipirona 500mg" — match exato
         # devolvia vazio sempre que faltava a dosagem/forma.
+        _registrar_consulta("estoque", {"ibge6": ibge}, None)
         rows = db.get_estoque(ibge)
-        if not item:
-            return rows
-        alvo = str(item).strip().casefold()
-        return [row for row in rows if alvo in str(row.get("item") or "").casefold()]
+        alvo = str(item or "").strip().casefold()
+        filtradas = [row for row in rows if alvo in str(row.get("item") or "").casefold()] if item else rows
+        _registrar_consulta("estoque", {"ibge6": ibge}, len(rows),
+                            {"item_substring_casefold": alvo} if item else {}, len(filtradas))
+        return filtradas
 
     def consultar_estoque(item: str | None = None, somente_risco: bool = False, **_kwargs) -> dict:
         rows = _buscar_estoque_por_item(item)
@@ -145,6 +207,10 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
         dados = _enriquecer_estoque(rows)
         if somente_risco:
             dados = [dado for dado in dados if dado["status"] in {"critico", "alerta"}]
+            contexto = _CONSULTA.get()
+            if contexto is not None:
+                contexto["filtros_pos_consulta"]["somente_risco"] = True
+                contexto["linhas_apos_filtros"] = len(dados)
             if not dados:
                 return _resposta_vazia(
                     "O estoque foi consultado e não há itens críticos ou em alerta neste momento.",
@@ -165,7 +231,14 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
         }
 
     def consultar_alertas(status: str | None = None, tipo: str | None = None, **_kwargs) -> dict:
+        filtros = {"ibge6": ibge}
+        if status:
+            filtros["status"] = status
+        if tipo:
+            filtros["tipo"] = tipo
+        _registrar_consulta("alertas", filtros, None)
         rows = db.get_alertas(ibge, status=status, tipo=tipo)
+        _registrar_consulta("alertas", filtros, len(rows), linhas_apos_filtros=len(rows))
         if not rows:
             return _resposta_vazia(
                 "Nenhum alerta encontrado para os filtros informados.",
@@ -200,9 +273,12 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
                 sistema=sistema,
             )
 
+        _registrar_consulta("datasus_runs", {"sistema": sistema_norm}, None,
+                            limite=200, ordem="created_at DESC")
+        runs = db.list_runs(sistema=sistema_norm, limit=200)
         candidatos = [
             run
-            for run in db.list_runs(sistema=sistema_norm, limit=200)
+            for run in runs
             if str(run.get("ibge6") or "")[:6] == ibge
         ]
         if ano_ini is not None:
@@ -213,6 +289,15 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
             alvo = str(doenca_cod).strip()
             candidatos = [run for run in candidatos if str(run.get("doenca_cod") or "").strip() == alvo]
 
+        filtros_pos = {"ibge6": ibge}
+        if ano_ini is not None:
+            filtros_pos["ano_ini"] = ano_ini
+        if ano_fim is not None:
+            filtros_pos["ano_fim"] = ano_fim
+        if doenca_cod:
+            filtros_pos["doenca_cod"] = str(doenca_cod).strip()
+        _registrar_consulta("datasus_runs", {"sistema": sistema_norm}, len(runs),
+                            filtros_pos, len(candidatos), limite=200)
         if not candidatos:
             return _resposta_vazia(
                 f"A base {sistema_norm} ainda não foi carregada para este município. "
@@ -228,6 +313,14 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
             )
 
         run = candidatos[0]
+        _registrar_consulta(
+            ["datasus_runs", "datasus_resultado"],
+            {"sistema": run["sistema"], "uf": run["uf"], "cidade": run["cidade"],
+             "ibge6": ibge, "ano_ini": run["ano_ini"], "ano_fim": run["ano_fim"],
+             "doenca_cod": run.get("doenca_cod") or None},
+            None, origem="sqlite_com_fallback_supabase", limite=None,
+            contagem_disponivel=False,
+        )
         resultado = db.find_cached(
             {
                 "sistema": run["sistema"],
@@ -240,6 +333,8 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
             }
         )
         if not resultado:
+            _registrar_consulta(["datasus_runs", "datasus_resultado"],
+                                {"ibge6": ibge, "sistema": sistema_norm}, None)
             resultado = db.find_latest_by_ibge(ibge, sistema_norm)
 
         if not resultado:
@@ -370,6 +465,7 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
         "sobre_o_projeto": sobre_o_projeto,
         "executar_sql_fallback": executar_sql_fallback,
     }
+    todas = {nome: _instrumentar(nome, fn, ibge6, ibge) for nome, fn in todas.items()}
     if permitidas is None:
         return todas
     return {nome: fn for nome, fn in todas.items() if nome in set(permitidas)}
