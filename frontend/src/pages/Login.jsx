@@ -4,15 +4,15 @@ import './login.css';
 import { LegalLinks } from './Legal.jsx';
 import { saveSession } from '../shared/auth.js';
 
-// O acesso institucional usa autenticação real. A entrada de demonstração usa
-// uma sessão isolada emitida pelo backend quando SUS_PREDICT_DEV_AUTH está ativo.
+// O acesso institucional usa autenticação real. No App, a demonstração abre
+// o replay histórico local. O callback legado de dev-login é mantido para outros consumidores.
 // O Supabase emite o código com o tamanho configurado no projeto (Authentication →
 // Providers → Email → OTP length), entre 6 e 10 dígitos. Fixar 6 aqui truncava um código
 // de 8 e o backend recusava um código correto como inválido.
 const CODIGO_MIN = 6;
 const CODIGO_MAX = 10;
 
-export default function LoginScreen({ onEnter }) {
+export default function LoginScreen({ onEnter, onDemoHistorica, demoCarregando = false, demoErro }) {
   const [erro, setErro] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -174,7 +174,7 @@ export default function LoginScreen({ onEnter }) {
     }
   }
 
-  const carregando = !!acaoCarregando;
+  const carregando = !!acaoCarregando || demoCarregando;
   const temaLogin = THEMES.teal.vars;
   const tipoSenha = mostrarSenha ? 'text' : 'password';
 
@@ -351,10 +351,10 @@ export default function LoginScreen({ onEnter }) {
             </div>
           )}
 
-          {erro && (
+          {(erro || demoErro) && (
             <div className="login-feedback" role="alert" aria-live="assertive">
               <MIcon m="error" size={19} />
-              <span>{erro}</span>
+              <span>{erro || demoErro}</span>
             </div>
           )}
 
@@ -363,14 +363,14 @@ export default function LoginScreen({ onEnter }) {
               <p className="login-demo">ou conheça a plataforma sem conta</p>
               <button
                 type="button"
-                onClick={loginDemonstracao}
+                onClick={onDemoHistorica || loginDemonstracao}
                 disabled={carregando}
                 className="login-demo__button touch-target"
               >
-                {acaoCarregando === 'demo' ? 'Preparando demonstração…' : 'Acessar demonstração'}
+                {(acaoCarregando === 'demo' || demoCarregando) ? 'Preparando demonstração…' : 'Acessar demonstração'}
                 <MIcon m="arrow_forward" size={18} />
               </button>
-              <p className="login-access__footer">A demonstração depende de habilitação neste ambiente.</p>
+              <p className="login-access__footer">Replay de Campinas em 2024, com casos históricos e estoque simulado.</p>
             </>
           )}
 

@@ -9,7 +9,7 @@ export function dentroDaJanela(item, resumo) {
   return mes >= resumo.periodo_inicio.slice(0, 7) && mes <= resumo.periodo_fim.slice(0, 7);
 }
 
-export default function HistoricoAquisicoes({ linhas = [], resumo }) {
+export default function HistoricoAquisicoes({ linhas = [], resumo, demo = false }) {
   const [escolha, setEscolha] = useState('');
   const itens = useMemo(() => [...new Map(linhas.map(item => {
     const key = JSON.stringify([item.insumo_padronizado, item.unidade_fornecimento]);
@@ -38,7 +38,7 @@ export default function HistoricoAquisicoes({ linhas = [], resumo }) {
         <Bar yAxisId="quantidade" dataKey="quantidade" name="Quantidade adquirida" fill="var(--primary)" />
         <Line yAxisId="valor" dataKey="valor" name="Valor adquirido (R$)" stroke="var(--warn)" dot={false} />
       </ComposedChart>
-    </ResponsiveContainer> : <p style={{ padding: '24px 0', color: 'var(--ink-500)' }}>Histórico de aquisições indisponível para este recorte.</p>}
+    </ResponsiveContainer> : <p style={{ padding: '24px 0', color: 'var(--ink-500)' }}>{demo ? 'O cenário histórico não contém aquisições reais. O estoque simulado aparece na tabela abaixo.' : 'Histórico de aquisições indisponível para este recorte.'}</p>}
     <p style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>Barras: quantidade (eixo esquerdo). Linha: valor em reais (eixo direito). {resumo?.periodo_inicio ? 'O gráfico acompanha o período selecionado.' : 'Janela não informada; exibindo a série disponível.'}</p>
   </Card>;
 }

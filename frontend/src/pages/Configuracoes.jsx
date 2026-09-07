@@ -1,3 +1,4 @@
+import { botao } from '../shared/dataUi.jsx';
 import { Card } from '../shared/ui.jsx';
 import { LegalLinks } from './Legal.jsx';
 import AdminUsuarios from './AdminUsuarios.jsx';
@@ -30,7 +31,7 @@ function CardHead({ title, hint }) {
   );
 }
 
-export default function PageConfiguracoes({ municipio, authUser }) {
+export default function PageConfiguracoes({ municipio, authUser, demo = false, onDemo, demoCarregando, demoErro }) {
   const admin = authUser?.acesso?.perfil === 'admin';
   return (
     <div className="rise">
@@ -44,8 +45,8 @@ export default function PageConfiguracoes({ municipio, authUser }) {
       <Card className="p-5" style={{ marginBottom: 20, border: '1px solid var(--ink-100)' }}>
         <CardHead title="Ambiente" hint="transparência" />
         <SettingRow
-          title="Fonte de dados: Supabase"
-          desc="Os painéis analíticos consultam tabelas curadas do Supabase. A disponibilidade de cada consulta é indicada na própria tela. A Clara também pode consultar registros locais, que são uma fonte separada."
+          title={demo ? "Fonte de dados: replay histórico local" : "Fonte de dados: Supabase"}
+          desc={demo ? "Campinas, 2024. Casos confirmados do CVE/SES-SP; estoque, preços e consumo fictícios. As demais bases não são consultadas durante a demo." : "Os painéis analíticos consultam tabelas curadas do Supabase. A disponibilidade de cada consulta é indicada na própria tela. A Clara também pode consultar registros locais, que são uma fonte separada."}
           last
         >
           <span style={{
@@ -54,16 +55,18 @@ export default function PageConfiguracoes({ municipio, authUser }) {
             background: 'color-mix(in srgb, var(--good) 14%, white)',
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-            FONTE CONFIGURADA
+            {demo ? 'DEMONSTRAÇÃO' : 'FONTE CONFIGURADA'}
           </span>
         </SettingRow>
+        <SettingRow title="Demonstração histórica" desc="Acompanhe a crise de dengue de Campinas em 2024 na interface atual, com estoque simulado." last><button type="button" style={botao} disabled={demoCarregando} onClick={onDemo}>{demo ? "Sair da demo" : demoCarregando ? "Preparando…" : "Iniciar demo histórica"}</button></SettingRow>
+        {demoErro && <p role="alert">{demoErro}</p>}
       </Card>
 
       <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 20, alignItems: 'start' }}>
         <Card className="p-5">
           <CardHead title="Município em análise" hint={`${municipio.nome} · ${municipio.uf}`} />
           <p style={{ fontSize: 13, color: '#6B665D', lineHeight: 1.6 }}>
-            A troca de município é feita pelo seletor da barra superior, disponível em qualquer tela. A lista vem da dimensão IBGE de São Paulo no Supabase (código {municipio.ibge7 || municipio.ibge6}).
+            {demo ? 'O cenário está fixado em Campinas (350950), para preservar a origem dos casos históricos. Saia da demo para trocar de município.' : <>A troca de município é feita pelo seletor da barra superior, disponível em qualquer tela. A lista vem da dimensão IBGE de São Paulo no Supabase (código {municipio.ibge7 || municipio.ibge6}).</>}
           </p>
         </Card>
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { authenticatedFetch } from './auth.js';
 import { assinarCacheSessao, lerCacheSessao, obterComCacheSessao } from './sessionCache.js';
+import { useDemoHistorica } from '../demo/DemoContext.js';
 
 const consultasIniciais = ibge => [
   ['visao-geral', { ibge, periodo: 'Mes' }],
@@ -46,6 +47,13 @@ export async function preCarregarDadosOperacionais(ibge) {
 }
 
 export function useDadosOperacionais(recurso, params, ativo = true) {
+  const demo = useDemoHistorica();
+  const real = useDadosOperacionaisReais(recurso, params, ativo && !demo);
+  if (demo) return { dados: demo.consultar(recurso, params), carregando: false, erro: null, recarregar: () => {} };
+  return real;
+}
+
+function useDadosOperacionaisReais(recurso, params, ativo = true) {
   const chave = JSON.stringify(params || {});
   const chaveCache = chaveDadosOperacionais(recurso, params);
   const inicial = ativo ? lerCacheSessao(chaveCache) : null;

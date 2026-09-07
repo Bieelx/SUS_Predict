@@ -35,7 +35,7 @@ function StatusChip({ status }) {
   );
 }
 
-function EstadoVazio() {
+function EstadoVazio({ demo }) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
@@ -45,13 +45,21 @@ function EstadoVazio() {
         <MIcon m="description" size={38} />
       </span>
       <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', margin: '0 0 6px' }}>
-        Histórico de documentos ainda não integrado
+        {demo ? 'Nenhum rascunho nesta demonstração' : 'Histórico de documentos ainda não integrado'}
       </p>
       <p style={{ fontSize: 13, color: 'var(--ink-500)', margin: 0, maxWidth: 380, lineHeight: 1.6 }}>
-        Esta tela ainda não consulta os rascunhos de ETP produzidos pela Clara. Quando disponíveis, consulte-os na conversa em que foram gerados. A ausência de itens aqui não confirma a ausência de documentos.
+        {demo ? 'Abra Roteiro e premissas na barra da demo e escolha Preparar rascunho de ETP demo. Ele ficará apenas nesta sessão.' : 'Esta tela ainda não consulta os rascunhos de ETP produzidos pela Clara. Quando disponíveis, consulte-os na conversa em que foram gerados. A ausência de itens aqui não confirma a ausência de documentos.'}
       </p>
     </div>
   );
+}
+
+function baixarRascunhoDemo(doc) {
+  const url = URL.createObjectURL(new Blob([doc.texto], { type: 'text/markdown;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url; link.download = `${doc.id}-rascunho-etp.md`;
+  document.body.appendChild(link); link.click(); link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function TabelaDocumentos({ documentos }) {
@@ -76,7 +84,7 @@ function TabelaDocumentos({ documentos }) {
                 <td style={{ ...estiloTd, fontFamily: 'JetBrains Mono, monospace' }}>{doc.data}</td>
                 <td style={estiloTd}><StatusChip status={doc.status} /></td>
                 <td style={{ ...estiloTd, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  {doc.status === 'finalizado' ? (
+                  {doc.demo ? <button onClick={() => baixarRascunhoDemo(doc)} style={estiloBotaoOutline}><MIcon m="download" size={14} />Baixar rascunho demo</button> : doc.status === 'finalizado' ? (
                     <button onClick={() => baixarEtpPdf(doc)} style={estiloBotaoOutline}>
                       <MIcon m="download" size={14} /> Baixar
                     </button>
@@ -91,7 +99,7 @@ function TabelaDocumentos({ documentos }) {
   );
 }
 
-export default function Documentos({ documentos = [] }) {
+export default function Documentos({ documentos = [], demo = false }) {
   return (
     <div className="rise">
       <div style={{ marginBottom: 22 }}>
@@ -99,12 +107,12 @@ export default function Documentos({ documentos = [] }) {
           Documentos
         </h1>
         <p style={{ fontSize: 13, color: 'var(--ink-400)', margin: 0 }}>
-          Estudos técnicos preliminares (ETPs)
+          {demo ? 'Rascunhos demonstrativos, temporários e sem validade para contratação.' : 'Estudos técnicos preliminares (ETPs)'}
         </p>
       </div>
 
 
-      {documentos.length === 0 ? <EstadoVazio /> : <TabelaDocumentos documentos={documentos} />}
+      {documentos.length === 0 ? <EstadoVazio demo={demo} /> : <TabelaDocumentos documentos={documentos} />}
     </div>
   );
 }

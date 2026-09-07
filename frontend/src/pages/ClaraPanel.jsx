@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { briefingDemo } from '../demo/adapter.js';
 import QRCode from 'react-qr-code';
 import { API_BASE, MIcon } from '../shared/ui.jsx';
 import {
@@ -806,7 +807,7 @@ function ContinuidadeCanais({ ibge6 }) {
 
 // ─── Componente principal ───────────────────────────────────────────────────
 
-export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChange, openRequest = null }) {
+export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChange, openRequest = null, demoReplay = null }) {
   const [open, setOpen] = useState(false);
   const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history' | 'channels'
   const [threads, setThreads] = useState([]);
@@ -918,7 +919,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || demoReplay) return;
 
     let cancelado = false;
 
@@ -1008,6 +1009,14 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
     const pergunta = (textoForcado ?? input).trim();
     if (!pergunta || enviando) return;
     setInput('');
+
+    if (demoReplay) {
+      setCurrent(c => ({ ...c, mensagens: [...c.mensagens,
+        { id: uid(), autor: 'user', texto: pergunta, page, ts: new Date() },
+        { id: uid(), autor: 'bot', texto: briefingDemo(demoReplay), ts: new Date() },
+      ] }));
+      return;
+    }
 
     const conversaIdAtual = current.conversaId || null;
     const agora = new Date();
@@ -1537,7 +1546,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {viewMode === 'chat' && (
+            {viewMode === 'chat' && !demoReplay && (
               <>
                 <button onClick={() => setViewMode('history')} title="Conversas anteriores" className="susbot-icon-btn">
                   <MIcon m="history" size={19} />
@@ -1556,12 +1565,13 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                 </button>
               </>
             )}
-            <button onClick={() => setOpen(false)} title="Fechar (a conversa continua salva)" className="susbot-icon-btn">
+            <button onClick={() => setOpen(false)} title={demoReplay ? "Fechar leitura guiada" : "Fechar (a conversa continua salva)"} className="susbot-icon-btn">
               <MIcon m="close" size={19} />
             </button>
           </div>
         </div>
 
+        {demoReplay && <p style={{ padding: '10px 20px', fontSize: 12, color: 'var(--ink-500)' }} role="status">Clara · leitura guiada da demo ({demoReplay.cutoff}). Respostas locais do cenário; conversa temporária, sem IA conectada.</p>}
         {/* Corpo — histórico ou conversa */}
         {viewMode === 'channels' ? (
           <ContinuidadeCanais ibge6={ibge6Atual} />
@@ -1669,10 +1679,10 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                   <ClaraMark size={48} />
                   <p className="susbot-vazio__titulo">O que você precisa decidir agora?</p>
                   <p className="susbot-vazio__texto">
-                    Pergunte sobre {getSusbotPageLabel(page)} ou sobre qualquer dado do município.
+                    {demoReplay ? `Consulte a leitura guiada do corte ${demoReplay.cutoff}. As perguntas abaixo apresentam o mesmo briefing demonstrativo.` : <>Pergunte sobre {getSusbotPageLabel(page)} ou sobre qualquer dado do município.</>}
                   </p>
                   <div className="susbot-vazio__chips">
-                    {SUGESTOES.map((s, i) => (
+                    {(demoReplay ? ['Apresentar o cenário deste mês', 'Explicar o estoque simulado', 'Ver as premissas de planejamento'] : SUGESTOES).map((s, i) => (
                       <button key={s} className="susbot-chip" style={{ animationDelay: `${0.12 + i * 0.06}s` }} onClick={() => void enviar(s)}>
                         <MIcon m={SUGESTOES_ICONES[i] || 'chat_bubble'} size={17} />
                         <span>{s}</span>
@@ -1692,7 +1702,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
 
             {/* Input */}
             <div style={{ padding: '10px 12px 12px', flexShrink: 0 }}>
-              <p id="clara-privacy" className="susbot-privacy">As conversas podem ser salvas. Não envie dados identificáveis de pacientes. <a href="/privacidade" target="_blank" rel="noopener noreferrer">Privacidade (nova aba)</a></p>
+              <p id="clara-privacy" className="susbot-privacy">{demoReplay ? 'Conversa temporária da demonstração, descartada ao trocar o corte ou sair.' : 'As conversas podem ser salvas. Não envie dados identificáveis de pacientes.'} <a href="/privacidade" target="_blank" rel="noopener noreferrer">Privacidade (nova aba)</a></p>
               <div className="susbot-composer">
                   <textarea
                   ref={inputRef}
@@ -1727,7 +1737,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                   </button>
                 </div>
               </div>
-              <p className="susbot-rodape">Respostas geradas automaticamente. Confira antes de decidir.</p>
+              <p className="susbot-rodape">{demoReplay ? 'Leitura local do cenário. Nenhuma ação real é executada.' : 'Respostas geradas automaticamente. Confira antes de decidir.'}</p>
             </div>
           </>
         )}

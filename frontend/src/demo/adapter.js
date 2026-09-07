@@ -3,6 +3,10 @@ export const MUNICIPIO_DEMO = { ibge6: '350950', nome: 'Campinas', uf: 'SP' };
 export const TRANSPARENCIA = 'Casos históricos confirmados: CVE/SES-SP. Estoque, consumo, preços e projeções são simulações. Não representam a operação atual.';
 
 const faixa = status => ({ critico: 'ALTO', atencao: 'MODERADO', ok: 'BAIXO' }[status]);
+const fimDoMes = mes => {
+  const [ano, numeroMes] = mes.split('-').map(Number);
+  return `${mes}-${new Date(Date.UTC(ano, numeroMes, 0)).getUTCDate()}`;
+};
 const soma = lista => lista.reduce((total, item) => total + item.casos, 0);
 const variacao = (atual, anterior) => anterior ? (atual - anterior) / anterior * 100 : null;
 
@@ -26,7 +30,7 @@ export function adaptarReplay(replay, estados, recurso, params = {}) {
         indice_risco_regional: null, variacao_indice_risco_pp: null,
         municipios_alerta_suprimento: itens.some(item => item.status !== 'ok') ? 1 : 0,
         internacoes_sih: null, variacao_internacoes_pct: null,
-        periodo_inicio: `${atual[0].mes}-01`, periodo_fim: `${replay.cutoff}-01` },
+        periodo_inicio: `${atual[0].mes}-01`, periodo_fim: fimDoMes(replay.cutoff) },
       serie: replay.serie_visivel.map(item => ({ competencia: item.mes, casos_notificados: item.casos })),
       evolucao: [...replay.serie_visivel.map(item => ({ competencia: item.mes, casos_notificados: item.casos })),
         ...replay.previsao.map(item => ({ competencia: item.mes, casos_tendencia: item.casos_previstos }))],
@@ -50,7 +54,7 @@ export function adaptarReplay(replay, estados, recurso, params = {}) {
     resumo: { itens_risco_alto_atual: itens.filter(item => item.status === 'critico').length,
       itens_risco_moderado_atual: itens.filter(item => item.status === 'atencao').length,
       valor_adquirido_atual: null, casos_atual: soma(janela.map(item => ({ casos: item.epidemiologia.casos_ultimo_mes }))),
-      variacao_casos_pct: null, periodo_inicio: `${janela[0].cutoff}-01`, periodo_fim: `${replay.cutoff}-01` },
+      variacao_casos_pct: null, periodo_inicio: `${janela[0].cutoff}-01`, periodo_fim: fimDoMes(replay.cutoff) },
     resumo_mensal: janela.map(item => ({ competencia: item.cutoff,
       itens_risco_alto: item.insumos.filter(insumo => insumo.status === 'critico').length,
       itens_risco_moderado: item.insumos.filter(insumo => insumo.status === 'atencao').length,

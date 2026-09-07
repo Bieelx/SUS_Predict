@@ -1,5 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { THEMES, ThemeContext, MIcon, LogoIcon } from './shared/ui.jsx';
+import { DemoContext } from './demo/DemoContext.js';
+import { adaptarReplay, criarRascunhoDemo, MUNICIPIO_DEMO } from './demo/adapter.js';
+import DemoControls from './demo/DemoControls.jsx';
 import { EstadoConsulta } from './shared/dataUi.jsx';
 import './beta/beta.css';
 import { BetaVariantSettings, BetaTopNav, readBetaVariant } from './beta/BetaVariants.jsx';
@@ -358,7 +361,7 @@ function Sidebar({ current, onNav, aberta, user }) {
 // (item ativo) e o <h1> da página já diziam, e nenhum nível dele era clicável.
 // A busca e o botão de "aplicativos" saíram: eram controles sem handler.
 
-function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar, visaoEstadual, onVisaoEstadual }) {
+function Topbar({ demo = false, page, municipio, municipios, onTrocarMunicipio, onNavigate, sidebarAberta, onToggleSidebar, visaoEstadual, onVisaoEstadual }) {
   const tituloPagina = [...NAV_OPERACIONAL, ...NAV_ANALISES, ...NAV_MOBILE_SECUNDARIA]
     .find(item => item.id === page)?.label || 'Visão Geral';
 
@@ -399,14 +402,14 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
               className="mobile-territory-select"
               aria-label="Território em análise"
               value={page === 'visao-geral' && visaoEstadual ? 'TODOS' : municipio?.ibge6 || ''}
-              disabled={!municipios.length}
+              disabled={demo || !municipios.length}
               onChange={event => {
                 onVisaoEstadual(event.target.value === 'TODOS');
                 if (event.target.value !== 'TODOS') onTrocarMunicipio(municipios.find(m => m.ibge6 === event.target.value));
               }}
             >
               {!municipios.length && <option value="">Carregando municípios…</option>}
-              {page === 'visao-geral' && <option value="TODOS">São Paulo (estado)</option>}
+              {!demo && page === 'visao-geral' && <option value="TODOS">São Paulo (estado)</option>}
               {municipios.map(m => <option key={m.ibge6} value={m.ibge6}>{m.nome} · {m.uf}</option>)}
             </select>}
           </div>
@@ -431,13 +434,13 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
             className="topbar-select"
             aria-label="Município em análise"
             value={page === 'visao-geral' && visaoEstadual ? 'TODOS' : municipio?.ibge6 || ''}
-            disabled={!municipios.length}
+            disabled={demo || !municipios.length}
             onChange={e => {
               onVisaoEstadual(e.target.value === 'TODOS');
               if (e.target.value !== 'TODOS') onTrocarMunicipio(municipios.find(m => m.ibge6 === e.target.value));
             }}
           >
-            {page === 'visao-geral' && <option value="TODOS">São Paulo (estado)</option>}
+            {!demo && page === 'visao-geral' && <option value="TODOS">São Paulo (estado)</option>}
             {municipios.map(m => (
               <option key={m.ibge6} value={m.ibge6}>{m.nome} · {m.uf}</option>
             ))}
@@ -621,6 +624,14 @@ function lerMunicipioSalvo() {
 }
 
 export default function App() {
+  const [demoEstados, setDemoEstados] = useState(null);
+  const [demoErro, setDemoErro] = useState('');
+  const [demoCarregando, setDemoCarregando] = useState(false);
+  const [demoCorte, setDemoCorte] = useState('2024-01');
+  const [demoDocumentos, setDemoDocumentos] = useState([]);
+  const [demoSessao, setDemoSessao] = useState(0);
+  const demoReplay = demoEstados?.find(item => item.cutoff === demoCorte);
+  const demoAtiva = !!demoReplay;
   const [authStatus, setAuthStatus] = useState('checking');
   const [authUser, setAuthUser] = useState(getCurrentUser);
   const [rota, setRota] = useState(lerRotaAtual);
@@ -689,8 +700,8 @@ export default function App() {
     }
   }, []);
   useEffect(() => {
-    if (authStatus === 'authenticated') void carregarMunicipios();
-  }, [authStatus, carregarMunicipios]);
+    if (authStatus === 'authenticated' && !demoAtiva) void carregarMunicipios();
+  }, [authStatus, carregarMunicipios, demoAtiva]);
 
   function trocarMunicipio(escolhido) {
     if (!escolhido) return;
@@ -701,7 +712,7 @@ export default function App() {
   const themeVars = (THEMES[themeId] || THEMES.teal).vars;
 
   useEffect(() => {
-    if (authStatus !== 'authenticated' || !municipio) return;
+    if (demoAtiva || authStatus !== 'authenticated' || !municipio) return;
     void Promise.allSettled([
       preCarregarDadosOperacionais(municipio.ibge6),
       import('./pages/VisaoGeral.jsx'),
@@ -712,7 +723,7 @@ export default function App() {
       import('./pages/Vacinacao.jsx'),
       import('./pages/Documentos.jsx'),
     ]);
-  }, [authStatus, municipio]);
+  }, [authStatus, municipio, demoAtiva]);
 
   useEffect(() => {
     let ativo = true;
@@ -771,12 +782,55 @@ export default function App() {
 
   const abrirClara = prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }));
 
-  if (authStatus === 'checking') return <CarregandoPagina />;
+  async function iniciarDemo() {
+    setDemoCarregando(true);
+    setDemoErro('');
+    try {
+      const { default: estados } = await import('./demo/replay.json');
+      setDemoCorte('2024-01');
+      setDemoDocumentos([]);
+      setDemoSessao(valor => valor + 1);
+      setDemoEstados(estados);
+      setClaraOpenRequest(null);
+      setChatAberto(false);
+      navegar('visao-geral');
+    } catch { setDemoErro('Não foi possível carregar o cenário. Tente novamente.'); }
+    finally { setDemoCarregando(false); }
+  }
 
-  if (authStatus !== 'authenticated') {
+  function sairDemo() {
+    setDemoEstados(null);
+    setDemoDocumentos([]);
+    setClaraOpenRequest(null);
+    setChatAberto(false);
+    navegar('visao-geral');
+  }
+
+  function reiniciarDemo() {
+    setDemoCorte('2024-01');
+    setDemoDocumentos([]);
+    setDemoSessao(valor => valor + 1);
+    setClaraOpenRequest(null);
+    setChatAberto(false);
+    navegar('visao-geral');
+  }
+
+  function prepararEtpDemo() {
+    const documento = criarRascunhoDemo(demoReplay);
+    setDemoDocumentos(anteriores => [...anteriores.filter(item => item.id !== documento.id), documento]);
+    navegar('documentos');
+  }
+
+  const municipioExibido = demoAtiva ? MUNICIPIO_DEMO : municipio;
+  const usuarioExibido = demoAtiva ? { user_metadata: { nome: 'Visitante da demonstração' } } : authUser;
+  const contextoDemo = demoAtiva ? { replay: demoReplay, consultar: (recurso, params) => adaptarReplay(demoReplay, demoEstados, recurso, params) } : null;
+
+  if (authStatus === 'checking' && !demoAtiva) return <CarregandoPagina />;
+
+  if (authStatus !== 'authenticated' && !demoAtiva) {
     return (
       <Suspense fallback={<CarregandoPagina />}>
-        <LoginScreen onEnter={async user => {
+        <LoginScreen onDemoHistorica={iniciarDemo} demoCarregando={demoCarregando} demoErro={demoErro} onEnter={async user => {
           // /api/auth/me traz `acesso.perfil` (o login do GoTrue não); sem isso a
           // área de administração só apareceria depois de um reload.
           setAuthUser((await validateSession()) || user || getCurrentUser());
@@ -789,19 +843,23 @@ export default function App() {
   function render() {
     // Sem município não há recorte para consultar: a tela mostra o estado da
     // própria lista (carregando ou erro), nunca um município substituto.
+    const municipio = municipioExibido;
+    if (demoAtiva && ['epidemiologia', 'internacoes', 'vacinacao', 'perfil'].includes(page)) {
+      return <div className="rise"><h1>{page === 'perfil' ? 'Perfil de demonstração' : 'Área fora do cenário histórico'}</h1><p style={{ margin: '16px 0', color: 'var(--ink-500)' }}>Esta demonstração cobre Visão Geral, Alertas, Insumos e rascunhos de Documentos de Campinas em 2024. Saia da demo para acessar as demais áreas.</p><button className="touch-target" onClick={sairDemo}>Sair da demo</button></div>;
+    }
     if (!municipio) {
       return <EstadoConsulta carregando={municipios.carregando} erro={municipios.erro || 'Nenhum município retornado pela dimensão IBGE.'} onRetry={() => carregarMunicipios(true)} />;
     }
 
     switch (page) {
-      case 'visao-geral':   return <VisaoGeral municipio={municipio} estadual={visaoEstadual} onNavigate={navegar} onOpenClara={abrirClara} />;
+      case 'visao-geral':   return <VisaoGeral municipio={municipio} estadual={!demoAtiva && visaoEstadual} onNavigate={navegar} onOpenClara={abrirClara} />;
       case 'alertas':       return <Alertas municipio={municipio} onOpenClara={abrirClara} deepLinkAlertaId={rota.alertaId} />;
       case 'insumos':       return <Insumos municipio={municipio} />;
-      case 'documentos':    return <Documentos />;
+      case 'documentos':    return <Documentos documentos={demoAtiva ? demoDocumentos : []} demo={demoAtiva} />;
       case 'epidemiologia': return <Epidemiologia municipio={municipio} onOpenClara={abrirClara} />;
       case 'internacoes':   return <Internacoes />;
       case 'vacinacao':     return <Vacinacao municipio={municipio} />;
-      case 'configuracoes': return <>{beta && <BetaVariantSettings value={betaVariant} onChange={changeBetaVariant} />}<PageConfiguracoes municipio={municipio} authUser={authUser} /></>;
+      case 'configuracoes': return <>{beta && <BetaVariantSettings value={betaVariant} onChange={changeBetaVariant} />}<PageConfiguracoes municipio={municipio} authUser={demoAtiva ? null : authUser} demo={demoAtiva} onDemo={demoAtiva ? sairDemo : iniciarDemo} demoCarregando={demoCarregando} demoErro={demoErro} /></>;
       case 'perfil':        return <PagePerfil onLogout={handleLogout} user={authUser} onUserChange={setAuthUser} />;
       default:              return <VisaoGeral municipio={municipio} onNavigate={navegar} onOpenClara={abrirClara} />;
     }
@@ -809,11 +867,12 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={{ themeId, setThemeId }}>
+      <DemoContext.Provider value={contextoDemo}>
       {/* Canvas = cor da sidebar: é o que aparece nas calhas entre os cards
           (esquerda da sidebar, gap central, respiro do painel da Clara). */}
       <div className={`app-shell${beta ? ` beta-app beta-${betaVariant}` : ''}`} style={{ ...SEMANTIC_TOKENS, ...themeVars, minHeight: '100dvh', background: SB }}>
         <a className="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
-        <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} user={authUser} />
+        <Sidebar current={page} onNav={navegar} aberta={sidebarAberta} user={usuarioExibido} />
         {viewportCompacto && sidebarAberta && (
           <button
             type="button"
@@ -824,10 +883,11 @@ export default function App() {
         )}
         <Topbar
           page={page}
-          municipio={municipio}
-          municipios={municipios.lista}
+          municipio={municipioExibido}
+          municipios={demoAtiva ? [MUNICIPIO_DEMO] : municipios.lista}
+          demo={demoAtiva}
           onTrocarMunicipio={trocarMunicipio}
-          visaoEstadual={visaoEstadual}
+          visaoEstadual={!demoAtiva && visaoEstadual}
           onVisaoEstadual={setVisaoEstadual}
           onNavigate={navegar}
           sidebarAberta={beta && betaVariant === 'v2' && !viewportCompacto ? false : sidebarAberta}
@@ -870,8 +930,9 @@ export default function App() {
                   <button type="button" className="beta-context-label beta-version-shortcut" onClick={() => navegar('configuracoes')} aria-label={`Beta ${betaVariant}, escolher versão`}><span className="beta-mark">BETA {betaVariant.toUpperCase()}</span> Explorar versões <span aria-hidden="true">↗</span></button>
                   <a href={`${window.location.pathname.replace(/^\/beta/, '') || '/visao-geral'}${window.location.search}${window.location.hash}`}>Interface original <span aria-hidden="true">↗</span></a>
                 </div>}
+                {demoAtiva && <DemoControls replay={demoReplay} cortes={demoEstados.map(item => item.cutoff)} onCorte={corte => { setDemoCorte(corte); setClaraOpenRequest(null); setChatAberto(false); }} onSair={sairDemo} onReset={reiniciarDemo} onEtp={prepararEtpDemo} />}
                 <Suspense fallback={<CarregandoPagina />}>
-                  <div key={page} className="page-enter">{render()}</div>
+                  <div key={`${page}-${demoAtiva ? demoCorte : 'real'}`} className="page-enter">{render()}</div>
                 </Suspense>
               </div>
             </div>
@@ -891,9 +952,10 @@ export default function App() {
           onToggleMais={() => setMobileMaisAberto(aberto => !aberto)}
         />
         <Suspense fallback={null}>
-          {municipio && <ClaraPanel page={page} onNavigate={navegar} ibge6={municipio.ibge6} onOpenChange={setChatAberto} openRequest={claraOpenRequest} />}
+          {municipioExibido && <ClaraPanel key={demoAtiva ? `demo-${demoSessao}-${demoCorte}` : 'real'} demoReplay={demoReplay} page={page} onNavigate={navegar} ibge6={municipioExibido.ibge6} onOpenChange={setChatAberto} openRequest={claraOpenRequest} />}
         </Suspense>
       </div>
+    </DemoContext.Provider>
     </ThemeContext.Provider>
   );
 }
