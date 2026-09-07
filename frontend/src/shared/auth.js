@@ -69,6 +69,14 @@ export function getCurrentUser() {
   return usuarioAtual;
 }
 
+// Perfil.jsx atualiza o cadastro via PUT /api/auth/me e devolve o usuário novo:
+// o cache em memória precisa acompanhar, senão a sidebar segue com o nome antigo
+// até o próximo refresh de token.
+export function setCurrentUser(usuario) {
+  usuarioAtual = usuario;
+  return usuario;
+}
+
 export async function signOut() {
   const token = getAccessToken();
   try {

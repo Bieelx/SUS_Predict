@@ -127,7 +127,7 @@ def is_dev_token(token: str) -> bool:
     return len(partes) == 3 and partes[0] == "dev"
 
 
-def _gotrue_request(path: str, body: dict, token: str | None = None) -> dict:
+def _gotrue_request(path: str, body: dict, token: str | None = None, method: str = "POST") -> dict:
     key = _publishable_key()
     headers = {"apikey": key, "Content-Type": "application/json"}
     if token:
@@ -136,7 +136,7 @@ def _gotrue_request(path: str, body: dict, token: str | None = None) -> dict:
         f"{_sb_url()}/auth/v1/{path}",
         data=json.dumps(body).encode("utf-8"),
         headers=headers,
-        method="POST",
+        method=method,
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -225,7 +225,7 @@ def verificar_codigo_email(email: str, codigo: str) -> dict:
 # GoTrue manda além disso — identities, app_metadata, aud, phone, is_anonymous —
 # fica no backend e nunca chega à aba Network.
 _CAMPOS_USUARIO = ("id", "email", "created_at", "last_sign_in_at")
-_CAMPOS_METADATA = ("nome", "full_name", "name")
+_CAMPOS_METADATA = ("nome", "full_name", "name", "avatar")
 
 
 def usuario_publico(usuario: dict | None) -> dict:
@@ -303,6 +303,21 @@ def get_user(token: str) -> dict:
         raise HTTPException(401, "Token inválido ou expirado")
     except urllib.error.URLError as exc:
         raise HTTPException(503, f"Supabase inacessível: {exc.reason}")
+
+
+def atualizar_usuario(token: str, campos: dict) -> dict:
+    """`PUT /auth/v1/user`: nome/avatar (user_metadata), e-mail ou senha.
+
+    Trocar o e-mail não tem efeito imediato — o GoTrue manda confirmação para o
+    endereço novo (e para o antigo, se "Secure email change" estiver ligado) e só
+    troca depois que o link é aberto. Quem chama trata isso como pedido, não fato.
+    """
+
+    if is_dev_token(token):
+        raise HTTPException(400, "A sessão de demonstração não permite alterar o cadastro.")
+    if not _supabase_configurado():
+        raise HTTPException(503, "Supabase Auth não configurado")
+    return _gotrue_request("user", campos, token=token, method="PUT")
 
 
 def require_user(authorization: str = Header(default="")) -> dict:

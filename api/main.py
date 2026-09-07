@@ -320,6 +320,16 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class PerfilRequest(BaseModel):
+    """Alterações do próprio cadastro. Todos opcionais: manda só o que mudou."""
+
+    nome:         str | None = None
+    avatar:       str | None = None   # data URL (image/*) ou "" para remover
+    email:        str | None = None
+    senha:        str | None = None
+    senha_atual:  str = ""
+
+
 class DownloadRequest(BaseModel):
     sistema:    str
     uf:         str
@@ -437,6 +447,79 @@ def auth_me(user: dict = Depends(auth_core.require_user)):
     return {
         **auth_core.usuario_publico(user),
         "acesso": {"perfil": linha.get("perfil"), "ativo": bool(linha.get("ativo"))} if linha else None,
+    }
+
+
+# Data URL de ~150KB cobre um avatar de 256px em JPEG com folga; acima disso o
+# user_metadata do GoTrue deixa de ser lugar de guardar imagem (aí é Storage).
+AVATAR_MAX_BYTES = 150_000
+
+
+@app.put("/api/auth/me")
+def auth_atualizar_me(
+    req: PerfilRequest,
+    request: Request,
+    authorization: str = Header(default=""),
+    user: dict = Depends(auth_core.require_user),
+):
+    """Edita o próprio cadastro: nome, foto, e-mail e senha."""
+
+    limitar("perfil", identidade_requisicao(request), limite=10)
+    token = authorization.removeprefix("Bearer ").strip()
+
+    campos: dict = {}
+    metadata: dict = {}
+
+    if req.nome is not None:
+        nome = req.nome.strip()
+        if len(nome) < 2:
+            raise HTTPException(400, "Informe um nome com pelo menos 2 caracteres.")
+        metadata["nome"] = nome
+
+    if req.avatar is not None:
+        avatar = req.avatar.strip()
+        if avatar:
+            if not avatar.startswith("data:image/"):
+                raise HTTPException(400, "A foto precisa ser uma imagem.")
+            if len(avatar.encode("utf-8")) > AVATAR_MAX_BYTES:
+                raise HTTPException(400, "A foto é grande demais. Envie uma imagem menor.")
+        metadata["avatar"] = avatar  # "" remove
+
+    if metadata:
+        # PUT substitui o user_metadata inteiro: mescla com o que já existe para não
+        # apagar o nome ao trocar só a foto (e vice-versa).
+        campos["data"] = {**(user.get("user_metadata") or {}), **metadata}
+
+    # E-mail e senha são credenciais: só mudam contra a senha atual. O GoTrue não
+    # exige isso, então a reconferência é aqui — um token roubado não vira conta roubada.
+    troca_credencial = bool(req.email) or bool(req.senha)
+    if troca_credencial:
+        if not req.senha_atual:
+            raise HTTPException(400, "Informe sua senha atual para alterar e-mail ou senha.")
+        try:
+            auth_core.login(user.get("email") or "", req.senha_atual)
+        except HTTPException:
+            raise HTTPException(400, "Senha atual incorreta.")
+
+    if req.email:
+        email = req.email.strip()
+        if "@" not in email or len(email) < 5:
+            raise HTTPException(400, "Informe um e-mail válido.")
+        if email.lower() != (user.get("email") or "").lower():
+            campos["email"] = email
+
+    if req.senha:
+        if len(req.senha) < SENHA_MINIMA:
+            raise HTTPException(400, f"A senha precisa ter pelo menos {SENHA_MINIMA} caracteres.")
+        campos["password"] = req.senha
+
+    if not campos:
+        raise HTTPException(400, "Nada para alterar.")
+
+    atualizado = auth_core.atualizar_usuario(token, campos)
+    return {
+        **auth_core.usuario_publico(atualizado),
+        "email_pendente": bool(campos.get("email")),
     }
 
 

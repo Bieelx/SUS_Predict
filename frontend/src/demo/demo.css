@@ -1,0 +1,11 @@
+.demo-controls { margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--ink-100); color: var(--ink-700); font-size: 12px; }
+.demo-controls__row, .demo-controls__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.demo-controls__row { justify-content: space-between; gap: 12px; }
+.demo-controls__row > strong { display: inline-flex; align-items: center; gap: 7px; color: var(--primary); }
+.demo-controls button, .demo-controls select { min-height: 36px; padding: 7px 10px; border: 1px solid var(--ink-100); border-radius: 8px; background: var(--elev); color: var(--primary); font: inherit; cursor: pointer; }
+.demo-controls button { display: inline-flex; align-items: center; justify-content: center; }
+.demo-controls button:disabled { opacity: .45; cursor: default; }
+.demo-controls p { margin: 10px 0; line-height: 1.6; max-width: 85ch; }
+.demo-controls summary { cursor: pointer; width: fit-content; }
+.demo-controls details .demo-controls__actions { margin-top: 10px; }
+@media (max-width: 768px) { .demo-controls button, .demo-controls select { min-height: 44px; } }

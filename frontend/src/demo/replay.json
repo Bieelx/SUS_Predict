@@ -1,0 +1,2808 @@
+[
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-01",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 0
+      }
+    },
+    "status": "estavel",
+    "epidemiologia": {
+      "casos_ultimo_mes": 3973,
+      "crescimento_pct": null,
+      "previsao_proximo_mes": 4569,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-02",
+        "casos_previstos": 4569,
+        "lower": 3747,
+        "upper": 5391,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-03",
+        "casos_previstos": 5237,
+        "lower": 4294,
+        "upper": 6180,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-04",
+        "casos_previstos": 5976,
+        "lower": 4900,
+        "upper": 7052,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 163800.5,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 206.65,
+        "dias_restantes": 792.6,
+        "status": "ok",
+        "preco_unitario": 4.8,
+        "custo_planejado": 89270.4,
+        "custo_emergencial": 120515.04,
+        "economia_estimada": 31244.64,
+        "evidencia": {
+          "mes_referencia": "2024-01",
+          "casos_referencia": 3973,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 150847.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 138.43,
+        "dias_restantes": 1089.7,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 292786.5,
+        "custo_emergencial": 395261.78,
+        "economia_estimada": 102475.28,
+        "evidencia": {
+          "mes_referencia": "2024-01",
+          "casos_referencia": 3973,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 127496.2,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 83.46,
+        "dias_restantes": 1527.6,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 24035.2,
+        "custo_emergencial": 32447.52,
+        "economia_estimada": 8412.32,
+        "evidencia": {
+          "mes_referencia": "2024-01",
+          "casos_referencia": 3973,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 113946.8,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 35.11,
+        "dias_restantes": 3245.6,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 62884.0,
+        "custo_emergencial": 84893.4,
+        "economia_estimada": 22009.4,
+        "evidencia": {
+          "mes_referencia": "2024-01",
+          "casos_referencia": 3973,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [],
+    "prova_valor": {
+      "etp_recomendado_em": null,
+      "mes_acao_recomendado": null,
+      "ruptura_estimada_em": null,
+      "mes_ruptura_prevista": null,
+      "antecedencia_operacional_dias": null,
+      "quantidade_planejada": 18598.5,
+      "custo_planejado": 89270.4,
+      "custo_emergencial": 120515.04,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 31244.64
+    },
+    "susbot_briefing": [
+      "O replay ainda esta em fase inicial e a tendencia epidemiologica segue sem sinal forte.",
+      "Dipirona 500mg e o insumo mais sensivel, com 792.6 dias de cobertura.",
+      "O sistema segue monitorando a curva e o estoque demo antes de acionar o ETP.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-02",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 1
+      }
+    },
+    "status": "atencao",
+    "epidemiologia": {
+      "casos_ultimo_mes": 12319,
+      "crescimento_pct": 210.1,
+      "previsao_proximo_mes": 20665,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-03",
+        "casos_previstos": 20665,
+        "lower": 16945,
+        "upper": 24385,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-04",
+        "casos_previstos": 30013,
+        "lower": 24611,
+        "upper": 35415,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-05",
+        "casos_previstos": 40362,
+        "lower": 33097,
+        "upper": 47627,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 145082.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 623.95,
+        "dias_restantes": 232.5,
+        "status": "ok",
+        "preco_unitario": 4.8,
+        "custo_planejado": 269548.8,
+        "custo_emergencial": 363890.88,
+        "economia_estimada": 94342.08,
+        "evidencia": {
+          "mes_referencia": "2024-02",
+          "casos_referencia": 12319,
+          "mes_acao_recomendado": "2024-04",
+          "mes_ruptura_prevista": "2024-05",
+          "antecedencia_operacional_dias": 42
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 138348.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 416.63,
+        "dias_restantes": 332.1,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 881179.5,
+        "custo_emergencial": 1189592.33,
+        "economia_estimada": 308412.83,
+        "evidencia": {
+          "mes_referencia": "2024-02",
+          "casos_referencia": 12319,
+          "mes_acao_recomendado": "2024-05",
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 119984.8,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 250.38,
+        "dias_restantes": 479.2,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 72108.8,
+        "custo_emergencial": 97346.88,
+        "economia_estimada": 25238.08,
+        "evidencia": {
+          "mes_referencia": "2024-02",
+          "casos_referencia": 12319,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 110807.0,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 104.66,
+        "dias_restantes": 1058.7,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 187438.1,
+        "custo_emergencial": 253041.44,
+        "economia_estimada": 65603.34,
+        "evidencia": {
+          "mes_referencia": "2024-02",
+          "casos_referencia": 12319,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-surto-dengue",
+        "tipo": "surto",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Surto de dengue em aceleração",
+        "descricao": "Crescimento mensal de 210.1% no último corte visível.",
+        "item_ou_condicao": "dengue",
+        "evidencia": {
+          "crescimento_pct": 210.1,
+          "previsao_proximo_mes": 20665
+        }
+      },
+      {
+        "id": "demo-surto-previsao",
+        "tipo": "surto",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Previsão aponta pico crescente",
+        "descricao": "Previsão do próximo mês chega a 20665 casos.",
+        "item_ou_condicao": "dengue",
+        "evidencia": {
+          "multiplo_previsto": 1.68,
+          "casos_previstos": 20665
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-04",
+      "mes_acao_recomendado": "2024-04",
+      "ruptura_estimada_em": "2024-05",
+      "mes_ruptura_prevista": "2024-05",
+      "antecedencia_operacional_dias": 42,
+      "quantidade_planejada": 56155.5,
+      "custo_planejado": 269548.8,
+      "custo_emergencial": 363890.88,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 94342.08
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de 210.1% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 232.5 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-04 para ganhar 42 dias antes da ruptura. Compra planejada: R$ 269.548,80 vs. emergencial: R$ 363.890,88.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-03",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 2
+      }
+    },
+    "status": "atencao",
+    "epidemiologia": {
+      "casos_ultimo_mes": 28156,
+      "crescimento_pct": 128.6,
+      "previsao_proximo_mes": 40248,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-04",
+        "casos_previstos": 40248,
+        "lower": 33003,
+        "upper": 47493,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-05",
+        "casos_previstos": 53791,
+        "lower": 44109,
+        "upper": 63473,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-06",
+        "casos_previstos": 68785,
+        "lower": 56404,
+        "upper": 81166,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 102608.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 1415.8,
+        "dias_restantes": 72.5,
+        "status": "ok",
+        "preco_unitario": 4.8,
+        "custo_planejado": 611625.6,
+        "custo_emergencial": 825694.56,
+        "economia_estimada": 214068.96,
+        "evidencia": {
+          "mes_referencia": "2024-03",
+          "casos_referencia": 28156,
+          "mes_acao_recomendado": "2024-04",
+          "mes_ruptura_prevista": "2024-04",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 110012.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 944.53,
+        "dias_restantes": 116.5,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 1997688.0,
+        "custo_emergencial": 2696878.8,
+        "economia_estimada": 699190.8,
+        "evidencia": {
+          "mes_referencia": "2024-03",
+          "casos_referencia": 28156,
+          "mes_acao_recomendado": "2024-04",
+          "mes_ruptura_prevista": "2024-05",
+          "antecedencia_operacional_dias": 43
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 102971.2,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 567.12,
+        "dias_restantes": 181.6,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 163331.2,
+        "custo_emergencial": 220497.12,
+        "economia_estimada": 57165.92,
+        "evidencia": {
+          "mes_referencia": "2024-03",
+          "casos_referencia": 28156,
+          "mes_acao_recomendado": "2024-05",
+          "mes_ruptura_prevista": "2024-06",
+          "antecedencia_operacional_dias": 39
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 103708.0,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 236.63,
+        "dias_restantes": 438.3,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 423810.3,
+        "custo_emergencial": 572143.91,
+        "economia_estimada": 148333.61,
+        "evidencia": {
+          "mes_referencia": "2024-03",
+          "casos_referencia": 28156,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-surto-dengue",
+        "tipo": "surto",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Surto de dengue em aceleração",
+        "descricao": "Crescimento mensal de 128.6% no último corte visível.",
+        "item_ou_condicao": "dengue",
+        "evidencia": {
+          "crescimento_pct": 128.6,
+          "previsao_proximo_mes": 40248
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-04",
+      "mes_acao_recomendado": "2024-04",
+      "ruptura_estimada_em": "2024-04",
+      "mes_ruptura_prevista": "2024-04",
+      "antecedencia_operacional_dias": 0,
+      "quantidade_planejada": 127422.0,
+      "custo_planejado": 611625.6,
+      "custo_emergencial": 825694.56,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 214068.96
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de 128.6% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 72.5 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-04 para ganhar 0 dias antes da ruptura. Compra planejada: R$ 611.625,60 vs. emergencial: R$ 825.694,56.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-04",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 3
+      }
+    },
+    "status": "atencao",
+    "epidemiologia": {
+      "casos_ultimo_mes": 33354,
+      "crescimento_pct": 18.5,
+      "previsao_proximo_mes": 43872,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      },
+      {
+        "mes": "2024-04",
+        "casos": 33354,
+        "tipo": "real",
+        "crescimento_pct": 18.5
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-05",
+        "casos_previstos": 43872,
+        "lower": 35975,
+        "upper": 51769,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-06",
+        "casos_previstos": 55652,
+        "lower": 45635,
+        "upper": 65669,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-07",
+        "casos_previstos": 68694,
+        "lower": 56329,
+        "upper": 81059,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 52337.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 1675.7,
+        "dias_restantes": 31.2,
+        "status": "atencao",
+        "preco_unitario": 4.8,
+        "custo_planejado": 723902.4,
+        "custo_emergencial": 977268.24,
+        "economia_estimada": 253365.84,
+        "evidencia": {
+          "mes_referencia": "2024-04",
+          "casos_referencia": 33354,
+          "mes_acao_recomendado": "2024-04",
+          "mes_ruptura_prevista": "2024-05",
+          "antecedencia_operacional_dias": 31
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 76478.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 1117.8,
+        "dias_restantes": 68.4,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 2364147.0,
+        "custo_emergencial": 3191598.45,
+        "economia_estimada": 827451.45,
+        "evidencia": {
+          "mes_referencia": "2024-04",
+          "casos_referencia": 33354,
+          "mes_acao_recomendado": "2024-05",
+          "mes_ruptura_prevista": "2024-05",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 82838.8,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 671.08,
+        "dias_restantes": 123.4,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 193270.4,
+        "custo_emergencial": 260915.04,
+        "economia_estimada": 67644.64,
+        "evidencia": {
+          "mes_referencia": "2024-04",
+          "casos_referencia": 33354,
+          "mes_acao_recomendado": "2024-06",
+          "mes_ruptura_prevista": "2024-06",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 95309.5,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 279.95,
+        "dias_restantes": 340.5,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 501400.4,
+        "custo_emergencial": 676890.54,
+        "economia_estimada": 175490.14,
+        "evidencia": {
+          "mes_referencia": "2024-04",
+          "casos_referencia": 33354,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-ruptura-dipirona-500mg",
+        "tipo": "ruptura",
+        "severidade": "media",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Dipirona 500mg",
+        "descricao": "Cobertura estimada de 31.2 dias.",
+        "item_ou_condicao": "Dipirona 500mg",
+        "evidencia": {
+          "dias_restantes": 31.2,
+          "consumo_previsto_dia": 1675.7,
+          "estoque_demo": true
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-04",
+      "mes_acao_recomendado": "2024-04",
+      "ruptura_estimada_em": "2024-05",
+      "mes_ruptura_prevista": "2024-05",
+      "antecedencia_operacional_dias": 31,
+      "quantidade_planejada": 150813.0,
+      "custo_planejado": 723902.4,
+      "custo_emergencial": 977268.24,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 253365.84
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de 18.5% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 31.2 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-04 para ganhar 31 dias antes da ruptura. Compra planejada: R$ 723.902,40 vs. emergencial: R$ 977.268,24.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-05",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 4
+      }
+    },
+    "status": "critico",
+    "epidemiologia": {
+      "casos_ultimo_mes": 29073,
+      "crescimento_pct": -12.8,
+      "previsao_proximo_mes": 31672,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      },
+      {
+        "mes": "2024-04",
+        "casos": 33354,
+        "tipo": "real",
+        "crescimento_pct": 18.5
+      },
+      {
+        "mes": "2024-05",
+        "casos": 29073,
+        "tipo": "real",
+        "crescimento_pct": -12.8
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-06",
+        "casos_previstos": 31672,
+        "lower": 25971,
+        "upper": 37373,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-07",
+        "casos_previstos": 34583,
+        "lower": 28358,
+        "upper": 40808,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-08",
+        "casos_previstos": 37806,
+        "lower": 31001,
+        "upper": 44611,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 8487.5,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 1461.65,
+        "dias_restantes": 5.8,
+        "status": "critico",
+        "preco_unitario": 4.8,
+        "custo_planejado": 631430.4,
+        "custo_emergencial": 852431.04,
+        "economia_estimada": 221000.64,
+        "evidencia": {
+          "mes_referencia": "2024-05",
+          "casos_referencia": 29073,
+          "mes_acao_recomendado": "2024-05",
+          "mes_ruptura_prevista": "2024-05",
+          "antecedencia_operacional_dias": 6
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 47225.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 975.1,
+        "dias_restantes": 48.4,
+        "status": "atencao",
+        "preco_unitario": 23.5,
+        "custo_planejado": 2062336.5,
+        "custo_emergencial": 2784154.28,
+        "economia_estimada": 721817.78,
+        "evidencia": {
+          "mes_referencia": "2024-05",
+          "casos_referencia": 29073,
+          "mes_acao_recomendado": "2024-05",
+          "mes_ruptura_prevista": "2024-06",
+          "antecedencia_operacional_dias": 48
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 65275.0,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 585.46,
+        "dias_restantes": 111.5,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 168611.2,
+        "custo_emergencial": 227625.12,
+        "economia_estimada": 59013.92,
+        "evidencia": {
+          "mes_referencia": "2024-05",
+          "casos_referencia": 29073,
+          "mes_acao_recomendado": "2024-07",
+          "mes_ruptura_prevista": "2024-08",
+          "antecedencia_operacional_dias": 33
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 87981.2,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 244.28,
+        "dias_restantes": 360.2,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 437501.5,
+        "custo_emergencial": 590627.03,
+        "economia_estimada": 153125.53,
+        "evidencia": {
+          "mes_referencia": "2024-05",
+          "casos_referencia": 29073,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-ruptura-dipirona-500mg",
+        "tipo": "ruptura",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Dipirona 500mg",
+        "descricao": "Cobertura estimada de 5.8 dias.",
+        "item_ou_condicao": "Dipirona 500mg",
+        "evidencia": {
+          "dias_restantes": 5.8,
+          "consumo_previsto_dia": 1461.65,
+          "estoque_demo": true
+        }
+      },
+      {
+        "id": "demo-ruptura-soro-fisiológico-1l",
+        "tipo": "ruptura",
+        "severidade": "media",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Soro fisiológico 1L",
+        "descricao": "Cobertura estimada de 48.4 dias.",
+        "item_ou_condicao": "Soro fisiológico 1L",
+        "evidencia": {
+          "dias_restantes": 48.4,
+          "consumo_previsto_dia": 975.1,
+          "estoque_demo": true
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-05",
+      "mes_acao_recomendado": "2024-05",
+      "ruptura_estimada_em": "2024-05",
+      "mes_ruptura_prevista": "2024-05",
+      "antecedencia_operacional_dias": 6,
+      "quantidade_planejada": 131548.5,
+      "custo_planejado": 631430.4,
+      "custo_emergencial": 852431.04,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 221000.64
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de -12.8% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 5.8 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-05 para ganhar 6 dias antes da ruptura. Compra planejada: R$ 631.430,40 vs. emergencial: R$ 852.431,04.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-06",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 5
+      }
+    },
+    "status": "critico",
+    "epidemiologia": {
+      "casos_ultimo_mes": 9500,
+      "crescimento_pct": -67.3,
+      "previsao_proximo_mes": 9501,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      },
+      {
+        "mes": "2024-04",
+        "casos": 33354,
+        "tipo": "real",
+        "crescimento_pct": 18.5
+      },
+      {
+        "mes": "2024-05",
+        "casos": 29073,
+        "tipo": "real",
+        "crescimento_pct": -12.8
+      },
+      {
+        "mes": "2024-06",
+        "casos": 9500,
+        "tipo": "real",
+        "crescimento_pct": -67.3
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-07",
+        "casos_previstos": 9501,
+        "lower": 7791,
+        "upper": 11211,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-08",
+        "casos_previstos": 9502,
+        "lower": 7792,
+        "upper": 11212,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-09",
+        "casos_previstos": 9503,
+        "lower": 7792,
+        "upper": 11214,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 0.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 483.0,
+        "dias_restantes": 0.0,
+        "status": "critico",
+        "preco_unitario": 4.8,
+        "custo_planejado": 208656.0,
+        "custo_emergencial": 281685.6,
+        "economia_estimada": 73029.6,
+        "evidencia": {
+          "mes_referencia": "2024-06",
+          "casos_referencia": 9500,
+          "mes_acao_recomendado": "2024-06",
+          "mes_ruptura_prevista": "2024-06",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 37545.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 322.67,
+        "dias_restantes": 116.4,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 682440.0,
+        "custo_emergencial": 921294.0,
+        "economia_estimada": 238854.0,
+        "evidencia": {
+          "mes_referencia": "2024-06",
+          "casos_referencia": 9500,
+          "mes_acao_recomendado": "2024-08",
+          "mes_ruptura_prevista": "2024-09",
+          "antecedencia_operacional_dias": 30
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 59455.0,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 194.0,
+        "dias_restantes": 306.5,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 55872.0,
+        "custo_emergencial": 75427.2,
+        "economia_estimada": 19555.2,
+        "evidencia": {
+          "mes_referencia": "2024-06",
+          "casos_referencia": 9500,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 85546.2,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 81.17,
+        "dias_restantes": 1054.0,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 145369.5,
+        "custo_emergencial": 196248.83,
+        "economia_estimada": 50879.33,
+        "evidencia": {
+          "mes_referencia": "2024-06",
+          "casos_referencia": 9500,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-ruptura-dipirona-500mg",
+        "tipo": "ruptura",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Dipirona 500mg",
+        "descricao": "Cobertura estimada de 0.0 dias.",
+        "item_ou_condicao": "Dipirona 500mg",
+        "evidencia": {
+          "dias_restantes": 0.0,
+          "consumo_previsto_dia": 483.0,
+          "estoque_demo": true
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-06",
+      "mes_acao_recomendado": "2024-06",
+      "ruptura_estimada_em": "2024-06",
+      "mes_ruptura_prevista": "2024-06",
+      "antecedencia_operacional_dias": 0,
+      "quantidade_planejada": 43470.0,
+      "custo_planejado": 208656.0,
+      "custo_emergencial": 281685.6,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 73029.6
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de -67.3% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 0.0 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-06 para ganhar 0 dias antes da ruptura. Compra planejada: R$ 208.656,00 vs. emergencial: R$ 281.685,60.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-07",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 6
+      }
+    },
+    "status": "critico",
+    "epidemiologia": {
+      "casos_ultimo_mes": 1988,
+      "crescimento_pct": -79.1,
+      "previsao_proximo_mes": 1989,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      },
+      {
+        "mes": "2024-04",
+        "casos": 33354,
+        "tipo": "real",
+        "crescimento_pct": 18.5
+      },
+      {
+        "mes": "2024-05",
+        "casos": 29073,
+        "tipo": "real",
+        "crescimento_pct": -12.8
+      },
+      {
+        "mes": "2024-06",
+        "casos": 9500,
+        "tipo": "real",
+        "crescimento_pct": -67.3
+      },
+      {
+        "mes": "2024-07",
+        "casos": 1988,
+        "tipo": "real",
+        "crescimento_pct": -79.1
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-08",
+        "casos_previstos": 1989,
+        "lower": 1631,
+        "upper": 2347,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-09",
+        "casos_previstos": 1990,
+        "lower": 1632,
+        "upper": 2348,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-10",
+        "casos_previstos": 1991,
+        "lower": 1633,
+        "upper": 2349,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 0.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 107.4,
+        "dias_restantes": 0.0,
+        "status": "critico",
+        "preco_unitario": 4.8,
+        "custo_planejado": 46396.8,
+        "custo_emergencial": 62635.68,
+        "economia_estimada": 16238.88,
+        "evidencia": {
+          "mes_referencia": "2024-07",
+          "casos_referencia": 1988,
+          "mes_acao_recomendado": "2024-07",
+          "mes_ruptura_prevista": "2024-07",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 35377.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 72.27,
+        "dias_restantes": 489.5,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 152844.0,
+        "custo_emergencial": 206339.4,
+        "economia_estimada": 53495.4,
+        "evidencia": {
+          "mes_referencia": "2024-07",
+          "casos_referencia": 1988,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 58142.2,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 43.76,
+        "dias_restantes": 1328.7,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 12601.6,
+        "custo_emergencial": 17012.16,
+        "economia_estimada": 4410.56,
+        "evidencia": {
+          "mes_referencia": "2024-07",
+          "casos_referencia": 1988,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 84989.2,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 18.57,
+        "dias_restantes": 4577.5,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 33252.9,
+        "custo_emergencial": 44891.42,
+        "economia_estimada": 11638.52,
+        "evidencia": {
+          "mes_referencia": "2024-07",
+          "casos_referencia": 1988,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-ruptura-dipirona-500mg",
+        "tipo": "ruptura",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Dipirona 500mg",
+        "descricao": "Cobertura estimada de 0.0 dias.",
+        "item_ou_condicao": "Dipirona 500mg",
+        "evidencia": {
+          "dias_restantes": 0.0,
+          "consumo_previsto_dia": 107.4,
+          "estoque_demo": true
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-07",
+      "mes_acao_recomendado": "2024-07",
+      "ruptura_estimada_em": "2024-07",
+      "mes_ruptura_prevista": "2024-07",
+      "antecedencia_operacional_dias": 0,
+      "quantidade_planejada": 9666.0,
+      "custo_planejado": 46396.8,
+      "custo_emergencial": 62635.68,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 16238.88
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de -79.1% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 0.0 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-07 para ganhar 0 dias antes da ruptura. Compra planejada: R$ 46.396,80 vs. emergencial: R$ 62.635,68.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-08",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 7
+      }
+    },
+    "status": "critico",
+    "epidemiologia": {
+      "casos_ultimo_mes": 960,
+      "crescimento_pct": -51.7,
+      "previsao_proximo_mes": 961,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      },
+      {
+        "mes": "2024-04",
+        "casos": 33354,
+        "tipo": "real",
+        "crescimento_pct": 18.5
+      },
+      {
+        "mes": "2024-05",
+        "casos": 29073,
+        "tipo": "real",
+        "crescimento_pct": -12.8
+      },
+      {
+        "mes": "2024-06",
+        "casos": 9500,
+        "tipo": "real",
+        "crescimento_pct": -67.3
+      },
+      {
+        "mes": "2024-07",
+        "casos": 1988,
+        "tipo": "real",
+        "crescimento_pct": -79.1
+      },
+      {
+        "mes": "2024-08",
+        "casos": 960,
+        "tipo": "real",
+        "crescimento_pct": -51.7
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-09",
+        "casos_previstos": 961,
+        "lower": 788,
+        "upper": 1134,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-10",
+        "casos_previstos": 962,
+        "lower": 789,
+        "upper": 1135,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-11",
+        "casos_previstos": 963,
+        "lower": 790,
+        "upper": 1136,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 0.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 56.0,
+        "dias_restantes": 0.0,
+        "status": "critico",
+        "preco_unitario": 4.8,
+        "custo_planejado": 24192.0,
+        "custo_emergencial": 32659.2,
+        "economia_estimada": 8467.2,
+        "evidencia": {
+          "mes_referencia": "2024-08",
+          "casos_referencia": 960,
+          "mes_acao_recomendado": "2024-08",
+          "mes_ruptura_prevista": "2024-08",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 34237.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 38.0,
+        "dias_restantes": 901.0,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 80370.0,
+        "custo_emergencial": 108499.5,
+        "economia_estimada": 28129.5,
+        "evidencia": {
+          "mes_referencia": "2024-08",
+          "casos_referencia": 960,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 57446.2,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 23.2,
+        "dias_restantes": 2476.1,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 6681.6,
+        "custo_emergencial": 9020.16,
+        "economia_estimada": 2338.56,
+        "evidencia": {
+          "mes_referencia": "2024-08",
+          "casos_referencia": 960,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 84689.2,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 10.0,
+        "dias_restantes": 8468.9,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 17910.0,
+        "custo_emergencial": 24178.5,
+        "economia_estimada": 6268.5,
+        "evidencia": {
+          "mes_referencia": "2024-08",
+          "casos_referencia": 960,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-ruptura-dipirona-500mg",
+        "tipo": "ruptura",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Dipirona 500mg",
+        "descricao": "Cobertura estimada de 0.0 dias.",
+        "item_ou_condicao": "Dipirona 500mg",
+        "evidencia": {
+          "dias_restantes": 0.0,
+          "consumo_previsto_dia": 56.0,
+          "estoque_demo": true
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-08",
+      "mes_acao_recomendado": "2024-08",
+      "ruptura_estimada_em": "2024-08",
+      "mes_ruptura_prevista": "2024-08",
+      "antecedencia_operacional_dias": 0,
+      "quantidade_planejada": 5040.0,
+      "custo_planejado": 24192.0,
+      "custo_emergencial": 32659.2,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 8467.2
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de -51.7% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 0.0 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-08 para ganhar 0 dias antes da ruptura. Compra planejada: R$ 24.192,00 vs. emergencial: R$ 32.659,20.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-09",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 8
+      }
+    },
+    "status": "critico",
+    "epidemiologia": {
+      "casos_ultimo_mes": 755,
+      "crescimento_pct": -21.4,
+      "previsao_proximo_mes": 756,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      },
+      {
+        "mes": "2024-04",
+        "casos": 33354,
+        "tipo": "real",
+        "crescimento_pct": 18.5
+      },
+      {
+        "mes": "2024-05",
+        "casos": 29073,
+        "tipo": "real",
+        "crescimento_pct": -12.8
+      },
+      {
+        "mes": "2024-06",
+        "casos": 9500,
+        "tipo": "real",
+        "crescimento_pct": -67.3
+      },
+      {
+        "mes": "2024-07",
+        "casos": 1988,
+        "tipo": "real",
+        "crescimento_pct": -79.1
+      },
+      {
+        "mes": "2024-08",
+        "casos": 960,
+        "tipo": "real",
+        "crescimento_pct": -51.7
+      },
+      {
+        "mes": "2024-09",
+        "casos": 755,
+        "tipo": "real",
+        "crescimento_pct": -21.4
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-10",
+        "casos_previstos": 756,
+        "lower": 620,
+        "upper": 892,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-11",
+        "casos_previstos": 757,
+        "lower": 621,
+        "upper": 893,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-12",
+        "casos_previstos": 758,
+        "lower": 622,
+        "upper": 894,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 0.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 45.75,
+        "dias_restantes": 0.0,
+        "status": "critico",
+        "preco_unitario": 4.8,
+        "custo_planejado": 19766.4,
+        "custo_emergencial": 26684.64,
+        "economia_estimada": 6918.24,
+        "evidencia": {
+          "mes_referencia": "2024-09",
+          "casos_referencia": 755,
+          "mes_acao_recomendado": "2024-09",
+          "mes_ruptura_prevista": "2024-09",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 33302.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 31.17,
+        "dias_restantes": 1068.5,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 65917.5,
+        "custo_emergencial": 88988.62,
+        "economia_estimada": 23071.12,
+        "evidencia": {
+          "mes_referencia": "2024-09",
+          "casos_referencia": 755,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 56873.2,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 19.1,
+        "dias_restantes": 2977.7,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 5500.8,
+        "custo_emergencial": 7426.08,
+        "economia_estimada": 1925.28,
+        "evidencia": {
+          "mes_referencia": "2024-09",
+          "casos_referencia": 755,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 84440.5,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 8.29,
+        "dias_restantes": 10183.8,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 14845.4,
+        "custo_emergencial": 20041.29,
+        "economia_estimada": 5195.89,
+        "evidencia": {
+          "mes_referencia": "2024-09",
+          "casos_referencia": 755,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-ruptura-dipirona-500mg",
+        "tipo": "ruptura",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Dipirona 500mg",
+        "descricao": "Cobertura estimada de 0.0 dias.",
+        "item_ou_condicao": "Dipirona 500mg",
+        "evidencia": {
+          "dias_restantes": 0.0,
+          "consumo_previsto_dia": 45.75,
+          "estoque_demo": true
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-09",
+      "mes_acao_recomendado": "2024-09",
+      "ruptura_estimada_em": "2024-09",
+      "mes_ruptura_prevista": "2024-09",
+      "antecedencia_operacional_dias": 0,
+      "quantidade_planejada": 4117.5,
+      "custo_planejado": 19766.4,
+      "custo_emergencial": 26684.64,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 6918.24
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de -21.4% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 0.0 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-09 para ganhar 0 dias antes da ruptura. Compra planejada: R$ 19.766,40 vs. emergencial: R$ 26.684,64.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-10",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 9
+      }
+    },
+    "status": "critico",
+    "epidemiologia": {
+      "casos_ultimo_mes": 586,
+      "crescimento_pct": -22.4,
+      "previsao_proximo_mes": 587,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      },
+      {
+        "mes": "2024-04",
+        "casos": 33354,
+        "tipo": "real",
+        "crescimento_pct": 18.5
+      },
+      {
+        "mes": "2024-05",
+        "casos": 29073,
+        "tipo": "real",
+        "crescimento_pct": -12.8
+      },
+      {
+        "mes": "2024-06",
+        "casos": 9500,
+        "tipo": "real",
+        "crescimento_pct": -67.3
+      },
+      {
+        "mes": "2024-07",
+        "casos": 1988,
+        "tipo": "real",
+        "crescimento_pct": -79.1
+      },
+      {
+        "mes": "2024-08",
+        "casos": 960,
+        "tipo": "real",
+        "crescimento_pct": -51.7
+      },
+      {
+        "mes": "2024-09",
+        "casos": 755,
+        "tipo": "real",
+        "crescimento_pct": -21.4
+      },
+      {
+        "mes": "2024-10",
+        "casos": 586,
+        "tipo": "real",
+        "crescimento_pct": -22.4
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-11",
+        "casos_previstos": 587,
+        "lower": 481,
+        "upper": 693,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2024-12",
+        "casos_previstos": 588,
+        "lower": 482,
+        "upper": 694,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2025-01",
+        "casos_previstos": 589,
+        "lower": 483,
+        "upper": 695,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 0.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 37.3,
+        "dias_restantes": 0.0,
+        "status": "critico",
+        "preco_unitario": 4.8,
+        "custo_planejado": 16113.6,
+        "custo_emergencial": 21753.36,
+        "economia_estimada": 5639.76,
+        "evidencia": {
+          "mes_referencia": "2024-10",
+          "casos_referencia": 586,
+          "mes_acao_recomendado": "2024-10",
+          "mes_ruptura_prevista": "2024-10",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 32536.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 25.53,
+        "dias_restantes": 1274.3,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 54003.0,
+        "custo_emergencial": 72904.05,
+        "economia_estimada": 18901.05,
+        "evidencia": {
+          "mes_referencia": "2024-10",
+          "casos_referencia": 586,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 56401.6,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 15.72,
+        "dias_restantes": 3587.9,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 4528.0,
+        "custo_emergencial": 6112.8,
+        "economia_estimada": 1584.8,
+        "evidencia": {
+          "mes_referencia": "2024-10",
+          "casos_referencia": 586,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 84234.0,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 6.88,
+        "dias_restantes": 12237.4,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 12338.0,
+        "custo_emergencial": 16656.3,
+        "economia_estimada": 4318.3,
+        "evidencia": {
+          "mes_referencia": "2024-10",
+          "casos_referencia": 586,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-ruptura-dipirona-500mg",
+        "tipo": "ruptura",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Dipirona 500mg",
+        "descricao": "Cobertura estimada de 0.0 dias.",
+        "item_ou_condicao": "Dipirona 500mg",
+        "evidencia": {
+          "dias_restantes": 0.0,
+          "consumo_previsto_dia": 37.3,
+          "estoque_demo": true
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-10",
+      "mes_acao_recomendado": "2024-10",
+      "ruptura_estimada_em": "2024-10",
+      "mes_ruptura_prevista": "2024-10",
+      "antecedencia_operacional_dias": 0,
+      "quantidade_planejada": 3357.0,
+      "custo_planejado": 16113.6,
+      "custo_emergencial": 21753.36,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 5639.76
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de -22.4% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 0.0 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-10 para ganhar 0 dias antes da ruptura. Compra planejada: R$ 16.113,60 vs. emergencial: R$ 21.753,36.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-11",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 10
+      }
+    },
+    "status": "critico",
+    "epidemiologia": {
+      "casos_ultimo_mes": 466,
+      "crescimento_pct": -20.5,
+      "previsao_proximo_mes": 467,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      },
+      {
+        "mes": "2024-04",
+        "casos": 33354,
+        "tipo": "real",
+        "crescimento_pct": 18.5
+      },
+      {
+        "mes": "2024-05",
+        "casos": 29073,
+        "tipo": "real",
+        "crescimento_pct": -12.8
+      },
+      {
+        "mes": "2024-06",
+        "casos": 9500,
+        "tipo": "real",
+        "crescimento_pct": -67.3
+      },
+      {
+        "mes": "2024-07",
+        "casos": 1988,
+        "tipo": "real",
+        "crescimento_pct": -79.1
+      },
+      {
+        "mes": "2024-08",
+        "casos": 960,
+        "tipo": "real",
+        "crescimento_pct": -51.7
+      },
+      {
+        "mes": "2024-09",
+        "casos": 755,
+        "tipo": "real",
+        "crescimento_pct": -21.4
+      },
+      {
+        "mes": "2024-10",
+        "casos": 586,
+        "tipo": "real",
+        "crescimento_pct": -22.4
+      },
+      {
+        "mes": "2024-11",
+        "casos": 466,
+        "tipo": "real",
+        "crescimento_pct": -20.5
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2024-12",
+        "casos_previstos": 467,
+        "lower": 383,
+        "upper": 551,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2025-01",
+        "casos_previstos": 468,
+        "lower": 384,
+        "upper": 552,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2025-02",
+        "casos_previstos": 469,
+        "lower": 385,
+        "upper": 553,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 0.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 31.3,
+        "dias_restantes": 0.0,
+        "status": "critico",
+        "preco_unitario": 4.8,
+        "custo_planejado": 13521.6,
+        "custo_emergencial": 18254.16,
+        "economia_estimada": 4732.56,
+        "evidencia": {
+          "mes_referencia": "2024-11",
+          "casos_referencia": 466,
+          "mes_acao_recomendado": "2024-11",
+          "mes_ruptura_prevista": "2024-11",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 31890.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 21.53,
+        "dias_restantes": 1481.0,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 45543.0,
+        "custo_emergencial": 61483.05,
+        "economia_estimada": 15940.05,
+        "evidencia": {
+          "mes_referencia": "2024-11",
+          "casos_referencia": 466,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 56002.0,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 13.32,
+        "dias_restantes": 4204.4,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 3836.8,
+        "custo_emergencial": 5179.68,
+        "economia_estimada": 1342.88,
+        "evidencia": {
+          "mes_referencia": "2024-11",
+          "casos_referencia": 466,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 84057.5,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 5.88,
+        "dias_restantes": 14287.4,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 10547.0,
+        "custo_emergencial": 14238.45,
+        "economia_estimada": 3691.45,
+        "evidencia": {
+          "mes_referencia": "2024-11",
+          "casos_referencia": 466,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-ruptura-dipirona-500mg",
+        "tipo": "ruptura",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Dipirona 500mg",
+        "descricao": "Cobertura estimada de 0.0 dias.",
+        "item_ou_condicao": "Dipirona 500mg",
+        "evidencia": {
+          "dias_restantes": 0.0,
+          "consumo_previsto_dia": 31.3,
+          "estoque_demo": true
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-11",
+      "mes_acao_recomendado": "2024-11",
+      "ruptura_estimada_em": "2024-11",
+      "mes_ruptura_prevista": "2024-11",
+      "antecedencia_operacional_dias": 0,
+      "quantidade_planejada": 2817.0,
+      "custo_planejado": 13521.6,
+      "custo_emergencial": 18254.16,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 4732.56
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de -20.5% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 0.0 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-11 para ganhar 0 dias antes da ruptura. Compra planejada: R$ 13.521,60 vs. emergencial: R$ 18.254,16.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  },
+  {
+    "demo": true,
+    "scenario_id": "demo-crise-historica-dengue-2024-campinas",
+    "status_dataset": "validado",
+    "cutoff": "2024-12",
+    "meta": {
+      "municipio": "Campinas",
+      "uf": "SP",
+      "ibge6": "350950",
+      "fonte": "CSV oficial do CVE/SES-SP (dengue24_mes.csv) consultado em 2026-07-30; série mensal de Campinas/SP com casos confirmados por mês de início dos sintomas",
+      "fonte_url": "https://www.saude.sp.gov.br/resources/cve-centro-de-vigilancia-epidemiologica/areas-de-vigilancia/doencas-de-transmissao-por-vetores-e-zoonoses/dados/dengue/2024/dengue24_mes.csv",
+      "periodo": {
+        "inicio": "2024-01",
+        "fim": "2024-12"
+      },
+      "extraido_em": "2026-07-30T00:00:00Z",
+      "observacoes": [
+        "Série mensal usa o total de casos confirmados (autóctones + importados) de Campinas/SP no CSV oficial do CVE.",
+        "O arquivo estabiliza o replay sem depender de rede.",
+        "Estoque e precos sao ficticios e marcados como estoque_demo.",
+        "A serie cobre 2024 inteiro para permitir corte mensal e revelacao posterior do restante do ano.",
+        "O estoque foi recalibrado para que a ruptura apareca depois do sinal epidemiologico, com Dipirona como primeiro item critico e Soro em alerta no corte seguinte."
+      ],
+      "status_dataset": "validado",
+      "cortes": {
+        "mes_inicial": "2024-01",
+        "mes_final": "2024-12",
+        "indice_atual": 11
+      }
+    },
+    "status": "critico",
+    "epidemiologia": {
+      "casos_ultimo_mes": 343,
+      "crescimento_pct": -26.4,
+      "previsao_proximo_mes": 344,
+      "limiares": {
+        "crescimento_pct": 30.0,
+        "multiplo_previsao": 1.5
+      }
+    },
+    "serie_visivel": [
+      {
+        "mes": "2024-01",
+        "casos": 3973,
+        "tipo": "real",
+        "crescimento_pct": null
+      },
+      {
+        "mes": "2024-02",
+        "casos": 12319,
+        "tipo": "real",
+        "crescimento_pct": 210.1
+      },
+      {
+        "mes": "2024-03",
+        "casos": 28156,
+        "tipo": "real",
+        "crescimento_pct": 128.6
+      },
+      {
+        "mes": "2024-04",
+        "casos": 33354,
+        "tipo": "real",
+        "crescimento_pct": 18.5
+      },
+      {
+        "mes": "2024-05",
+        "casos": 29073,
+        "tipo": "real",
+        "crescimento_pct": -12.8
+      },
+      {
+        "mes": "2024-06",
+        "casos": 9500,
+        "tipo": "real",
+        "crescimento_pct": -67.3
+      },
+      {
+        "mes": "2024-07",
+        "casos": 1988,
+        "tipo": "real",
+        "crescimento_pct": -79.1
+      },
+      {
+        "mes": "2024-08",
+        "casos": 960,
+        "tipo": "real",
+        "crescimento_pct": -51.7
+      },
+      {
+        "mes": "2024-09",
+        "casos": 755,
+        "tipo": "real",
+        "crescimento_pct": -21.4
+      },
+      {
+        "mes": "2024-10",
+        "casos": 586,
+        "tipo": "real",
+        "crescimento_pct": -22.4
+      },
+      {
+        "mes": "2024-11",
+        "casos": 466,
+        "tipo": "real",
+        "crescimento_pct": -20.5
+      },
+      {
+        "mes": "2024-12",
+        "casos": 343,
+        "tipo": "real",
+        "crescimento_pct": -26.4
+      }
+    ],
+    "previsao": [
+      {
+        "mes": "2025-01",
+        "casos_previstos": 344,
+        "lower": 282,
+        "upper": 406,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2025-02",
+        "casos_previstos": 345,
+        "lower": 283,
+        "upper": 407,
+        "tipo": "previsto"
+      },
+      {
+        "mes": "2025-03",
+        "casos_previstos": 346,
+        "lower": 284,
+        "upper": 408,
+        "tipo": "previsto"
+      }
+    ],
+    "insumos": [
+      {
+        "item": "Dipirona 500mg",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 170000.0,
+        "quantidade_restante": 0.0,
+        "consumo_basal_diario": 8.0,
+        "consumo_base_por_caso": 1.5,
+        "consumo_previsto_dia": 25.15,
+        "dias_restantes": 0.0,
+        "status": "critico",
+        "preco_unitario": 4.8,
+        "custo_planejado": 10867.2,
+        "custo_emergencial": 14670.72,
+        "economia_estimada": 3803.52,
+        "evidencia": {
+          "mes_referencia": "2024-12",
+          "casos_referencia": 343,
+          "mes_acao_recomendado": "2024-12",
+          "mes_ruptura_prevista": "2024-12",
+          "antecedencia_operacional_dias": 0
+        }
+      },
+      {
+        "item": "Soro fisiológico 1L",
+        "unidade": "fr",
+        "estoque_demo": true,
+        "quantidade_inicial": 155000.0,
+        "quantidade_restante": 31367.0,
+        "consumo_basal_diario": 6.0,
+        "consumo_base_por_caso": 1.0,
+        "consumo_previsto_dia": 17.43,
+        "dias_restantes": 1799.3,
+        "status": "ok",
+        "preco_unitario": 23.5,
+        "custo_planejado": 36871.5,
+        "custo_emergencial": 49776.53,
+        "economia_estimada": 12905.03,
+        "evidencia": {
+          "mes_referencia": "2024-12",
+          "casos_referencia": 343,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Sais de reidratação oral",
+        "unidade": "cx",
+        "estoque_demo": true,
+        "quantidade_inicial": 130000.0,
+        "quantidade_restante": 55676.2,
+        "consumo_basal_diario": 4.0,
+        "consumo_base_por_caso": 0.6,
+        "consumo_previsto_dia": 10.86,
+        "dias_restantes": 5126.7,
+        "status": "ok",
+        "preco_unitario": 3.2,
+        "custo_planejado": 3126.4,
+        "custo_emergencial": 4220.64,
+        "economia_estimada": 1094.24,
+        "evidencia": {
+          "mes_referencia": "2024-12",
+          "casos_referencia": 343,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      },
+      {
+        "item": "Repelente infantil",
+        "unidade": "un",
+        "estoque_demo": true,
+        "quantidade_inicial": 115000.0,
+        "quantidade_restante": 83911.8,
+        "consumo_basal_diario": 2.0,
+        "consumo_base_por_caso": 0.25,
+        "consumo_previsto_dia": 4.86,
+        "dias_restantes": 17271.7,
+        "status": "ok",
+        "preco_unitario": 19.9,
+        "custo_planejado": 8696.3,
+        "custo_emergencial": 11740.0,
+        "economia_estimada": 3043.7,
+        "evidencia": {
+          "mes_referencia": "2024-12",
+          "casos_referencia": 343,
+          "mes_acao_recomendado": null,
+          "mes_ruptura_prevista": null,
+          "antecedencia_operacional_dias": null
+        }
+      }
+    ],
+    "alertas": [
+      {
+        "id": "demo-ruptura-dipirona-500mg",
+        "tipo": "ruptura",
+        "severidade": "alta",
+        "status": "novo",
+        "titulo": "Risco de ruptura: Dipirona 500mg",
+        "descricao": "Cobertura estimada de 0.0 dias.",
+        "item_ou_condicao": "Dipirona 500mg",
+        "evidencia": {
+          "dias_restantes": 0.0,
+          "consumo_previsto_dia": 25.15,
+          "estoque_demo": true
+        }
+      }
+    ],
+    "prova_valor": {
+      "etp_recomendado_em": "2024-12",
+      "mes_acao_recomendado": "2024-12",
+      "ruptura_estimada_em": "2024-12",
+      "mes_ruptura_prevista": "2024-12",
+      "antecedencia_operacional_dias": 0,
+      "quantidade_planejada": 2263.5,
+      "custo_planejado": 10867.2,
+      "custo_emergencial": 14670.72,
+      "percentual_emergencial": 35.0,
+      "economia_estimada": 3803.52
+    },
+    "susbot_briefing": [
+      "A dengue entrou em tendencia de alta de -26.4% no ultimo corte visivel.",
+      "Dipirona 500mg e o insumo mais sensivel, com 0.0 dias de cobertura.",
+      "Recomendamos abrir o ETP em 2024-12 para ganhar 0 dias antes da ruptura. Compra planejada: R$ 10.867,20 vs. emergencial: R$ 14.670,72.",
+      "Casos historicos sao reais; estoque e precos sao cenário demo fictício."
+    ]
+  }
+]

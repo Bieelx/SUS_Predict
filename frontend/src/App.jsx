@@ -227,13 +227,14 @@ function iniciaisDoUsuario(nome) {
 }
 
 function Sidebar({ current, onNav, aberta, user }) {
-  // Abre já expandido quando a página ativa é de Análises — chegar em
-  // Epidemiologia por um link de card e não ver o item destacado no menu é
-  // desorientador. Reabre também quando a navegação vem de fora da sidebar.
+  // As páginas analíticas ficam visíveis na primeira visita para facilitar
+  // sua descoberta. O usuário pode recolher o grupo durante a sessão.
+  // Navegar para uma análise também revela seu destino no menu.
   const emAnalises = NAV_ANALISES.some(i => i.id === current);
-  const [analisesOpen, setAnalisesOpen] = useState(emAnalises);
+  const [analisesOpen, setAnalisesOpen] = useState(true);
   const nomeUsuario = nomeDoUsuario(user);
   const iniciaisUsuario = iniciaisDoUsuario(nomeUsuario);
+  const avatarUsuario = user?.user_metadata?.avatar || '';
   useEffect(() => { if (emAnalises) setAnalisesOpen(true); }, [emAnalises]);
 
   // Recolhida, a sidebar continua montada e só translada para fora (o menu não
@@ -288,18 +289,25 @@ function Sidebar({ current, onNav, aberta, user }) {
             onClick={() => setAnalisesOpen(prev => !prev)}
             className="nav-item-2"
             aria-expanded={analisesOpen}
+            aria-controls="sidebar-analises"
+            aria-label={analisesOpen ? 'Recolher análises' : 'Mostrar análises: Epidemiologia, Internações e Vacinação'}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '2px 10px', marginBottom: 4, border: 'none', background: 'transparent',
+              padding: '6px 10px', minHeight: 36, marginBottom: 4, border: 'none', background: 'transparent',
               cursor: 'pointer', color: SB_SECTION, borderRadius: 8,
             }}
           >
             <span className="eyebrow" style={{ color: 'inherit' }}>ANÁLISES</span>
-            <MIcon m={analisesOpen ? 'expand_less' : 'expand_more'} size={16} />
+            <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 500, letterSpacing: 0 }}>
+              {analisesOpen ? 'Recolher' : `Mostrar ${NAV_ANALISES.length}`}
+              <MIcon m={analisesOpen ? 'expand_less' : 'expand_more'} size={16} />
+            </span>
           </button>
-          {analisesOpen && NAV_ANALISES.map(item => (
-            <NavItemTier2 key={item.id} item={item} active={current === item.id} onClick={() => onNav(item.id)} />
-          ))}
+          <div id="sidebar-analises" hidden={!analisesOpen}>
+            {NAV_ANALISES.map(item => (
+              <NavItemTier2 key={item.id} item={item} active={current === item.id} onClick={() => onNav(item.id)} />
+            ))}
+          </div>
         </div>
 
         {/* Documentos — item isolado, destaque ainda menor */}
@@ -328,8 +336,10 @@ function Sidebar({ current, onNav, aberta, user }) {
               boxShadow: current === 'perfil' ? '0 1px 6px rgba(44,74,71,0.12)' : 'none',
             }}
           >
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--sb-icon-active-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'white', flexShrink: 0 }}>
-              {iniciaisUsuario}
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--sb-icon-active-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'white', flexShrink: 0, overflow: 'hidden' }}>
+              {avatarUsuario
+                ? <img src={avatarUsuario} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : iniciaisUsuario}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
               <p title={nomeUsuario} style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: current === 'perfil' ? 'var(--sb-active-text)' : 'var(--sb-strong)', lineHeight: 1.2, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nomeUsuario}</p>
@@ -792,7 +802,7 @@ export default function App() {
       case 'internacoes':   return <Internacoes />;
       case 'vacinacao':     return <Vacinacao municipio={municipio} />;
       case 'configuracoes': return <>{beta && <BetaVariantSettings value={betaVariant} onChange={changeBetaVariant} />}<PageConfiguracoes municipio={municipio} authUser={authUser} /></>;
-      case 'perfil':        return <PagePerfil onLogout={handleLogout} />;
+      case 'perfil':        return <PagePerfil onLogout={handleLogout} user={authUser} onUserChange={setAuthUser} />;
       default:              return <VisaoGeral municipio={municipio} onNavigate={navegar} onOpenClara={abrirClara} />;
     }
   }
