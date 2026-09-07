@@ -60,3 +60,14 @@ def test_chave_secreta_no_nome_curto_do_env_tambem_configura(monkeypatch):
     monkeypatch.setenv("SUPABASE_SECRET", "sb_secret_curto")
 
     assert db.supabase_configured() is True
+
+
+def test_select_aceita_operador_por_sufixo(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://exemplo.supabase.co")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_teste")
+    urls = []
+    monkeypatch.setattr(db, "_sb_get", lambda url, key: urls.append(url) or [])
+
+    db.sb_select("anual", {"cod": "355030", "ano__gte": 2023, "ano__lte": 2025})
+
+    assert urls == ["https://exemplo.supabase.co/rest/v1/anual?select=*&cod=eq.355030&ano=gte.2023&ano=lte.2025"]

@@ -135,51 +135,144 @@ def test_consultar_alertas_vazio_retorna_motivo(db):
     assert resultado["dados"] == []
 
 
-def test_consultar_epidemiologia_retorna_cache_salvo(db):
+def _fake_supabase(monkeypatch, tabelas):
+    from api.core import susbot_tools
+
+    chamadas = []
+
+    def fake_select(table, eq=None, order=None, limit=None):
+        chamadas.append({"table": table, "eq": eq, "order": order, "limit": limit})
+        return tabelas.get(table, [])
+
+    monkeypatch.setattr(susbot_tools.db, "supabase_configured", lambda: True)
+    monkeypatch.setattr(susbot_tools.db, "sb_select", fake_select)
+    return chamadas
+
+
+def test_consultar_epidemiologia_sinan_le_tabelas_curadas_do_supabase(db, monkeypatch):
     from api.core.susbot_tools import criar_susbot_tools
 
-    db.save_resultado(
-        "run-epi-1",
-        {
-            "meta": {
-                "sistema": "SINAN",
-                "uf": "SP",
-                "cidade": "São Paulo",
-                "ibge": "3550308",
-                "ano_ini": 2024,
-                "ano_fim": 2025,
-                "doenca_cod": "A90",
-                "gerado_em": "2026-07-14T00:00:00Z",
-            },
-            "stats": {"total": 10},
-            "serie_temporal": [{"ano": 2024, "total": 3, "tipo": "real"}],
-            "serie_com_previsao": [{"ano": 2025, "total": 4, "tipo": "previsto"}],
-            "distribuicao_sexo": [{"sexo": "Masculino", "pct": 60}],
-            "distribuicao_faixa_etaria": [{"faixa": "15–29", "pct": 40}],
-            "top_causas": [{"causa": "Dengue", "pct": 50}],
-        },
-    )
+    chamadas = _fake_supabase(monkeypatch, {
+        "sinan_dengue_municipios_total_casos": [
+            {"id": 1, "cod_ibge_municipio": "355030", "periodo": "3 Anos", "casos_atual": 1030, "variacao_pct": 12.5},
+        ],
+        "sinan_dengue_municipios_incidencia": [{"incidencia_atual": 355.79}],
+        "sinan_dengue_municipios_desfecho_clinico_anual": [
+            {"ano_referencia": 2024, "casos_leves": 900, "hospitalizacoes": 100, "obitos": 3},
+            {"ano_referencia": 2025, "casos_leves": 20, "hospitalizacoes": 7, "obitos": 0},
+        ],
+    })
 
-    tools = criar_susbot_tools("3550308")
-    resultado = tools["consultar_epidemiologia"]("sinan", ano_ini=2024, ano_fim=2025, doenca_cod="A90")
+    resultado = criar_susbot_tools("3550308")["consultar_epidemiologia"]("sinan", ano_ini=2023, ano_fim=2025)
 
     assert resultado["encontrado"] is True
     assert resultado["sistema"] == "SINAN"
-    assert resultado["ano_ini"] == 2024
-    assert resultado["doenca_cod"] == "A90"
-    assert resultado["dados"]["stats"]["total"] == 10
-    assert resultado["dados"]["top_causas"][0]["causa"] == "Dengue"
+    assert resultado["granularidade"] == "municipal"
+    assert resultado["periodo"] == "3 Anos"
+    assert resultado["ano_ini"] == 2023 and resultado["ano_fim"] == 2025
+    assert resultado["dados"]["stats"]["casos_atual"] == 1030
+    assert resultado["dados"]["stats"]["incidencia_atual"] == 355.79
+    assert "cod_ibge_municipio" not in resultado["dados"]["stats"]
+    assert resultado["dados"]["serie_temporal"] == [
+        {"ano": 2024, "total": 1003, "tipo": "real"},
+        {"ano": 2025, "total": 27, "tipo": "real"},
+    ]
+    # Município, janela e ano vão dentro da query, sem limite.
+    assert all(c["limit"] is None for c in chamadas)
+    assert all(c["eq"]["cod_ibge_municipio"] == "355030" for c in chamadas)
+    anual = next(c for c in chamadas if c["table"] == "sinan_dengue_municipios_desfecho_clinico_anual")
+    assert anual["eq"] == {"cod_ibge_municipio": "355030", "ano_referencia__gte": 2023, "ano_referencia__lte": 2025}
+    assert all(c["eq"]["periodo"] == "3 Anos" for c in chamadas if c["table"] != anual["table"])
 
 
-def test_consultar_epidemiologia_distingue_base_ausente_de_total_zero(db):
+def test_consultar_epidemiologia_sih_responde_consolidado_estadual(db, monkeypatch):
     from api.core.susbot_tools import criar_susbot_tools
 
-    resultado = criar_susbot_tools("351300")["consultar_epidemiologia"]("SIH")
+    chamadas = _fake_supabase(monkeypatch, {
+        "sih_dengue_interacoes_periodo": [{"cnes": "TODOS", "periodo": "12 Meses", "internacoes_atual": 30}],
+        "sih_dengue_permanencia_media_periodo": [{"cnes": "TODOS", "permanencia_media_atual": 2.5}],
+    })
+
+    resultado = criar_susbot_tools("3550308")["consultar_epidemiologia"]("SIH", escopo_solicitado="uti")
+
+    assert resultado["encontrado"] is True
+    assert resultado["granularidade"] == "estadual"
+    assert resultado["escopo_solicitado"] == "uti"
+    assert resultado["dados"]["stats"]["internacoes_atual"] == 30
+    assert resultado["dados"]["stats"]["permanencia_media_atual"] == 2.5
+    assert "Estado de SP" in resultado["dados"]["stats"]["abrangencia"]
+    assert all(c["eq"] == {"periodo": "12 Meses", "cnes": "TODOS"} for c in chamadas)
+
+
+def test_consultar_epidemiologia_distingue_base_ausente_de_total_zero(db, monkeypatch):
+    from api.core.susbot_tools import criar_susbot_tools
+
+    _fake_supabase(monkeypatch, {})
+    resultado = criar_susbot_tools("351300")["consultar_epidemiologia"]("SINAN")
 
     assert resultado["encontrado"] is False
     assert resultado["base_disponivel"] is False
     assert "não significa que o total seja zero" in resultado["motivo"]
     assert "Epidemiologia" in resultado["acao_sugerida"]
+
+
+def test_consultar_epidemiologia_sem_supabase_ou_sem_tabela_curada(db, monkeypatch):
+    from api.core import susbot_tools
+    from api.core.susbot_tools import criar_susbot_tools
+
+    monkeypatch.setattr(susbot_tools.db, "supabase_configured", lambda: False)
+    monkeypatch.setattr(susbot_tools.db, "sb_select", lambda *a, **kw: pytest.fail("não deve consultar"))
+    tools = criar_susbot_tools("3550308")
+
+    sem_fonte = tools["consultar_epidemiologia"]("SINAN")
+    assert sem_fonte["encontrado"] is False and "Supabase" in sem_fonte["motivo"]
+
+    sem_tabela = tools["consultar_epidemiologia"]("SIM")
+    assert sem_tabela["encontrado"] is False and "SIM" in sem_tabela["motivo"]
+
+    outra_doenca = tools["consultar_epidemiologia"]("SINAN", doenca_cod="A15")
+    assert outra_doenca["encontrado"] is False and "dengue" in outra_doenca["motivo"]
+
+
+def test_janela_curada():
+    from api.core.susbot_tools import _janela_curada
+
+    assert _janela_curada(None, None) == "12 Meses"
+    assert _janela_curada(2025, 2025) == "12 Meses"
+    assert _janela_curada(2023, 2025) == "3 Anos"
+    assert _janela_curada(2020, 2025) == "5 Anos"
+    assert _janela_curada(2024, None) == "12 Meses"
+
+
+def test_estoque_e_etp_sem_fonte_conectada_explicam_ausencia(db):
+    from api.core.susbot_tools import criar_susbot_tools
+
+    tools = criar_susbot_tools("3550308")
+
+    estoque = tools["consultar_estoque"](item="dipirona")
+    assert estoque["encontrado"] is False
+    assert estoque["base_disponivel"] is False
+    assert "estoque físico" in estoque["motivo"]
+    assert "não é estoque" in estoque["motivo"]
+    assert "ainda não foi carregada" not in estoque["motivo"]
+
+    etp = tools["gerar_etp"](item="dipirona")
+    assert etp["encontrado"] is False
+    assert etp["base_disponivel"] is False
+    assert "estoque físico" in etp["motivo"]
+    assert "dimensionar compra" in etp["motivo"]
+
+
+def test_estoque_com_fonte_mas_item_inexistente(db):
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
+    from api.core.susbot_tools import criar_susbot_tools
+
+    seed_susbot_municipio("3550308")
+    resultado = criar_susbot_tools("3550308")["consultar_estoque"](item="item-que-nao-existe")
+
+    assert resultado["encontrado"] is False
+    assert resultado["base_disponivel"] is True
+    assert "nenhum item com nome contendo" in resultado["motivo"]
 
 
 def test_executar_sql_fallback_respeita_guard(db):

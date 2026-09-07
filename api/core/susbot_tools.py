@@ -75,6 +75,55 @@ from api.core.sql_guard import validar_sql
 
 _SISTEMAS_VALIDOS = {"SIM", "SIH", "SINASC", "SIA", "SINAN"}
 
+# Tabelas curadas do Supabase — as mesmas que /api/dados/epidemiologia e
+# /api/dados/internacoes leem. SINAN é municipal; SIH é por CNES com consolidado
+# estadual ("TODOS"). Só dengue está curada.
+_TABELAS_SINAN_KPI = (
+    "sinan_dengue_municipios_total_casos",
+    "sinan_dengue_municipios_incidencia",
+    "sinan_dengue_municipios_taxa_hospitalizacao",
+    "sinan_dengue_municipios_taxa_obito",
+)
+_TABELA_SINAN_ANUAL = "sinan_dengue_municipios_desfecho_clinico_anual"
+_TABELAS_SIH_KPI = (
+    "sih_dengue_interacoes_periodo",
+    "sih_dengue_permanencia_media_periodo",
+    "sih_dengue_taxa_mortalidade_periodo",
+)
+_COLUNAS_FILTRO = {"id", "cod_ibge_municipio", "cod_ibge_completo", "periodo", "cnes", "created_at"}
+
+MSG_SEM_FONTE_ESTOQUE = (
+    "Não há fonte de estoque físico conectada ao SusPredict para este município — a Clara "
+    "não consegue informar quantidade disponível, consumo médio ou dias de cobertura. "
+    "A tela de Insumos mostra risco de aquisição (indicador de ruptura), que não é estoque."
+)
+ACAO_SEM_FONTE_ESTOQUE = (
+    "Consulte a tela de Insumos para o risco de aquisição. Para estoque físico é preciso "
+    "integrar o sistema de almoxarifado do município."
+)
+
+
+def _janela_curada(ano_ini: int | None, ano_fim: int | None) -> str:
+    """Mapeia o intervalo pedido para a janela das tabelas curadas."""
+    if ano_ini is None and ano_fim is None:
+        return "12 Meses"
+    ini = int(ano_ini if ano_ini is not None else ano_fim)
+    fim = int(ano_fim if ano_fim is not None else ano_ini)
+    span = fim - ini + 1
+    return "12 Meses" if span <= 1 else ("3 Anos" if span <= 3 else "5 Anos")
+
+
+def _e_dengue(doenca_cod: str | None) -> bool:
+    cod = str(doenca_cod or "").strip().upper()
+    return not cod or cod.startswith("A9") or "DENGUE" in cod
+
+
+def _kpis(rows: list[dict]) -> dict:
+    stats: dict = {}
+    for row in rows:
+        stats.update({k: v for k, v in row.items() if k not in _COLUNAS_FILTRO})
+    return stats
+
 
 def _normalizar_ibge6(ibge6: str) -> str:
     return str(ibge6 or "").strip()[:6]
@@ -182,25 +231,37 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
 
     ibge = _normalizar_ibge6(ibge6)
 
-    def _buscar_estoque_por_item(item: str | None) -> list[dict]:
+    def _buscar_estoque_por_item(item: str | None) -> tuple[list[dict], list[dict]]:
         # Busca por substring (case-insensitive), não exata: o modelo tende a mandar
         # "dipirona" quando o item cadastrado é "Dipirona 500mg" — match exato
         # devolvia vazio sempre que faltava a dosagem/forma.
+        # Devolve (todas as linhas do município, linhas após o filtro por item) para
+        # distinguir "não há fonte de estoque" de "há estoque, mas não esse item".
         _registrar_consulta("estoque", {"ibge6": ibge}, None)
         rows = db.get_estoque(ibge)
         alvo = str(item or "").strip().casefold()
         filtradas = [row for row in rows if alvo in str(row.get("item") or "").casefold()] if item else rows
         _registrar_consulta("estoque", {"ibge6": ibge}, len(rows),
                             {"item_substring_casefold": alvo} if item else {}, len(filtradas))
-        return filtradas
+        return rows, filtradas
 
     def consultar_estoque(item: str | None = None, somente_risco: bool = False, **_kwargs) -> dict:
-        rows = _buscar_estoque_por_item(item)
-        if not rows:
+        todas, rows = _buscar_estoque_por_item(item)
+        if not todas:
             return _resposta_vazia(
-                "Nenhum item de estoque encontrado para este município.",
+                MSG_SEM_FONTE_ESTOQUE,
                 ibge6=ibge,
                 item=item,
+                base_disponivel=False,
+                acao_sugerida=ACAO_SEM_FONTE_ESTOQUE,
+                dados=[],
+            )
+        if not rows:
+            return _resposta_vazia(
+                f"Há estoque cadastrado para este município, mas nenhum item com nome contendo '{item}'.",
+                ibge6=ibge,
+                item=item,
+                base_disponivel=True,
                 dados=[],
             )
 
@@ -257,6 +318,94 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
             "dados": rows,
         }
 
+    def _sb(tabela: str, filtros: dict, order: str | None = None) -> list[dict]:
+        # Município, período e ano vão na query do PostgREST; sem limite (sb_select
+        # pagina até o fim). Nada é filtrado em Python depois de um corte.
+        _registrar_consulta(tabela, filtros, None, origem="supabase", limite=None)
+        rows = db.sb_select(tabela, filtros, order=order)
+        _registrar_consulta(tabela, filtros, len(rows), linhas_apos_filtros=len(rows),
+                            origem="supabase", limite=None)
+        return rows
+
+    def _epidemiologia_sinan(janela, ano_ini, ano_fim, escopo_solicitado, comum) -> dict:
+        filtros = {"cod_ibge_municipio": ibge, "periodo": janela}
+        stats = _kpis([row for tabela in _TABELAS_SINAN_KPI for row in _sb(tabela, filtros)])
+
+        filtro_anual = {"cod_ibge_municipio": ibge}
+        if ano_ini is not None:
+            filtro_anual["ano_referencia__gte"] = int(ano_ini)
+        if ano_fim is not None:
+            filtro_anual["ano_referencia__lte"] = int(ano_fim)
+        serie = [
+            {
+                "ano": row.get("ano_referencia"),
+                "total": (row.get("casos_leves") or 0) + (row.get("hospitalizacoes") or 0) + (row.get("obitos") or 0),
+                "tipo": "real",
+            }
+            for row in _sb(_TABELA_SINAN_ANUAL, filtro_anual, order="ano_referencia.asc")
+        ]
+        if not stats and not serie:
+            return _resposta_vazia(
+                f"A base SINAN (dengue) não tem linha para este município na janela '{janela}'. "
+                "Isso não significa que o total seja zero; significa que as tabelas curadas do "
+                "SusPredict não têm consulta disponível para responder com segurança.",
+                acao_sugerida="Confira a tela de Epidemiologia com outro período.",
+                periodo=janela, **comum,
+            )
+        anos = [int(p["ano"]) for p in serie if p.get("ano") is not None]
+        return {
+            "encontrado": True,
+            "ibge6": ibge,
+            "sistema": "SINAN",
+            "ano_ini": ano_ini if ano_ini is not None else (min(anos) if anos else None),
+            "ano_fim": ano_fim if ano_fim is not None else (max(anos) if anos else None),
+            "doenca_cod": comum["doenca_cod"] or "A90",
+            "escopo_solicitado": escopo_solicitado,
+            "periodo": janela,
+            "granularidade": "municipal",
+            "dados": {
+                "meta": {"fonte": "Supabase", "tabelas": [*_TABELAS_SINAN_KPI, _TABELA_SINAN_ANUAL],
+                         "dados_reais": True, "periodo": janela},
+                "stats": {"janela": janela, **stats},
+                "serie_temporal": serie,
+            },
+        }
+
+    def _internacoes_sih(janela, ano_ini, ano_fim, escopo_solicitado, comum) -> dict:
+        # SIH curado é por estabelecimento (CNES) do estado de SP; não há recorte
+        # municipal. Responde o consolidado estadual e diz isso no próprio dado.
+        filtros = {"periodo": janela, "cnes": "TODOS"}
+        stats = _kpis([row for tabela in _TABELAS_SIH_KPI for row in _sb(tabela, filtros)])
+        if not stats:
+            return _resposta_vazia(
+                f"A base SIH (internações por dengue) não tem consolidado para a janela '{janela}'. "
+                "Isso não significa que o total seja zero; significa que as tabelas curadas do "
+                "SusPredict não têm consulta disponível para responder com segurança.",
+                acao_sugerida="Confira a tela de Internações com outro período.",
+                periodo=janela, **comum,
+            )
+        return {
+            "encontrado": True,
+            "ibge6": ibge,
+            "sistema": "SIH",
+            "ano_ini": ano_ini,
+            "ano_fim": ano_fim,
+            "doenca_cod": comum["doenca_cod"] or "A90",
+            "escopo_solicitado": escopo_solicitado,
+            "periodo": janela,
+            "granularidade": "estadual",
+            "dados": {
+                "meta": {"fonte": "Supabase", "tabelas": list(_TABELAS_SIH_KPI),
+                         "dados_reais": True, "periodo": janela},
+                "stats": {
+                    "abrangencia": "Estado de SP, consolidado de todos os estabelecimentos (SIH não tem recorte municipal)",
+                    "janela": janela,
+                    **stats,
+                },
+                "serie_temporal": [],
+            },
+        }
+
     def consultar_epidemiologia(
         sistema: str | None = None,
         ano_ini: int | None = None,
@@ -272,132 +421,59 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
                 ibge6=ibge,
                 sistema=sistema,
             )
-
-        _registrar_consulta("datasus_runs", {"sistema": sistema_norm}, None,
-                            limite=200, ordem="created_at DESC")
-        runs = db.list_runs(sistema=sistema_norm, limit=200)
-        candidatos = [
-            run
-            for run in runs
-            if str(run.get("ibge6") or "")[:6] == ibge
-        ]
-        if ano_ini is not None:
-            candidatos = [run for run in candidatos if int(run.get("ano_ini") or 0) == int(ano_ini)]
-        if ano_fim is not None:
-            candidatos = [run for run in candidatos if int(run.get("ano_fim") or 0) == int(ano_fim)]
-        if doenca_cod:
-            alvo = str(doenca_cod).strip()
-            candidatos = [run for run in candidatos if str(run.get("doenca_cod") or "").strip() == alvo]
-
-        filtros_pos = {"ibge6": ibge}
-        if ano_ini is not None:
-            filtros_pos["ano_ini"] = ano_ini
-        if ano_fim is not None:
-            filtros_pos["ano_fim"] = ano_fim
-        if doenca_cod:
-            filtros_pos["doenca_cod"] = str(doenca_cod).strip()
-        _registrar_consulta("datasus_runs", {"sistema": sistema_norm}, len(runs),
-                            filtros_pos, len(candidatos), limite=200)
-        if not candidatos:
-            return _resposta_vazia(
-                f"A base {sistema_norm} ainda não foi carregada para este município. "
-                "Isso não significa que o total seja zero; significa que não há uma consulta "
-                "DATASUS disponível no cache do SusPredict para responder com segurança.",
-                ibge6=ibge,
-                sistema=sistema_norm,
-                ano_ini=ano_ini,
-                ano_fim=ano_fim,
-                doenca_cod=doenca_cod,
-                base_disponivel=False,
-                acao_sugerida="Carregue os dados na tela de Epidemiologia e tente novamente.",
-            )
-
-        run = candidatos[0]
-        _registrar_consulta(
-            ["datasus_runs", "datasus_resultado"],
-            {"sistema": run["sistema"], "uf": run["uf"], "cidade": run["cidade"],
-             "ibge6": ibge, "ano_ini": run["ano_ini"], "ano_fim": run["ano_fim"],
-             "doenca_cod": run.get("doenca_cod") or None},
-            None, origem="sqlite_com_fallback_supabase", limite=None,
-            contagem_disponivel=False,
-        )
-        resultado = db.find_cached(
-            {
-                "sistema": run["sistema"],
-                "uf": run["uf"],
-                "cidade": run["cidade"],
-                "ibge": ibge,
-                "ano_ini": run["ano_ini"],
-                "ano_fim": run["ano_fim"],
-                "doenca_cod": run.get("doenca_cod") or None,
-            }
-        )
-        if not resultado:
-            _registrar_consulta(["datasus_runs", "datasus_resultado"],
-                                {"ibge6": ibge, "sistema": sistema_norm}, None)
-            resultado = db.find_latest_by_ibge(ibge, sistema_norm)
-
-        if not resultado:
-            return _resposta_vazia(
-                "Nenhum resultado epidemiológico disponível para o município.",
-                ibge6=ibge,
-                sistema=sistema_norm,
-            )
-
-        meta = resultado.get("meta") or {}
-        if doenca_cod and str(meta.get("doenca_cod") or "").strip() != str(doenca_cod).strip():
-            return _resposta_vazia(
-                "Resultado encontrado, mas o código de doença solicitado não bate com o cache mais recente.",
-                ibge6=ibge,
-                sistema=sistema_norm,
-                doenca_cod=doenca_cod,
-            )
-
-        if ano_ini is not None and int(meta.get("ano_ini") or 0) != int(ano_ini):
-            return _resposta_vazia(
-                "Resultado encontrado, mas o ano inicial solicitado não bate com o cache mais recente.",
-                ibge6=ibge,
-                sistema=sistema_norm,
-                ano_ini=ano_ini,
-                ano_fim=ano_fim,
-            )
-
-        if ano_fim is not None and int(meta.get("ano_fim") or 0) != int(ano_fim):
-            return _resposta_vazia(
-                "Resultado encontrado, mas o ano final solicitado não bate com o cache mais recente.",
-                ibge6=ibge,
-                sistema=sistema_norm,
-                ano_ini=ano_ini,
-                ano_fim=ano_fim,
-            )
-
-        return {
-            "encontrado": True,
-            "ibge6": ibge,
-            "sistema": sistema_norm,
-            "ano_ini": meta.get("ano_ini"),
-            "ano_fim": meta.get("ano_fim"),
-            "doenca_cod": meta.get("doenca_cod"),
-            "escopo_solicitado": escopo_solicitado,
-            "dados": {
-                "meta": meta,
-                "stats": resultado.get("stats") or {},
-                "serie_temporal": resultado.get("serie_temporal") or [],
-                "serie_com_previsao": resultado.get("serie_com_previsao") or [],
-                "distribuicao_sexo": resultado.get("distribuicao_sexo") or [],
-                "distribuicao_faixa_etaria": resultado.get("distribuicao_faixa_etaria") or [],
-                "top_causas": resultado.get("top_causas") or [],
-            },
+        comum = {
+            "ibge6": ibge, "sistema": sistema_norm, "ano_ini": ano_ini, "ano_fim": ano_fim,
+            "doenca_cod": doenca_cod, "base_disponivel": False,
         }
+        if sistema_norm not in {"SINAN", "SIH"}:
+            return _resposta_vazia(
+                f"A base {sistema_norm} não tem tabela curada no SusPredict. A Clara responde "
+                "SINAN (casos de dengue por município) e SIH (internações por dengue).",
+                **comum,
+            )
+        if not _e_dengue(doenca_cod):
+            return _resposta_vazia(
+                f"As tabelas curadas cobrem apenas dengue (CID A90/A91); não há dado para '{doenca_cod}'.",
+                **comum,
+            )
+        if not db.supabase_configured():
+            return _resposta_vazia(
+                f"Fonte Supabase indisponível neste ambiente; sem ela a Clara não consulta a base {sistema_norm}.",
+                **comum,
+            )
+        janela = _janela_curada(ano_ini, ano_fim)
+        try:
+            if sistema_norm == "SINAN":
+                return _epidemiologia_sinan(janela, ano_ini, ano_fim, escopo_solicitado, comum)
+            return _internacoes_sih(janela, ano_ini, ano_fim, escopo_solicitado, comum)
+        except RuntimeError as exc:
+            # Mensagem do Supabase pode carregar URL/corpo: só o tipo vai pro log.
+            _log_consulta("clara_ferramenta_erro", erro_tipo=type(exc).__name__)
+            return _resposta_vazia(
+                "A consulta ao Supabase falhou agora; tente novamente em instantes.",
+                periodo=janela, **comum,
+            )
 
     def gerar_etp(item: str, alerta_id: str | None = None, **_kwargs) -> dict:
-        rows = _buscar_estoque_por_item(item)
-        if not rows:
+        todas, rows = _buscar_estoque_por_item(item)
+        if not todas:
             return _resposta_vazia(
-                f"Nenhum estoque cadastrado para '{item}' neste município — não é possível "
-                "fundamentar o ETP sem dado de consumo/cobertura.",
+                f"Não é possível fundamentar o ETP de '{item}': não há fonte de estoque físico "
+                "(quantidade, consumo, cobertura) conectada ao SusPredict para este município. "
+                "O risco de aquisição da tela de Insumos não substitui esse dado e não deve ser "
+                "usado para dimensionar compra.",
                 ibge6=ibge,
                 item=item,
+                base_disponivel=False,
+                acao_sugerida=ACAO_SEM_FONTE_ESTOQUE,
+            )
+        if not rows:
+            return _resposta_vazia(
+                f"Há estoque cadastrado para este município, mas nenhum item com nome contendo "
+                f"'{item}' — não é possível fundamentar o ETP sem dado de consumo/cobertura.",
+                ibge6=ibge,
+                item=item,
+                base_disponivel=True,
             )
 
         estoque = _enriquecer_estoque(rows)[0]

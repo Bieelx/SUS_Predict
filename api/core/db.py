@@ -1204,7 +1204,12 @@ def sb_select(table: str, eq: dict | None = None, order: str | None = None, limi
             "Supabase não configurado (SUPABASE_URL e chave secreta de leitura ausentes)"
         )
 
-    filters = [f"{k}=eq.{urllib.parse.quote(str(v))}" for k, v in (eq or {}).items() if v is not None]
+    # "ano__gte": 2022 vira ano=gte.2022; sem sufixo é eq. Filtro entra na
+    # query do PostgREST — nunca é aplicado em Python depois de um limite.
+    filters = [
+        f"{k.partition('__')[0]}={k.partition('__')[2] or 'eq'}.{urllib.parse.quote(str(v))}"
+        for k, v in (eq or {}).items() if v is not None
+    ]
     qs = "&".join(["select=*"] + filters)
     url = f"{sb_url.rstrip('/')}/rest/v1/{table}?{qs}"
     if order:

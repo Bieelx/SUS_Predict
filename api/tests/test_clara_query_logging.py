@@ -30,15 +30,17 @@ def test_execucao_e_fallback_com_contagens(monkeypatch, caplog):
     assert draft._CONSULTA.get() is None
 
 
-def test_epi_distingue_linhas_sql_de_filtro_municipal(monkeypatch, caplog):
-    monkeypatch.setattr(draft.db, 'list_runs', lambda **kw: [{'ibge6': '355030'}])
-    draft.criar_susbot_tools('351300')['consultar_epidemiologia']('SINAN', ano_ini=2024)
+def test_epi_filtra_municipio_e_ano_dentro_da_query_sem_limite(monkeypatch, caplog):
+    monkeypatch.setattr(draft.db, 'supabase_configured', lambda: True)
+    monkeypatch.setattr(draft.db, 'sb_select', lambda *a, **kw: [])
+    with caplog.at_level(logging.WARNING):
+        draft.criar_susbot_tools('351300')['consultar_epidemiologia']('SINAN', ano_ini=2024)
     fallback = next(x for x in events(caplog) if x['evento'] == 'clara_consulta_sem_resultado')
-    assert fallback['linhas_retornadas'] == 1
-    assert fallback['linhas_apos_filtros'] == 0
-    assert fallback['filtros_sql'] == {'sistema': 'SINAN'}
-    assert fallback['filtros_pos_consulta'] == {'ibge6': '351300', 'ano_ini': 2024}
-    assert fallback['limite'] == 200
+    assert fallback['origem'] == 'supabase'
+    assert fallback['limite'] is None
+    assert fallback['linhas_retornadas'] == fallback['linhas_apos_filtros'] == 0
+    assert fallback['filtros_pos_consulta'] == {}
+    assert fallback['filtros_sql'] == {'cod_ibge_municipio': '351300', 'ano_referencia__gte': 2024}
 
 
 def test_contexto_isolado_e_limpo_em_erro(monkeypatch, caplog):
