@@ -219,12 +219,22 @@ def test_existe_usuario_auth_usa_get_por_id(monkeypatch):
                     "https://exemplo.supabase.co/auth/v1/admin/users/nao-existe"]
 
 
-def test_admin_nao_e_atribuivel(ambiente):
+def test_admin_e_atribuivel_a_outro_usuario(ambiente):
+    """Fase 4.1: um admin pode promover outra conta a admin (normalizando o valor)."""
     db, _, client = ambiente
     _seed(db)
     for perfil in ("admin", "ADMIN", " Admin "):
         r = client.put(f"/api/admin/usuarios/{_uid(NOVO)}/perfil", json={"perfil": perfil}, headers=_token(ADMIN))
-        assert r.status_code == 400 and "admin" in r.json()["detail"].lower()
+        assert r.status_code == 200, r.text
+        assert r.json()["perfil"] == "admin"
+        assert db.get_acesso(_uid(NOVO))["perfil"] == "admin"
+    assert db.count_admins_ativos() == 2
+    assert [l["acao"] for l in db.list_acesso_log(_uid(NOVO))] == ["atribuir_perfil"] * 3
+
+
+def test_perfil_desconhecido_e_recusado(ambiente):
+    db, _, client = ambiente
+    _seed(db)
     r = client.put(f"/api/admin/usuarios/{_uid(NOVO)}/perfil", json={"perfil": "superuser"}, headers=_token(ADMIN))
     assert r.status_code == 400
     assert db.get_acesso(_uid(NOVO)) is None and db.list_acesso_log() == []

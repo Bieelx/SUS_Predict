@@ -8,7 +8,7 @@ import { authenticatedFetch } from '../shared/auth.js';
 // Esconder aqui é cosmético: todo endpoint /api/admin/* confere admin no backend.
 // Caso de uso principal: alguém cria conta, o admin acha pelo e-mail e libera.
 
-const PERFIS = ['visitante', 'gestor', 'vigilancia', 'farmacia'];
+const PERFIS = ['visitante', 'gestor', 'vigilancia', 'farmacia', 'admin'];
 const COR = { admin: '#7A3E9D', gestor: 'var(--primary)', vigilancia: '#A6580F', farmacia: '#2A6B40', visitante: '#6B665D' };
 
 function fmt(iso) {
@@ -121,7 +121,9 @@ export default function AdminUsuarios({ euId }) {
   });
   const nome = u => u.email || u.usuario;
   const onPerfil = (u, perfil) => aplicar(
-    u.sem_acesso ? `Liberar ${nome(u)} como "${perfil}"?` : `Alterar o perfil de ${nome(u)} de "${u.perfil}" para "${perfil}"?`,
+    perfil === 'admin'
+      ? `Tornar ${nome(u)} ADMINISTRADOR? Essa pessoa poderá gerenciar o acesso de todos os usuários, inclusive promover outros admins. Rebaixá-la depois só por SQL manual.`
+      : u.sem_acesso ? `Liberar ${nome(u)} como "${perfil}"?` : `Alterar o perfil de ${nome(u)} de "${u.perfil}" para "${perfil}"?`,
     `/api/admin/usuarios/${encodeURIComponent(u.usuario)}/perfil`, { perfil },
   );
   const onAtivo = (u, ativo) => aplicar(
@@ -134,7 +136,7 @@ export default function AdminUsuarios({ euId }) {
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #EFEBE0' }}>
         <div>
           <h2 style={{ fontFamily: 'Inter Tight, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1814' }}>Usuários e acesso</h2>
-          <p style={{ fontSize: 12, color: 'var(--ink-400)' }}>Todas as contas do Auth, inclusive quem nunca entrou. Admin só por SQL manual.</p>
+          <p style={{ fontSize: 12, color: 'var(--ink-400)' }}>Todas as contas do Auth, inclusive quem nunca entrou. Rebaixar um admin existente só por SQL manual.</p>
         </div>
         <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: semAcesso ? '#A6580F' : 'var(--ink-300)' }}>
           {usuarios ? `${usuarios.length} contas · ${semAcesso} sem acesso` : 'administração'}

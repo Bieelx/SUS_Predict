@@ -5,7 +5,7 @@ esconder o menu é cosmético. A chave secreta do Supabase só é usada em
 `auth.listar_usuarios_auth`, nunca sai na resposta.
 
 Regras que não são negociáveis (ver testes em test_admin_usuarios.py):
-- nunca promove a `admin` (só SQL manual);
+- admin pode promover outro usuário a `admin` (a partir da Fase 4.1);
 - admin não altera a si mesmo;
 - nunca deixa o sistema sem admin ativo;
 - toda alteração vira linha em `usuarios_acesso_log`.
@@ -23,7 +23,7 @@ from api.core.permissoes import PERFIS, Acesso, require_acesso
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-PERFIS_ATRIBUIVEIS = frozenset(PERFIS) - {"admin"}
+PERFIS_ATRIBUIVEIS = frozenset(PERFIS)
 
 
 def require_admin(acesso: Acesso = Depends(require_acesso()), user: dict = Depends(auth_core.require_user)) -> dict:
@@ -101,8 +101,6 @@ def _protege_ultimo_admin(antes: dict | None, perfil_depois: str, ativo_depois: 
 @router.put("/usuarios/{usuario}/perfil")
 def atribuir_perfil(usuario: str, body: PerfilBody, admin: dict = Depends(require_admin)) -> dict:
     perfil = str(body.perfil or "").strip().lower()
-    if perfil == "admin":
-        raise HTTPException(400, "Perfil admin não pode ser atribuído por esta tela. Use SQL manual.")
     if perfil not in PERFIS_ATRIBUIVEIS:
         raise HTTPException(400, f"Perfil inválido. Use um de: {sorted(PERFIS_ATRIBUIVEIS)}")
     usuario, antes, admin_email = _alvo(usuario, admin)

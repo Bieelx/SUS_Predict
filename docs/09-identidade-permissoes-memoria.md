@@ -529,8 +529,11 @@ cosmético: a autorização real continua no backend.
 
 **Regras (todas em código, todas testadas em `test_admin_usuarios.py`):**
 
-- `perfil = "admin"` no body → 400. Admin continua só por SQL manual
+- `perfil = "admin"` no body → 200: um admin pode promover outra conta a admin pela tela
+  (a UI pede confirmação explícita). Rebaixar quem já é admin continua fora da tela — o
+  front não oferece o controle para linhas com `perfil = "admin"`; use SQL manual
   (`supabase/seed_usuarios_acesso.sql`). Perfil desconhecido → 400.
+  Provisionamento automático (`EQUIPE_AUTORIZADA`) segue proibido de atribuir admin.
 - Admin não altera o próprio acesso (perfil ou ativo) → 400.
 - Operação que deixaria zero admins ativos → 409 (`_protege_ultimo_admin`). Via HTTP é
   inalcançável (o único admin ativo seria ele mesmo, barrado antes), fica como defesa em
