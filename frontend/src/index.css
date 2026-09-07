@@ -642,6 +642,12 @@ textarea:focus-visible,
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
+  /* Mapa de SP: a busca e a lista de municípios vão para baixo do mapa em vez de
+     espremer os dois numa tela estreita. */
+  .mapa-sp {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
   .alerta-drawer-actions > button {
     width: 100%;
   }

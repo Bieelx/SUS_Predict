@@ -1,6 +1,7 @@
 import ChartData from '../shared/ChartData.jsx';
 import { useState } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import MapaSP from '../shared/MapaSP.jsx';
 import { Badge, Card, SectionTitle } from '../shared/ui.jsx';
 import { EstadoConsulta, FonteReal, Kpi, SeletorPeriodo } from '../shared/dataUi.jsx';
 import { useDadosOperacionais } from '../shared/operationalClient.js';
@@ -11,7 +12,27 @@ export default function Vacinacao({ municipio }) {
   const [periodo, setPeriodo] = useState('12 Meses');
   const { dados, carregando, erro, recarregar } = useDadosOperacionais('vacinacao', { ibge: municipio.ibge6, periodo });
   const faixas = (dados?.faixa_etaria || []).map(item => ({ faixa: item.faixa_etaria, casos: numero(item.casos), doses: numero(item.doses_aplicadas) }));
-  const comparativo = (dados?.comparativo_municipios || []).map(item => ({ nome: item.nome_municipio, doses: numero(item.doses_aplicadas), incidencia: numero(item.incidencia_atual), casos: numero(item.casos_atual) }));
+  const comparativo = (dados?.comparativo_municipios || []).map(item => ({
+    ibge6: String(item.cod_ibge_municipio || ''),
+    nome: item.nome_municipio,
+    doses: numero(item.doses_aplicadas),
+    incidencia: numero(item.incidencia_atual),
+    casos: numero(item.casos_atual),
+  }));
+  // Doses e casos são o que se lê primeiro — são a contagem que existe de fato no
+  // registro. A incidência entra como linha secundária: é derivada (casos ÷
+  // população × 100 mil) e serve para comparar municípios de portes diferentes,
+  // que é justamente por isso que ela, e não os absolutos, define a cor do mapa.
+  const mapa = comparativo.map(m => ({
+    ibge6: m.ibge6,
+    nome: m.nome,
+    valor: m.incidencia,
+    metricas: [
+      { rotulo: 'doses aplicadas', valor: inteiro(m.doses) },
+      { rotulo: 'casos notificados', valor: inteiro(m.casos) },
+    ],
+    nota: `${decimal(m.incidencia)} casos por 100 mil habitantes`,
+  }));
   const amostra = dados?.hospitalar_estadual?.possui_amostragem_suficiente;
 
   return (
@@ -33,31 +54,21 @@ export default function Vacinacao({ municipio }) {
           <Kpi rotulo="Internações SIH" valor={inteiro(dados.hospitalar_estadual?.internacoes_atual)} detalhe="Contexto estadual, não municipal" tom="var(--risk-medio)" />
         </div>
 
-        <div className="responsive-grid-2" style={grid2}>
-          <Card className="p-5">
-            <SectionTitle>Vacinação × incidência nos municípios</SectionTitle>
-            <ResponsiveContainer width="100%" height={290}>
-              <ScatterChart margin={{ top: 10, right: 14, bottom: 16, left: 8 }}>
-                <CartesianGrid stroke="var(--ink-100)" />
-                <XAxis type="number" dataKey="doses" name="Doses" tick={{ fontSize: 10 }} label={{ value: 'Doses aplicadas', position: 'insideBottom', offset: -9, fontSize: 10 }} />
-                <YAxis type="number" dataKey="incidencia" name="Incidência" tick={{ fontSize: 10 }} width={54} />
-                <ZAxis type="number" dataKey="casos" range={[35, 150]} />
-                <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<TooltipMunicipio />} />
-                <Scatter data={comparativo} fill="var(--primary)" fillOpacity={0.68} />
-              </ScatterChart>
-            </ResponsiveContainer>
-            <p style={nota}>Cada ponto representa um município. A relação visual é exploratória e não demonstra efeito causal.</p>
+        <Card className="p-5" style={{ marginTop: 18 }}>
+          <SectionTitle>Incidência de dengue nos municípios de São Paulo</SectionTitle>
+          <MapaSP dados={mapa} formatarValor={decimal} rotuloValor="Casos por 100 mil habitantes" />
+          <p style={nota}>Cada área é um município do estado, colorida por incidência em cinco faixas de mesmo tamanho (quintis) — a cor indica posição relativa, não escala absoluta. Doses e casos aparecem ao passar o cursor. A relação entre vacinação e incidência é exploratória e não demonstra efeito causal.</p>
           <ChartData title="Vacinação e incidência por município" rows={comparativo} columns={[['nome', 'Município'], ['doses', 'Doses', inteiro], ['incidencia', 'Incidência por 100 mil', decimal], ['casos', 'Casos', inteiro]]} />
-          </Card>
-          <Card className="p-5">
+        </Card>
+
+        <Card className="p-5" style={{ marginTop: 18 }}>
             <SectionTitle>Casos × doses por faixa etária</SectionTitle>
             <ResponsiveContainer width="100%" height={290}>
               <BarChart accessibilityLayer data={faixas}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="faixa" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip formatter={inteiro} /><Bar dataKey="casos" name="Casos" fill="var(--risk-medio)" /><Bar dataKey="doses" name="Doses" fill="var(--primary)" radius={[4, 4, 0, 0]} /></BarChart>
             </ResponsiveContainer>
             <p style={nota}>As duas medidas compartilham faixa etária, município e período, mas possuem escalas e origens distintas.</p>
           <ChartData title="Casos e doses por faixa etária" rows={faixas} columns={[['faixa', 'Faixa etária'], ['casos', 'Casos', inteiro], ['doses', 'Doses', inteiro]]} />
-          </Card>
-        </div>
+        </Card>
 
         <Card className="p-5" style={{ marginTop: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
@@ -84,11 +95,6 @@ export default function Vacinacao({ municipio }) {
   );
 }
 
-function TooltipMunicipio({ active, payload }) {
-  if (!active || !payload?.[0]?.payload) return null;
-  const item = payload[0].payload;
-  return <div style={tooltip}><strong>{item.nome}</strong><span>{inteiro(item.doses)} doses</span><span>{decimal(item.incidencia)} casos/100 mil</span></div>;
-}
 function Resumo({ label, value }) { return <div style={resumo}><span>{label}</span><strong>{value}</strong></div>; }
 const cabecalho = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap', marginBottom: 18 };
 const titulo = { fontFamily: 'Inter Tight, sans-serif', fontSize: 26, fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.02em', margin: 0 };
@@ -96,7 +102,5 @@ const subtitulo = { color: 'var(--ink-400)', fontWeight: 450, fontSize: '0.72em'
 const descricao = { fontSize: 13, color: 'var(--ink-400)', margin: '5px 0 0' };
 const grid4 = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 };
 const grid3 = { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14 };
-const grid2 = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18, marginTop: 18 };
 const nota = { color: 'var(--ink-400)', fontSize: 11.5, lineHeight: 1.5, margin: '9px 0 0' };
 const resumo = { border: '1px solid var(--ink-100)', borderRadius: 10, padding: 14, display: 'grid', gap: 6, color: 'var(--ink-400)', fontSize: 11.5 };
-const tooltip = { display: 'grid', gap: 3, padding: '9px 11px', background: 'white', border: '1px solid var(--ink-100)', borderRadius: 8, fontSize: 11, boxShadow: '0 4px 14px rgba(0,0,0,.1)' };
