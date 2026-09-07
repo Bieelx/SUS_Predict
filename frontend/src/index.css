@@ -161,9 +161,9 @@
   transition: background 0.12s, box-shadow 0.12s, border-color 0.12s;
 }
 
-.nav-item:not([aria-current]):hover        { background: rgba(255, 255, 255, 0.35); }
-.nav-item-2:not([aria-current]):hover      { background: rgba(255, 255, 255, 0.25); }
-.nav-footer:not([aria-current]):hover      { background: rgba(255, 255, 255, 0.34); }
+.nav-item:not([aria-current]):hover        { background: var(--sb-hover, rgba(255, 255, 255, 0.35)); }
+.nav-item-2:not([aria-current]):hover      { background: var(--sb-hover, rgba(255, 255, 255, 0.25)); }
+.nav-footer:not([aria-current]):hover      { background: color-mix(in srgb, var(--sb-hover, rgba(255,255,255,0.34)) 100%, #fff 12%); }
 .topbar-btn:hover                          { border-color: var(--ink-200); background: var(--subtle); }
 
 /* Anel de foco único para todo o chrome. :focus-visible = só teclado, o clique
@@ -179,7 +179,7 @@
 
 .topbar-select {
   appearance: none;
-  border: 1px solid var(--sb-border);
+  border: 1px solid var(--ink-100);
   background: var(--elev);
   color: var(--ink-900);
   border-radius: 8px;
@@ -294,15 +294,25 @@
    movimento curto. Nada disso muda estrutura ou dado. */
 .app-shell {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.10) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.10) 1px, transparent 1px),
-    radial-gradient(90% 60% at 0% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
-    linear-gradient(180deg, color-mix(in srgb, var(--sb) 92%, #fff) 0%, var(--sb) 40%, color-mix(in srgb, var(--sb) 88%, var(--sb-border)) 100%) !important;
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    radial-gradient(90% 70% at 0% 0%, rgba(158, 202, 227, 0.22), transparent 60%),
+    linear-gradient(160deg, color-mix(in srgb, var(--sb) 90%, #fff) 0%, var(--sb) 45%, color-mix(in srgb, var(--sb) 78%, #000) 100%) !important;
   background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%;
   background-attachment: fixed;
 }
 .app-sidebar, .app-topbar, .app-main { background: transparent !important; }
-.app-sidebar { border-right: 1px solid rgba(255, 255, 255, 0.18); }
+.app-sidebar { border-right: 1px solid var(--sb-border); }
+.app-sidebar > div:last-child { border-top-color: var(--sb-border) !important; }
+.topbar-btn { border-color: var(--ink-100) !important; }
+
+/* Marca em ladrilho branco, como no login: o logo colorido não some no azul. */
+.brand-tile {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 40px; height: 40px; border-radius: 11px;
+  background: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+.brand-tile--sm { width: 32px; height: 32px; border-radius: 9px; }
 
 .app-content-frame {
   border-radius: 20px !important;
@@ -332,8 +342,14 @@
     0 1px 2px rgba(26, 24, 20, 0.04),
     0 10px 24px -16px rgba(20, 50, 74, 0.22);
 }
+/* Apenas os indicadores principais recebem o degradê suave da beta.
+   A mistura com a cor primária mantém o efeito visível em cada tema. */
 .metric-card {
-  background: linear-gradient(180deg, var(--elev) 0%, var(--elev) 70%, color-mix(in srgb, var(--primary-soft) 55%, var(--elev)) 100%) !important;
+  --metric-tint: color-mix(in oklch, var(--primary) 12%, var(--elev));
+  background: linear-gradient(180deg, var(--elev) 0%, var(--elev) 70%, var(--metric-tint) 100%) !important;
+}
+.beta-app .metric-card {
+  --metric-tint: color-mix(in srgb, var(--primary-soft) 55%, var(--elev));
 }
 
 /* Cabeçalho de página: mesmo peso e tracking do título do login. */
@@ -371,7 +387,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--sb-strong, var(--primary));
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
@@ -742,5 +758,25 @@ textarea:focus-visible,
 .chart-data { margin-top: 16px; font-size: 13px; color: var(--ink-700); }
 .chart-data summary { cursor: pointer; padding: 8px 0; color: var(--primary); }
 .chart-data summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.chart-data-count { color: var(--ink-400); font-weight: 400; }
+.chart-data-scroll { max-height: min(52vh, 420px); overflow-y: auto; border: 1px solid var(--ink-100); border-radius: 8px; }
+.chart-data-scroll caption { position: sticky; left: 0; padding: 10px 12px; background: var(--elev); }
+.chart-data-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--elev); }
 
 .legal-table table { min-width: 580px; }
+
+/* Referência temporal compartilhada, visível também em telas pequenas. */
+.data-context { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 14px 0; margin-bottom: 18px; border-block: 1px solid var(--ink-100); }
+.data-context-period { display: flex; align-items: center; gap: 12px; color: var(--ink-700); }
+.data-context-period > div { display: flex; flex-direction: column; gap: 3px; }
+.data-context-label { font-size: 12px; color: var(--ink-500); }
+.data-context-period strong { font-size: 16px; font-weight: 650; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.data-context-reference { font-size: 12px; color: var(--ink-500); }
+.data-context-source { position: relative; margin-left: auto; font-size: 12px; color: var(--ink-500); max-width: 100%; }
+.data-context-source summary { cursor: pointer; padding: 10px 0; }
+.data-context-source summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 3px; }
+/* Painel sobreposto: abrir "Sobre a fonte" não empurra o conteúdo da página. */
+.data-context-source > div { position: absolute; top: 100%; right: 0; z-index: 20; width: max(260px, 100%); max-width: min(380px, 90vw); max-height: 60vh; overflow-y: auto; padding: 12px 14px; background: var(--elev); border: 1px solid var(--ink-100); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .12); }
+.data-context-source p { margin: 6px 0; overflow-wrap: anywhere; }
+.data-context-source ul { padding-left: 18px; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .data-context-source { margin-left: 33px; position: static; } .data-context-source > div { position: static; width: auto; max-width: none; box-shadow: none; } }

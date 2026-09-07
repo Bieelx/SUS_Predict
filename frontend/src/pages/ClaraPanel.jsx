@@ -36,6 +36,8 @@ const SUGESTOES = [
   'Como está a tendência de dengue no município?',
 ];
 
+const SUGESTOES_ICONES = ['notifications_active', 'inventory_2', 'trending_up'];
+
 const ERRO_SUSBOT_PADRAO ='Não consegui consultar a Clara agora. Tente novamente em instantes.';
 const SUSBOT_IBGE6_PADRAO = '351300';
 
@@ -238,16 +240,12 @@ function criarThreadVazia() {
 // Marca do bot: monograma tipográfico, não avatar de robô. O produto fala em
 // vozes editoriais (mono para meta, Inter Tight para título) — o assistente segue a
 // mesma gramática em vez do vocabulário genérico de chatbot.
-function ClaraMark({ size = 30 }) {
+function ClaraMark({ size = 30, ativa = false }) {
   return (
-    <span style={{
-      width: size, height: size, borderRadius: Math.round(size * 0.3),
-      background: 'var(--primary)', color: '#fff', flexShrink: 0,
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--ff-mono, monospace)', fontWeight: 700,
-      fontSize: size * 0.38, letterSpacing: '0.02em',
-    }}>
-      SB
+    <span className={`susbot-mark${ativa ? ' susbot-mark--ativa' : ''}`} style={{
+      width: size, height: size, borderRadius: Math.round(size * 0.32), fontSize: Math.round(size * 0.46),
+    }} aria-hidden="true">
+      C
     </span>
   );
 }
@@ -365,7 +363,7 @@ function ArtefatoView({ artefato }) {
         </p>
         <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(entradas.length, 3)}, 1fr)`, gap: 8 }}>
           {entradas.map(([chave, valor]) => (
-            <div key={chave} style={{ padding: '8px 10px', borderRadius: 10, background: 'var(--subtle)', border: '1px solid var(--ink-100)' }}>
+            <div key={chave} className="susbot-resumo-card">
               <p style={{ margin: 0, fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
                 {chave.replace(/_/g, ' ')}
               </p>
@@ -463,14 +461,8 @@ function Bolha({ msg, onNavigate, onConfirmar, onCancelar }) {
   if (isUser) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-        <div style={{
-          maxWidth: '88%', padding: '9px 13px', borderRadius: 12,
-          background: 'var(--subtle)', border: '1px solid var(--ink-100)',
-          fontSize: 13, lineHeight: 1.55, color: 'var(--ink-900)', overflowWrap: 'anywhere',
-        }}>
-          {msg.texto}
-        </div>
-        <p style={{ ...ROTULO_META, paddingRight: 2 }}>{getSusbotPageLabel(msg.page)}</p>
+        <div className="susbot-user">{msg.texto}</div>
+        <p className="susbot-meta" style={{ paddingRight: 4 }}>{getSusbotPageLabel(msg.page)}</p>
       </div>
     );
   }
@@ -478,21 +470,18 @@ function Bolha({ msg, onNavigate, onConfirmar, onCancelar }) {
   const cor = isErro ? 'var(--bad, #8A2A38)' : 'var(--accent)';
 
   return (
-    <div style={{ borderLeft: `2px solid ${cor}`, paddingLeft: 13 }}>
-      <p style={{ ...ROTULO_META, display: 'flex', alignItems: 'center', gap: 5, color: isErro ? cor : 'var(--ink-400)' }}>
-        {isErro && <MIcon m="error" size={12} />}
-        {isErro ? 'não foi possível responder' : 'Clara'}
+    <div className={`susbot-bot${isErro ? ' susbot-bot--erro' : ''}`}>
+      <p className="susbot-bot__quem" style={{ color: isErro ? cor : undefined }}>
+        {isErro ? <MIcon m="error" size={14} /> : <ClaraMark size={20} ativa={isStreaming} />}
+        <span>{isErro ? 'Não foi possível responder' : 'Clara'}</span>
       </p>
-      <div style={{
-        marginTop: 5, fontSize: 13, lineHeight: 1.6,
-        color: 'var(--ink-700)', overflowWrap: 'anywhere',
-      }}>
+      <div className="susbot-bot__texto">
         {isErro ? <p style={{ margin: 0 }}>{msg.texto}</p> : renderMd(msg.texto)}
         {isStreaming && <Cursor />}
       </div>
 
       {isStreaming && msg.status && (
-        <p style={{ ...ROTULO_META, marginTop: 6 }}>{msg.status}</p>
+        <p className="susbot-meta susbot-status">{msg.status}</p>
       )}
 
       {!isErro && <ArtefatoView artefato={msg.artefato} />}
@@ -546,6 +535,24 @@ function ItemHistorico({ thread, onAbrir }) {
         {thread.totalMensagens > 0 ? ` · ${thread.totalMensagens} ${thread.totalMensagens === 1 ? 'troca' : 'trocas'}` : ''}
       </p>
     </div>
+  );
+}
+
+// Marcas oficiais desenhadas em path: o Material Symbols só tem genéricos
+// ("send", "chat"), que não identificam o aplicativo no ladrilho.
+function IconeTelegram({ size = 21 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M23.91 3.79 20.3 20.84c-.25 1.21-.98 1.5-2 .94l-5.5-4.07-2.66 2.57c-.3.3-.55.56-1.1.56-.72 0-.6-.27-.84-.95L6.3 13.7.85 12c-1.18-.35-1.19-1.16.26-1.75l21.26-8.2c.97-.43 1.9.24 1.54 1.74Z" />
+    </svg>
+  );
+}
+
+function IconeWhatsApp({ size = 19 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+    </svg>
   );
 }
 
@@ -657,117 +664,141 @@ function ContinuidadeCanais({ ibge6 }) {
     }
   }
 
+  const statusTelegram = telegram ? 'on' : pareamento && ['emitido', 'reivindicado'].includes(pareamento.status) ? 'wait' : 'off';
+  const rotuloTelegram = telegram ? 'Conectado' : statusTelegram === 'wait' ? 'Aguardando' : 'Não conectado';
+
   return (
-    <div className="susbot-panel-body" style={{ flex: 1, padding: '18px 16px' }}>
-      <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--ink-900)', fontFamily: 'var(--ff-tight)' }}>
-        Continuidade entre canais
+    <div className="susbot-panel-body susbot-canais" aria-busy={carregando || processando}>
+      <p className="susbot-canais__intro">
+        A Clara é a mesma em qualquer canal: mesma identidade, mesmo histórico, mesmas confirmações. Conectar um canal novo sempre passa pela sua aprovação aqui.
       </p>
-      <p style={{ margin: '7px 0 18px', fontSize: 13, lineHeight: 1.55, color: 'var(--ink-500)' }}>
-        Use a mesma identidade e o mesmo histórico onde sua equipe já conversa. Cada novo canal exige sua confirmação no SusPredict.
-      </p>
+
       {erro && (
-        <p role="alert" style={{ padding: '10px 12px', borderRadius: 9, background: 'color-mix(in srgb, var(--bad) 8%, var(--elev))', color: 'var(--bad)', fontSize: 12, lineHeight: 1.5 }}>
-          {erro}
-        </p>
+        <p role="alert" className="susbot-canais__erro"><MIcon m="error" size={16} />{erro}</p>
       )}
 
-      <div style={{ borderTop: '1px solid var(--ink-100)' }} aria-busy={carregando || processando}>
-        <div style={{ padding: '13px 0', borderBottom: '1px solid var(--ink-100)' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-            <strong style={{ fontSize: 13, color: 'var(--ink-900)' }}>Web</strong>
-            <span style={{ ...ROTULO_META, color: 'var(--good)' }}>Ativo</span>
+      {/* Web */}
+      <section className="susbot-canal">
+        <div className="susbot-canal__topo">
+          <span className="susbot-canal__logo susbot-canal__logo--web"><MIcon m="language" size={20} /></span>
+          <div className="susbot-canal__nome">
+            <strong>SusPredict Web</strong>
+            <span>Este painel, com o município e a tela em contexto.</span>
           </div>
-          <p style={{ margin: '5px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-500)' }}>Conversa, contexto de tela e município ativos.</p>
+          <span className="susbot-status-pill susbot-status-pill--on">Ativo</span>
+        </div>
+      </section>
+
+      {/* Telegram */}
+      <section className={`susbot-canal${statusTelegram === 'wait' ? ' susbot-canal--ativo' : ''}`}>
+        <div className="susbot-canal__topo">
+          <span className="susbot-canal__logo susbot-canal__logo--telegram"><IconeTelegram /></span>
+          <div className="susbot-canal__nome">
+            <strong>Telegram</strong>
+            <span>{telegram?.external_username ? `@${telegram.external_username}` : 'Converse com a Clara pelo celular.'}</span>
+          </div>
+          <span className={`susbot-status-pill susbot-status-pill--${statusTelegram}`}>{rotuloTelegram}</span>
         </div>
 
-        <div style={{ padding: '14px 0', borderBottom: '1px solid var(--ink-100)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <div>
-              <strong style={{ display: 'block', fontSize: 13, color: 'var(--ink-900)' }}>Telegram</strong>
-              <span style={{ ...ROTULO_META, color: telegram ? 'var(--good)' : 'var(--ink-400)' }}>
-                {telegram ? 'Conectado' : pareamento ? 'Pareamento em andamento' : 'Não conectado'}
-              </span>
-            </div>
-            {!telegram && !pareamento && (
-              <button type="button" disabled={processando || carregando} onClick={() => void iniciarPareamento()} className="susbot-channel-primary">
-                Conectar
-              </button>
-            )}
+        {!telegram && !pareamento && (
+          <div className="susbot-canal__corpo">
+            <button type="button" disabled={processando || carregando} onClick={() => void iniciarPareamento()} className="susbot-btn susbot-btn--primary">
+              <MIcon m="link" size={17} /> Conectar Telegram
+            </button>
           </div>
+        )}
 
-          {telegram && (
-            <div style={{ marginTop: 12, padding: '11px 12px', borderRadius: 10, background: 'var(--primary-soft)' }}>
-              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--ink-900)' }}>
-                {telegram.external_username ? `@${telegram.external_username}` : 'Conta Telegram conectada'}
-              </p>
-              <p style={{ margin: '4px 0 10px', fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-500)' }}>
-                Novas conversas entram no mesmo histórico. Ações continuam exigindo confirmação.
-              </p>
-              <button type="button" disabled={processando} onClick={() => void desconectarTelegram()} className="susbot-channel-danger">
-                Desconectar Telegram
-              </button>
-            </div>
-          )}
+        {telegram && (
+          <div className="susbot-canal__corpo">
+            <p className="susbot-canal__nota">Novas conversas no Telegram entram neste mesmo histórico. Ações continuam exigindo confirmação.</p>
+            <button type="button" disabled={processando} onClick={() => void desconectarTelegram()} className="susbot-btn susbot-btn--danger">
+              <MIcon m="link_off" size={17} /> Desconectar
+            </button>
+          </div>
+        )}
 
-          {pareamento?.status === 'emitido' && (
-            <div style={{ marginTop: 12, padding: '14px', borderRadius: 10, background: 'var(--primary-soft)' }}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--ink-900)' }}>1. Abra a Clara no Telegram</p>
-              <p style={{ margin: '5px 0 12px', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-500)' }}>
-                No celular, toque no botão. Em outro dispositivo, escaneie o QR Code. Este convite expira em 10 minutos e funciona uma vez.
-              </p>
-              {pareamento.deep_link ? (
-                <div className="susbot-channel-connect-options">
-                  <div className="susbot-channel-qr" aria-label="QR Code para abrir a Clara no Telegram">
-                    <QRCode value={pareamento.deep_link} size={148} bgColor="#fbfaf7" fgColor="#1a1814" />
+        {pareamento?.status === 'emitido' && (
+          <div className="susbot-canal__corpo susbot-passos">
+            <div className="susbot-passo susbot-passo--atual">
+              <span className="susbot-passo__num">1</span>
+              <div className="susbot-passo__conteudo">
+                <strong>Abra a Clara no Telegram</strong>
+                <p>No celular, toque no botão. Em outro aparelho, aponte a câmera para o código. O convite vale por 10 minutos e funciona uma vez.</p>
+                {pareamento.deep_link ? (
+                  <div className="susbot-convite">
+                    <div className="susbot-convite__qr" aria-label="QR Code para abrir a Clara no Telegram">
+                      <QRCode value={pareamento.deep_link} size={132} bgColor="#ffffff" fgColor="#14324A" />
+                    </div>
+                    <div className="susbot-convite__acoes">
+                      <a href={pareamento.deep_link} target="_blank" rel="noopener noreferrer" className="susbot-btn susbot-btn--primary">
+                        Abrir no Telegram <MIcon m="open_in_new" size={15} />
+                      </a>
+                      <button type="button" onClick={() => void copiarLinkTelegram()} className="susbot-btn susbot-btn--ghost">
+                        <MIcon m={copiado ? 'check' : 'content_copy'} size={15} /> {copiado ? 'Link copiado' : 'Copiar link'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="susbot-channel-connect-actions">
-                    <span style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--ink-500)' }}>O link já inclui seu convite seguro. Não é necessário copiar nenhum código.</span>
-                    <a href={pareamento.deep_link} target="_blank" rel="noopener noreferrer" className="susbot-channel-primary" style={{ textDecoration: 'none' }}>
-                      Abrir no Telegram <MIcon m="open_in_new" size={15} />
-                    </a>
-                    <button type="button" onClick={() => void copiarLinkTelegram()} className="susbot-channel-link">
-                      <MIcon m="content_copy" size={15} /> {copiado ? 'Link copiado' : 'Copiar link'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p role="alert" style={{ margin: '0 0 9px', fontSize: 11.5, color: 'var(--warn)' }}>O usuário oficial do bot ainda não foi configurado. Reinicie o ambiente depois de definir TELEGRAM_BOT_USERNAME.</p>
-              )}
-              <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-channel-link" style={{ marginTop: 10 }}>Cancelar convite</button>
-            </div>
-          )}
-
-          {pareamento?.status === 'reivindicado' && (
-            <div role="group" aria-label="Confirmar conta Telegram" style={{ marginTop: 12, padding: '12px', borderRadius: 10, border: '1px solid var(--primary-soft-border)', background: 'var(--elev)' }}>
-              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: 'var(--ink-900)' }}>2. Confirme a conta encontrada</p>
-              <p style={{ margin: '5px 0 12px', fontSize: 12, color: 'var(--ink-700)' }}>
-                Conectar {pareamento.external_username ? `@${pareamento.external_username}` : 'esta conta do Telegram'} ao seu histórico SusPredict?
-              </p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" disabled={processando} onClick={() => void confirmarPareamento()} className="susbot-channel-primary">Confirmar conexão</button>
-                <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-channel-link">Cancelar</button>
+                ) : (
+                  <p role="alert" className="susbot-canal__aviso">O usuário oficial do bot ainda não foi configurado. Reinicie o ambiente depois de definir TELEGRAM_BOT_USERNAME.</p>
+                )}
               </div>
             </div>
-          )}
-
-          {pareamento && ['expirado', 'cancelado'].includes(pareamento.status) && (
-            <div style={{ marginTop: 10 }}>
-              <p style={{ fontSize: 12, color: 'var(--ink-500)' }}>Este pareamento não está mais disponível.</p>
-              <button type="button" onClick={() => { setPareamento(null); void iniciarPareamento(); }} className="susbot-channel-primary">Gerar novo link</button>
+            <div className="susbot-passo">
+              <span className="susbot-passo__num"><span className="susbot-passo__pulso" />2</span>
+              <div className="susbot-passo__conteudo">
+                <strong>Confirme a conta aqui</strong>
+                <p>Assim que o Telegram responder, a conta aparece nesta tela para você aprovar.</p>
+              </div>
             </div>
-          )}
-        </div>
-
-        <div style={{ padding: '13px 0', borderBottom: '1px solid var(--ink-100)' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-            <strong style={{ fontSize: 13, color: 'var(--ink-900)' }}>WhatsApp</strong>
-            <span style={{ ...ROTULO_META, color: 'var(--ink-400)' }}>Próximo canal</span>
+            <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-btn susbot-btn--ghost susbot-passos__cancelar">Cancelar convite</button>
           </div>
-          <p style={{ margin: '5px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-500)' }}>Usará o mesmo pareamento seguro e o mesmo histórico.</p>
+        )}
+
+        {pareamento?.status === 'reivindicado' && (
+          <div className="susbot-canal__corpo susbot-passos" role="group" aria-label="Confirmar conta Telegram">
+            <div className="susbot-passo susbot-passo--feito">
+              <span className="susbot-passo__num"><MIcon m="check" size={14} /></span>
+              <div className="susbot-passo__conteudo"><strong>Clara aberta no Telegram</strong></div>
+            </div>
+            <div className="susbot-passo susbot-passo--atual">
+              <span className="susbot-passo__num">2</span>
+              <div className="susbot-passo__conteudo">
+                <strong>Confirme a conta encontrada</strong>
+                <p>Conectar <b>{pareamento.external_username ? `@${pareamento.external_username}` : 'esta conta do Telegram'}</b> ao seu histórico SusPredict?</p>
+                <div className="susbot-convite__acoes susbot-convite__acoes--linha">
+                  <button type="button" disabled={processando} onClick={() => void confirmarPareamento()} className="susbot-btn susbot-btn--primary">Confirmar conexão</button>
+                  <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-btn susbot-btn--ghost">Cancelar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pareamento && ['expirado', 'cancelado'].includes(pareamento.status) && (
+          <div className="susbot-canal__corpo">
+            <p className="susbot-canal__nota">Este convite não está mais disponível.</p>
+            <button type="button" onClick={() => { setPareamento(null); void iniciarPareamento(); }} className="susbot-btn susbot-btn--primary">
+              <MIcon m="refresh" size={17} /> Gerar novo convite
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* WhatsApp */}
+      <section className="susbot-canal susbot-canal--breve">
+        <div className="susbot-canal__topo">
+          <span className="susbot-canal__logo susbot-canal__logo--whatsapp"><IconeWhatsApp /></span>
+          <div className="susbot-canal__nome">
+            <strong>WhatsApp</strong>
+            <span>Mesmo pareamento seguro, mesmo histórico.</span>
+          </div>
+          <span className="susbot-status-pill susbot-status-pill--breve">Em breve</span>
         </div>
-      </div>
-      <p style={{ margin: '16px 0 0', padding: '10px 12px', background: 'var(--subtle)', borderRadius: 8, fontSize: 12, lineHeight: 1.55, color: 'var(--ink-700)' }}>
-        O código nunca é permanente: expira, funciona uma vez e só conclui a conexão depois da sua confirmação aqui.
+      </section>
+
+      <p className="susbot-canais__rodape">
+        <MIcon m="verified_user" size={15} />
+        <span>O convite expira, funciona uma vez e só conclui a conexão depois da sua confirmação aqui.</span>
       </p>
     </div>
   );
@@ -1183,109 +1214,234 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
       <style>{`
         @keyframes susbot-caret { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
         @keyframes susbot-msg-in {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0); }
+          from { opacity: 0; transform: translateY(8px) scale(0.985); }
+          to   { opacity: 1; transform: none; }
+        }
+        @keyframes susbot-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes susbot-halo { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(1.9); opacity: 0; } }
+        @keyframes susbot-shimmer { to { background-position: -200% 0; } }
+
+        .susbot-msg { animation: susbot-msg-in .32s cubic-bezier(0.2,0.7,0.2,1) both; }
+
+        /* Marca da Clara: ladrilho com gradiente do azul da casa. */
+        .susbot-mark {
+          position: relative; flex-shrink: 0;
+          display: inline-flex; align-items: center; justify-content: center;
+          background: linear-gradient(145deg, var(--accent, #4E8BB8), var(--primary) 60%, var(--primary-dark));
+          color: #fff; font-family: var(--ff-tight); font-weight: 800; line-height: 1;
+          box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 4px 10px -4px color-mix(in srgb, var(--primary) 60%, transparent);
+        }
+        .susbot-mark--ativa::after {
+          content: ''; position: absolute; inset: 0; border-radius: inherit;
+          border: 2px solid var(--primary);
+          animation: susbot-halo 1.6s ease-out infinite;
         }
 
-        .susbot-msg { animation: susbot-msg-in .22s cubic-bezier(0.2,0.7,0.3,1) both; }
+        .susbot-header {
+          padding: 12px 12px 12px 16px; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: space-between; gap: 8px;
+          border-bottom: 1px solid var(--ink-100);
+          background: color-mix(in srgb, var(--elev) 55%, var(--content));
+        }
+        .susbot-contexto { margin: 2px 0 0; max-width: 150px; font-size: 12px; color: var(--ink-500); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .susbot-meta { margin: 0; font-size: 11px; color: var(--ink-400); }
+        .susbot-status { margin-top: 6px; color: var(--ink-500);
+          background: linear-gradient(90deg, var(--ink-400) 0%, var(--primary) 50%, var(--ink-400) 100%);
+          background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+          animation: susbot-shimmer 1.8s linear infinite; }
 
+        /* Mensagens */
+        .susbot-user {
+          max-width: 86%; padding: 10px 14px; border-radius: 16px 16px 4px 16px;
+          background: var(--primary); color: #fff;
+          font-size: 13px; line-height: 1.55; overflow-wrap: anywhere;
+          box-shadow: 0 6px 16px -10px color-mix(in srgb, var(--primary) 70%, transparent);
+        }
+        .susbot-bot { display: flex; flex-direction: column; align-items: flex-start; }
+        .susbot-bot > .susbot-bot__texto, .susbot-bot > div:not([class]) { align-self: stretch; }
+        .susbot-bot__quem {
+          margin: 0 0 6px; display: flex; align-items: center; gap: 7px;
+          font-size: 12px; font-weight: 700; color: var(--ink-700);
+        }
+        .susbot-bot__texto {
+          padding: 12px 14px; border-radius: 4px 16px 16px 16px;
+          background: var(--elev); border: 1px solid color-mix(in srgb, var(--ink-100) 80%, transparent);
+          box-shadow: 0 1px 2px rgba(26,24,20,.03), 0 8px 20px -14px rgba(20,50,74,.25);
+          font-size: 13px; line-height: 1.6; color: var(--ink-700); overflow-wrap: anywhere;
+        }
+        .susbot-bot--erro .susbot-bot__texto { border-color: color-mix(in srgb, var(--bad) 30%, transparent); background: color-mix(in srgb, var(--bad) 5%, var(--elev)); }
+        .susbot-resumo-card {
+          padding: 8px 10px; border-radius: 10px; background: var(--elev);
+          border: 1px solid color-mix(in srgb, var(--ink-100) 80%, transparent);
+          box-shadow: 0 4px 12px -10px rgba(20,50,74,.3);
+        }
+
+        /* Estado vazio */
+        .susbot-vazio { padding: 22px 4px 8px; display: flex; flex-direction: column; align-items: flex-start; animation: susbot-rise .4s cubic-bezier(0.2,0.7,0.2,1) both; }
+        .susbot-vazio__titulo { margin: 16px 0 0; font-family: var(--ff-tight); font-weight: 800; font-size: 21px; letter-spacing: -0.025em; line-height: 1.2; color: var(--ink-900); }
+        .susbot-vazio__texto { margin: 8px 0 20px; font-size: 13px; line-height: 1.5; color: var(--ink-500); }
+        .susbot-vazio__chips { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+        .susbot-chip {
+          display: flex; align-items: center; gap: 10px; text-align: left;
+          padding: 11px 13px; border-radius: 12px;
+          border: 1px solid color-mix(in srgb, var(--ink-100) 80%, transparent);
+          background: var(--elev); color: var(--ink-700);
+          font-size: 13px; line-height: 1.4; cursor: pointer;
+          box-shadow: 0 1px 2px rgba(26,24,20,.03), 0 8px 20px -16px rgba(20,50,74,.3);
+          transition: border-color .18s, background .18s, transform .18s cubic-bezier(0.2,0.7,0.2,1), box-shadow .18s;
+          animation: susbot-rise .4s cubic-bezier(0.2,0.7,0.2,1) both;
+        }
+        .susbot-chip .material-symbols-rounded { color: var(--primary); flex-shrink: 0; }
+        .susbot-chip:hover { border-color: var(--primary-soft-border); background: var(--primary-soft); transform: translateX(3px); }
+        .susbot-chip:active { transform: translateX(3px) scale(0.99); }
+
+        /* Composer */
+        .susbot-privacy { margin: 0 0 8px; font-size: 11px; line-height: 1.45; color: var(--ink-400); }
+        .susbot-privacy a { color: var(--primary); }
         .susbot-composer {
-          border: 1px solid var(--ink-100);
-          border-radius: 14px;
-          background: var(--canvas);
-          transition: border-color .15s, box-shadow .15s;
+          padding: 10px 10px 8px 14px;
+          border: 1px solid color-mix(in srgb, var(--ink-100) 80%, transparent);
+          border-radius: 16px;
+          background: var(--elev);
+          box-shadow: 0 1px 2px rgba(26,24,20,.04), 0 10px 24px -16px rgba(20,50,74,.3);
+          transition: border-color .18s, box-shadow .18s;
         }
         .susbot-composer:focus-within {
-          border-color: var(--primary-soft-border);
-          box-shadow: 0 0 0 3px var(--primary-soft);
+          border-color: var(--primary);
+          box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent), 0 10px 24px -16px rgba(20,50,74,.3);
         }
-
-        .susbot-chip {
-          text-align: left;
-          padding: 9px 12px;
-          border: 1px solid var(--ink-100);
-          border-radius: 10px;
-          background: var(--elev);
-          color: var(--ink-700);
-          font-size: 12.5;
-          line-height: 1.45;
-          cursor: pointer;
-          transition: border-color .15s, background .15s;
+        .susbot-composer textarea:focus-visible { outline: none; }
+        .susbot-dica { margin: 0; font-size: 11px; color: var(--ink-300); }
+        .susbot-send {
+          width: 34px; height: 34px; border-radius: 11px; border: 0; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center; cursor: pointer;
+          background: linear-gradient(145deg, var(--accent, #4E8BB8), var(--primary) 70%);
+          color: #fff; box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--primary) 80%, transparent);
+          transition: transform .15s cubic-bezier(0.2,0.7,0.2,1), box-shadow .15s, background .2s, color .2s;
         }
-        .susbot-chip:hover { border-color: var(--primary-soft-border); background: var(--primary-soft); }
+        .susbot-send:hover:not(:disabled) { transform: translateY(-1px); }
+        .susbot-send:active:not(:disabled) { transform: scale(0.94); }
+        .susbot-send:disabled { background: var(--tint); color: var(--ink-300); box-shadow: none; cursor: default; }
+        .susbot-rodape { margin: 8px 0 0; font-size: 11px; color: var(--ink-300); text-align: center; }
 
         .susbot-icon-btn {
           background: none; border: none; cursor: pointer; color: var(--ink-500);
-          display: flex; padding: 6px; border-radius: 8; border-radius: 8px;
-          transition: background .15s, color .15s;
+          display: flex; padding: 7px; border-radius: 9px;
+          transition: background .15s, color .15s, transform .12s;
         }
-        .susbot-icon-btn:hover { background: var(--subtle); color: var(--ink-900); }
+        .susbot-icon-btn:hover { background: var(--tint); color: var(--ink-900); }
+        .susbot-icon-btn:active { transform: scale(0.94); }
 
-        .susbot-channel-trigger {
-          min-height: 36px;
-          padding: 7px 10px;
-          border: 1px solid var(--primary-soft-border);
-          border-radius: 9px;
-          background: var(--primary-soft);
-          color: var(--primary);
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          font-size: 11px;
-          font-weight: 800;
-          white-space: nowrap;
-          transition: border-color .15s, background .15s;
+        /* Botões da Clara (canais e confirmações) */
+        .susbot-btn {
+          min-height: 40px; padding: 9px 14px; border-radius: 11px; border: 1px solid transparent;
+          display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+          font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap;
+          transition: transform .15s cubic-bezier(0.2,0.7,0.2,1), box-shadow .15s, background .15s, border-color .15s;
         }
-        .susbot-channel-trigger:hover { border-color: var(--primary); }
+        .susbot-btn:active:not(:disabled) { transform: scale(0.97); }
+        .susbot-btn:disabled { opacity: .55; cursor: wait; }
+        .susbot-btn--primary {
+          background: linear-gradient(145deg, var(--accent, #4E8BB8), var(--primary) 70%); color: #fff;
+          box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--primary) 80%, transparent);
+        }
+        .susbot-btn--primary:hover:not(:disabled) { transform: translateY(-1px); }
+        .susbot-btn--ghost { background: var(--elev); color: var(--ink-700); border-color: color-mix(in srgb, var(--ink-100) 80%, transparent); }
+        .susbot-btn--ghost:hover:not(:disabled) { border-color: var(--primary-soft-border); background: var(--primary-soft); color: var(--primary); }
+        .susbot-btn--danger { background: var(--elev); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 28%, transparent); }
+        .susbot-btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 6%, var(--elev)); }
 
-        .susbot-channel-primary,
-        .susbot-channel-link,
-        .susbot-channel-danger {
-          min-height: 40px;
-          padding: 8px 12px;
-          border-radius: 9px;
-          font-size: 12px;
-          font-weight: 750;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
+        /* Tela de canais */
+        .susbot-canais { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 10px; animation: susbot-rise .35s cubic-bezier(0.2,0.7,0.2,1) both; }
+        .susbot-canais__intro { margin: 0 0 6px; font-size: 13px; line-height: 1.55; color: var(--ink-500); }
+        .susbot-canais__erro {
+          margin: 0; padding: 10px 12px; display: flex; gap: 8px; align-items: flex-start; border-radius: 11px;
+          background: color-mix(in srgb, var(--bad) 7%, var(--elev)); border: 1px solid color-mix(in srgb, var(--bad) 25%, transparent);
+          color: var(--bad); font-size: 12.5px; line-height: 1.5;
         }
-        .susbot-channel-primary { border: 1px solid var(--primary); background: var(--primary); color: var(--elev); }
-        .susbot-channel-link { border: 1px solid var(--ink-100); background: var(--elev); color: var(--ink-700); }
-        .susbot-channel-danger { border: 1px solid color-mix(in srgb, var(--bad) 28%, var(--ink-100)); background: var(--elev); color: var(--bad); }
-        .susbot-channel-primary:disabled,
-        .susbot-channel-link:disabled,
-        .susbot-channel-danger:disabled { opacity: .55; cursor: wait; }
-        .susbot-channel-connect-options {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          flex-wrap: wrap;
+        .susbot-canal {
+          border-radius: 14px; background: var(--elev);
+          border: 1px solid color-mix(in srgb, var(--ink-100) 80%, transparent);
+          box-shadow: 0 1px 2px rgba(26,24,20,.03), 0 8px 20px -14px rgba(20,50,74,.25);
+          animation: susbot-rise .4s cubic-bezier(0.2,0.7,0.2,1) both;
+          transition: border-color .2s, box-shadow .2s;
         }
-        .susbot-channel-qr {
-          padding: 9px;
-          border: 1px solid var(--ink-100);
-          border-radius: 10px;
-          background: #fbfaf7;
-          line-height: 0;
+        .susbot-canal:nth-child(3) { animation-delay: .05s; }
+        .susbot-canal:nth-child(4) { animation-delay: .10s; }
+        .susbot-canal:nth-child(5) { animation-delay: .15s; }
+        .susbot-canal--ativo { border-color: var(--primary-soft-border); box-shadow: 0 0 0 3px var(--primary-soft), 0 8px 20px -14px rgba(20,50,74,.25); }
+        .susbot-canal--breve { opacity: .72; }
+        .susbot-canal__topo { display: flex; align-items: center; gap: 12px; padding: 13px 14px; }
+        .susbot-canal__logo {
+          width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; color: #fff;
+          display: inline-flex; align-items: center; justify-content: center;
+          box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 4px 10px -5px rgba(0,0,0,.35);
         }
-        .susbot-channel-connect-actions {
-          min-width: 160px;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: stretch;
-          gap: 8px;
+        .susbot-canal__logo--web { background: linear-gradient(145deg, var(--accent, #4E8BB8), var(--primary) 70%); }
+        .susbot-canal__logo--telegram { background: linear-gradient(145deg, #37AEE2, #1E96C8 70%); }
+        .susbot-canal__logo--telegram svg { margin: 1px 1px 0 0; }
+        .susbot-canal__logo--whatsapp { background: linear-gradient(145deg, #5FD37F, #25A75A 70%); }
+        .susbot-canal__nome { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .susbot-canal__nome strong { font-size: 13.5px; font-weight: 700; color: var(--ink-900); }
+        .susbot-canal__nome span { font-size: 12px; line-height: 1.4; color: var(--ink-500); overflow-wrap: anywhere; }
+        .susbot-status-pill {
+          flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+          padding: 4px 9px 4px 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
+          background: var(--tint); color: var(--ink-500);
         }
+        .susbot-status-pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .7; }
+        .susbot-status-pill--on { background: color-mix(in srgb, var(--good) 12%, var(--elev)); color: var(--good); }
+        .susbot-status-pill--wait { background: var(--primary-soft); color: var(--primary); }
+        .susbot-status-pill--wait::before { animation: susbot-caret 1.2s ease-in-out infinite; }
+        .susbot-status-pill--breve::before { display: none; }
+        .susbot-canal__corpo { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+        .susbot-canal__nota { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-500); }
+        .susbot-canal__aviso { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--warn); }
+
+        /* Passos do pareamento */
+        .susbot-passos { position: relative; gap: 0; }
+        .susbot-passo { display: flex; gap: 12px; padding: 6px 0 14px; position: relative; width: 100%; }
+        .susbot-passo + .susbot-passo::before {
+          content: ''; position: absolute; left: 13px; top: -8px; height: 14px; width: 2px; border-radius: 1px;
+          background: color-mix(in srgb, var(--ink-100) 90%, transparent);
+        }
+        .susbot-passo__num {
+          position: relative; width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+          display: inline-flex; align-items: center; justify-content: center;
+          font-family: var(--ff-mono); font-size: 12px; font-weight: 700;
+          background: var(--tint); color: var(--ink-500);
+        }
+        .susbot-passo--atual .susbot-passo__num { background: var(--primary); color: #fff; box-shadow: 0 4px 10px -4px color-mix(in srgb, var(--primary) 70%, transparent); }
+        .susbot-passo--feito .susbot-passo__num { background: color-mix(in srgb, var(--good) 14%, var(--elev)); color: var(--good); }
+        .susbot-passo__pulso { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--primary); opacity: 0; animation: susbot-halo 2s ease-out .6s infinite; }
+        .susbot-passo__conteudo { flex: 1; min-width: 0; padding-top: 4px; }
+        .susbot-passo__conteudo strong { display: block; font-size: 13px; font-weight: 700; color: var(--ink-900); }
+        .susbot-passo__conteudo p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-500); }
+        .susbot-passo__conteudo p b { color: var(--ink-900); font-weight: 700; }
+        .susbot-passo:not(.susbot-passo--atual) .susbot-passo__conteudo { opacity: .75; }
+        .susbot-convite { margin-top: 12px; display: flex; gap: 14px; align-items: stretch; flex-wrap: wrap; }
+        .susbot-convite__qr {
+          padding: 8px; border-radius: 12px; background: #fff; line-height: 0;
+          border: 1px solid color-mix(in srgb, var(--ink-100) 80%, transparent);
+          box-shadow: 0 8px 20px -14px rgba(20,50,74,.35);
+          animation: susbot-msg-in .4s cubic-bezier(0.2,0.7,0.2,1) both;
+        }
+        .susbot-convite__acoes { flex: 1; min-width: 150px; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+        .susbot-convite__acoes .susbot-btn { width: 100%; }
+        .susbot-convite__acoes--linha { flex-direction: row; flex-wrap: wrap; margin-top: 12px; }
+        .susbot-convite__acoes--linha .susbot-btn { width: auto; }
+        .susbot-passos__cancelar { align-self: flex-start; margin-top: 2px; }
+        .susbot-canais__rodape {
+          margin: 6px 0 0; padding: 10px 12px; display: flex; gap: 8px; align-items: flex-start;
+          border-radius: 11px; background: var(--subtle); color: var(--ink-500); font-size: 12px; line-height: 1.5;
+        }
+        .susbot-canais__rodape .material-symbols-rounded { color: var(--primary); flex-shrink: 0; margin-top: 1px; }
 
         .susbot-panel-shell {
           width: min(var(--chat-w), calc(100vw - var(--gap)));
-          border-radius: 18px;
+          border-radius: 20px;
           overflow: hidden;
+          box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 2px 6px rgba(20,50,74,.10), 0 18px 44px -18px rgba(20,50,74,.35);
         }
 
         .susbot-panel-body {
@@ -1295,10 +1451,24 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         }
 
         .susbot-panel-fab {
-          bottom: 24px;
-          right: 24px;
+          position: fixed; bottom: 24px; right: 24px; z-index: 50;
+          height: 48px; padding: 0 16px 0 6px; border: 0; border-radius: 999px;
+          display: inline-flex; align-items: center; gap: 9px; cursor: pointer;
+          background: var(--elev); color: var(--ink-900);
+          font-family: var(--ff-tight); font-size: 14px; font-weight: 800; letter-spacing: -0.01em;
+          box-shadow: 0 1px 2px rgba(26,24,20,.06), 0 12px 28px -10px rgba(20,50,74,.45);
+          transition: transform .2s cubic-bezier(0.2,0.7,0.2,1), box-shadow .2s;
+          animation: susbot-rise .35s cubic-bezier(0.2,0.7,0.2,1) both;
         }
-        .susbot-panel-fab:hover { background: var(--primary-dark); }
+        .susbot-panel-fab:hover { transform: translateY(-2px); box-shadow: 0 1px 2px rgba(26,24,20,.06), 0 16px 32px -10px rgba(20,50,74,.5); }
+        .susbot-panel-fab:active { transform: scale(0.97); }
+        .susbot-panel-fab__mark {
+          width: 36px; height: 36px; border-radius: 50%;
+          display: inline-flex; align-items: center; justify-content: center;
+          background: linear-gradient(145deg, var(--accent, #4E8BB8), var(--primary) 60%, var(--primary-dark));
+          color: #fff; font-size: 16px;
+          box-shadow: 0 1px 0 rgba(255,255,255,.25) inset;
+        }
 
         @media (max-width: 720px) {
           .susbot-panel-shell {
@@ -1315,18 +1485,9 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
           }
 
           .susbot-icon-btn { min-width: 44px; min-height: 44px; justify-content: center; }
-          .susbot-channel-trigger { min-height: 44px; }
           .susbot-chip { min-height: 44px; font-size: 13px; }
-          .susbot-channel-primary,
-          .susbot-channel-link,
-          .susbot-channel-danger { min-height: 44px; }
-          .susbot-channel-connect-options { flex-direction: column; align-items: stretch; }
-          .susbot-channel-qr { display: none; }
-        }
-
-        @media (max-width: 360px) {
-          .susbot-channel-trigger { width: 44px; padding-inline: 0; }
-          .susbot-channel-trigger span { display: none; }
+          .susbot-btn { min-height: 44px; }
+          .susbot-convite__qr { display: none; }
         }
       `}</style>
 
@@ -1343,36 +1504,33 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
           // do card de conteúdo (topbar + respiro no topo, respiro nas demais).
           position: 'fixed', top: 'calc(var(--topbar-h) + var(--gap))', right: 'var(--gap)', bottom: 'var(--gap)',
           background: 'var(--content)', border: '1px solid var(--sb-border)',
-          boxShadow: open ? '0 8px 28px rgba(26,24,20,0.12)' : 'none',
           zIndex: 55, display: 'flex', flexDirection: 'column',
-          transform: open ? 'translateX(0)' : 'translateX(calc(100% + 16px))',
-          transition: 'transform .3s cubic-bezier(0.2,0.7,0.3,1)',
+          transform: open ? 'translateX(0) scale(1)' : 'translateX(calc(100% + 24px)) scale(0.98)',
+          opacity: open ? 1 : 0,
+          transition: 'transform .42s cubic-bezier(0.32, 0.72, 0, 1), opacity .3s',
           pointerEvents: open ? 'auto' : 'none',
         }}
       >
         {/* Cabeçalho */}
-        <div style={{
-          padding: '13px 14px 13px 16px', borderBottom: '1px solid var(--ink-100)', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-        }}>
+        <div className="susbot-header">
           {viewMode !== 'chat' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button onClick={() => setViewMode('chat')} title="Voltar" className="susbot-icon-btn">
                 <MIcon m="arrow_back" size={19} />
               </button>
               <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', fontFamily: 'var(--ff-tight)' }}>
-                {viewMode === 'history' ? 'Conversas' : 'Canais'}
+                {viewMode === 'history' ? 'Conversas' : 'Canais da Clara'}
               </p>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <ClaraMark size={30} />
+              <ClaraMark size={34} ativa={enviando} />
               <div>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', lineHeight: 1.15, fontFamily: 'var(--ff-tight)' }}>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1.15, fontFamily: 'var(--ff-tight)', letterSpacing: '-0.01em' }}>
                   Clara
                 </p>
-                <p style={{ ...ROTULO_META, marginTop: 2 }}>
-                  {getSusbotPageLabel(page)}
+                <p className="susbot-contexto">
+                  {enviando ? 'analisando…' : getSusbotPageLabel(page)}
                 </p>
               </div>
             </div>
@@ -1387,12 +1545,11 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                 <button
                   type="button"
                   onClick={() => setViewMode('channels')}
-                  aria-label="Conectar canal de mensagens"
-                  title="Conectar canal (Telegram, WhatsApp)"
-                  className="susbot-channel-trigger"
+                  aria-label="Canais conectados (Telegram, WhatsApp)"
+                  title="Canais"
+                  className="susbot-icon-btn"
                 >
-                  <MIcon m="hub" size={16} />
-                  <span>Conectar canal</span>
+                  <MIcon m="hub" size={19} />
                 </button>
                 <button onClick={novaConversa} title="Nova conversa" className="susbot-icon-btn">
                   <MIcon m="edit_square" size={19} />
@@ -1508,20 +1665,17 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                   tom="danger"
                 />
               ) : semMensagens && !enviando && (
-                <div style={{ paddingTop: 10 }}>
-                  <p style={{
-                    margin: 0, fontFamily: 'var(--ff-tight)', fontWeight: 800,
-                    fontSize: 20, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--ink-900)',
-                  }}>
-                    O que você precisa decidir agora?
-                  </p>
-                  <p style={{ margin: '8px 0 18px', fontSize: 13, lineHeight: 1.5, color: 'var(--ink-400)' }}>
+                <div className="susbot-vazio">
+                  <ClaraMark size={48} />
+                  <p className="susbot-vazio__titulo">O que você precisa decidir agora?</p>
+                  <p className="susbot-vazio__texto">
                     Pergunte sobre {getSusbotPageLabel(page)} ou sobre qualquer dado do município.
                   </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {SUGESTOES.map(s => (
-                      <button key={s} className="susbot-chip" onClick={() => void enviar(s)}>
-                        {s}
+                  <div className="susbot-vazio__chips">
+                    {SUGESTOES.map((s, i) => (
+                      <button key={s} className="susbot-chip" style={{ animationDelay: `${0.12 + i * 0.06}s` }} onClick={() => void enviar(s)}>
+                        <MIcon m={SUGESTOES_ICONES[i] || 'chat_bubble'} size={17} />
+                        <span>{s}</span>
                       </button>
                     ))}
                   </div>
@@ -1538,8 +1692,8 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
 
             {/* Input */}
             <div style={{ padding: '10px 12px 12px', flexShrink: 0 }}>
-              <p id="clara-privacy" className="form-privacy" style={{ margin: '0 0 8px', fontSize: 11 }}>As conversas podem ser salvas. Não envie dados identificáveis de pacientes. <a href="/privacidade" target="_blank" rel="noopener noreferrer">Privacidade (nova aba)</a></p>
-              <div className="susbot-composer" style={{ padding: '10px 10px 8px 12px' }}>
+              <p id="clara-privacy" className="susbot-privacy">As conversas podem ser salvas. Não envie dados identificáveis de pacientes. <a href="/privacidade" target="_blank" rel="noopener noreferrer">Privacidade (nova aba)</a></p>
+              <div className="susbot-composer">
                   <textarea
                   ref={inputRef}
                   value={input}
@@ -1561,30 +1715,19 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                   }}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                  <p style={{ ...ROTULO_META, color: 'var(--ink-300)' }}>
-                    enter envia · shift+enter quebra linha
-                  </p>
+                  <p className="susbot-dica">Enter envia, Shift+Enter quebra linha</p>
                   <button
                     onClick={() => enviar()}
                     disabled={!input.trim() || enviando}
                     title="Enviar"
                     aria-label="Enviar mensagem à Clara"
-                    style={{
-                      width: 30, height: 30, borderRadius: 9, border: 'none', flexShrink: 0,
-                      cursor: input.trim() && !enviando ? 'pointer' : 'default',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: input.trim() && !enviando ? 'var(--primary)' : 'var(--ink-100)',
-                      color: input.trim() && !enviando ? 'white' : 'var(--ink-300)',
-                      transition: 'background .15s',
-                    }}
+                    className="susbot-send"
                   >
-                    <MIcon m="arrow_upward" size={17} />
+                    <MIcon m="arrow_upward" size={18} />
                   </button>
                 </div>
               </div>
-              <p style={{ ...ROTULO_META, color: 'var(--ink-300)', marginTop: 8, textAlign: 'center' }}>
-                respostas geradas · confira antes de decidir
-              </p>
+              <p className="susbot-rodape">Respostas geradas automaticamente. Confira antes de decidir.</p>
             </div>
           </>
         )}
@@ -1598,16 +1741,9 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
           title="Clara — assistente"
           aria-label="Abrir Clara"
           className="susbot-panel-fab"
-          style={{
-            position: 'fixed', width: 48, height: 48, borderRadius: '50%',
-            background: 'var(--primary)', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', zIndex: 50,
-            boxShadow: '0 2px 10px rgba(26,24,20,0.14)',
-            transition: 'background .15s',
-          }}
         >
-          <MIcon m="chat_bubble" size={20} />
+          <span className="susbot-panel-fab__mark">C</span>
+          <span className="susbot-panel-fab__label">Clara</span>
         </button>
       )}
     </>

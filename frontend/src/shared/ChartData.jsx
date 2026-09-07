@@ -1,8 +1,9 @@
 export default function ChartData({ title, rows, columns }) {
   if (!rows.length) return null;
   return <details className="chart-data">
-    <summary>Ver dados: {title}</summary>
-    <div className="legal-table" tabIndex={0} role="region" aria-label={title}>
+    <summary>Ver dados: {title} <span className="chart-data-count">({rows.length} {rows.length === 1 ? 'linha' : 'linhas'})</span></summary>
+    {/* ponytail: rolagem interna com cabeçalho fixo em vez de paginação — a tabela não estica a página. */}
+    <div className="legal-table chart-data-scroll" tabIndex={0} role="region" aria-label={title}>
       <table>
         <caption>{title}</caption>
         <thead><tr>{columns.map(([key, label]) => <th key={key} scope="col">{label}</th>)}</tr></thead>

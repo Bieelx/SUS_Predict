@@ -8,7 +8,7 @@ import HistoricoAquisicoes, { dentroDaJanela } from './HistoricoAquisicoes.jsx';
 // Telas operacionais. Regra única: cada número vem de uma linha do Supabase
 // via /api/dados/*; quando a consulta volta vazia, o bloco mostra estado vazio.
 
-import { numero as n, inteiro, decimal, moeda, rotuloDado, dataBr, janelaDados } from './formatters.js';
+import { numero as n, inteiro, decimal, moeda, rotuloDado } from './formatters.js';
 const riscoCor = risco => String(risco).toUpperCase() === 'ALTO' ? 'var(--risk-alto)' : String(risco).toUpperCase() === 'MODERADO' ? 'var(--risk-medio)' : ['BAIXO', 'SEM_ALERTA'].includes(String(risco).toUpperCase()) ? 'var(--risk-baixo)' : 'var(--ink-500)';
 const variacao = (valor, unidade = '%', referencia = 'período anterior') => valor == null ? 'Comparativo indisponível' : `${n(valor) >= 0 ? '+' : ''}${decimal(valor)}${unidade} vs. ${referencia}`;
 
@@ -40,7 +40,7 @@ export function VisaoGeralReal({ municipio, onNavigate, estadual = false }) {
   const alertas = dados.alertas || [];
   return <div className="rise">
     <header style={header}><div><h1 style={titulo}>Visão Geral <span className="page-territory" style={subtitulo}>— {dados.municipio.nome}, {dados.municipio.uf}</span></h1><p style={descricao}>Síntese executiva de dengue, pressão hospitalar e suprimento.</p></div>{filtros}</header>
-    <FonteReal meta={dados.meta} detalhe={`Competência ${dataBr(dados.competencia?.competencia_referencia)} · Dengue (A90) · ${periodo === 'Mes' ? 'Indicadores da competência mensal' : janelaDados(kpi)}`} />
+    <FonteReal meta={dados.meta} janela={kpi} competencia={dados.competencia?.competencia_referencia} somenteCompetencia={periodo === 'Mes'} detalhe="Dengue (A90)" />
     {cards.length ? <div className="responsive-grid-4" style={grid4}>
       {cards.map(card => <Card key={card.key} className="p-5"><p className="eyebrow">{card.label}</p><strong style={{ display: 'block', color: card.color, font: '800 27px JetBrains Mono, monospace', margin: '8px 0 4px' }}>{card.value}</strong><p style={{ ...texto, margin: 0 }}>{card.detail}</p>{serie.length ? <ResponsiveContainer width="100%" height={48}><LineChart data={serie}><Line type="linear" dataKey={card.key} stroke={card.color} strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer> : null}<small style={microcopy}>{serie.length ? `Evolução mensal, ${serie.length} meses; independente do comparativo` : 'Série mensal indisponível para este recorte'}</small></Card>)}
     </div> : <Card className="p-5"><Vazio texto={`Sem indicadores para ${dados.municipio.nome} no comparativo ${periodo === 'Mes' ? 'mês' : periodo.toLowerCase()}.`} /></Card>}
@@ -61,7 +61,7 @@ export function AlertasReais({ municipio, onOpenClara, deepLinkAlertaId }) {
   const selecionado = deepLinkAlertaId ? alertas.find((_, indice) => `aquisicao-${indice + 1}` === deepLinkAlertaId) : null;
   return <div className="rise">
     <header style={header}><div><h1 style={titulo}>Central de Alertas <span className="page-territory" style={subtitulo}>— {dados.municipio.nome}, {dados.municipio.uf}</span></h1><p style={descricao}>Riscos de aquisição identificados na competência de referência da fonte.</p></div></header>
-    <FonteReal meta={dados.meta} detalhe={`Competência ${dataBr(dados.competencia?.competencia_referencia)} · alertas deduplicados por insumo e unidade`} />
+    <FonteReal meta={dados.meta} competencia={dados.competencia?.competencia_referencia} somenteCompetencia detalhe="Alertas deduplicados por insumo e unidade" />
     <Card style={{ overflow: 'hidden' }}>
       {alertas.length ? alertas.map((item, indice) => <article key={`${item.insumo_padronizado}-${item.unidade_fornecimento}`} style={{ padding: '16px 18px', borderBottom: indice < alertas.length - 1 ? '1px solid var(--ink-100)' : 0, background: selecionado === item ? 'var(--primary-soft)' : 'transparent' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -91,7 +91,7 @@ export function InsumosReais({ municipio }) {
   const alertas = dados.alertas || [];
   return <div className="rise">
     {cabecalho}
-    <FonteReal meta={dados.meta} detalhe={`Competência ${dataBr(dados.competencia?.competencia_referencia)} · ${periodo} · ${janelaDados(resumo)}`} />
+    <FonteReal meta={dados.meta} janela={resumo} competencia={dados.competencia?.competencia_referencia} />
     <aside className="acquisition-note"><MIcon m="info" size={19} /><div><strong>Este painel não representa estoque físico.</strong><details><summary>Entenda os indicadores de aquisição</summary><p>Quantidade adquirida, fornecedores e ausência de compras são sinais de aquisição. Dias de cobertura exigem estoque e consumo locais, que não existem nestas tabelas.</p></details></div></aside>
     {resumo ? <div className="responsive-grid-4" style={{ ...grid4, marginBottom: 18 }}>
       <Kpi rotulo="Ocorrências de risco alto" valor={inteiro(resumo.itens_risco_alto_atual)} detalhe={resumo.itens_risco_alto_anterior == null ? 'Sem base comparável' : `${inteiro(resumo.itens_risco_alto_anterior)} no período anterior`} tom="var(--risk-alto)" />

@@ -53,20 +53,31 @@ export function PainelSkeleton() {
   );
 }
 
-export function FonteReal({ meta, detalhe }) {
-  if (!meta) return null;
-  const data = dataBr(meta.data_referencia);
+export function FonteReal({ meta, detalhe, janela, competencia, somenteCompetencia = false }) {
+  const inicio = dataBr(janela?.periodo_inicio);
+  const fim = dataBr(janela?.periodo_fim);
+  const temJanela = inicio !== 'Não informada' && fim !== 'Não informada';
+  const referencia = dataBr(competencia);
+  const periodo = somenteCompetencia ? referencia : temJanela ? `${inicio} a ${fim}` : 'Não informado pela fonte';
   return (
-    <>
-    <details className="source-mobile"><summary>Fonte e período <span>{data}</span></summary><div><p>Fonte: {meta.fonte}</p><p>Atualização da fonte: {data}</p>{detalhe && <p>{detalhe}</p>}{meta.tabelas?.length > 0 && <><strong>Tabelas de origem</strong><ul>{meta.tabelas.map(tabela => <li key={tabela}>{tabela}</li>)}</ul></>}</div></details>
-    <div className="source-desktop" role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--ink-500)', marginBottom: 18 }}>
-      <span>Fonte: {meta.fonte}</span>
-      <span aria-hidden="true">·</span>
-      <span>Atualização da fonte: {data}</span>
-      {detalhe && <><span aria-hidden="true">·</span><span>{detalhe}</span></>}
-      {meta.tabelas?.length > 0 && <details style={{ flexBasis: '100%' }}><summary style={{ cursor: 'pointer' }}>Ver tabelas de origem</summary><ul style={{ paddingLeft: 18, overflowWrap: 'anywhere' }}>{meta.tabelas.map(tabela => <li key={tabela}>{tabela}</li>)}</ul></details>}
-    </div>
-    </>
+    <section className="data-context" aria-label="Referência temporal dos dados">
+      <div className="data-context-period">
+        <span aria-hidden="true"><MIcon m="calendar_month" size={21} /></span>
+        <div>
+          <span className="data-context-label">{somenteCompetencia ? 'Competência dos dados' : 'Período dos dados'}</span>
+          <strong>{periodo}</strong>
+          {!somenteCompetencia && referencia !== 'Não informada' && <span className="data-context-reference">Competência de referência: {referencia}</span>}
+        </div>
+      </div>
+      {(meta || detalhe) && <details className="data-context-source">
+        <summary>Sobre a fonte</summary>
+        <div>
+          {meta && <><p>Fonte: {meta.fonte}</p><p>Atualização da fonte: {dataBr(meta.data_referencia)}</p></>}
+          {detalhe && <p>{detalhe}</p>}
+          {meta?.tabelas?.length > 0 && <><strong>Tabelas de origem</strong><ul>{meta.tabelas.map(tabela => <li key={tabela}>{tabela}</li>)}</ul></>}
+        </div>
+      </details>}
+    </section>
   );
 }
 

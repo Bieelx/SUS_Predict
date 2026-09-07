@@ -143,7 +143,7 @@ function NavItemTier1({ item, active, onClick }) {
       }}>
         <MIcon m={item.icon} />
       </span>
-      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: active ? 600 : 500, flex: 1, color: active ? 'var(--sb-strong)' : SB_TEXT, lineHeight: 1.2 }}>
+      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: active ? 600 : 500, flex: 1, color: active ? 'var(--sb-active-text)' : SB_TEXT, lineHeight: 1.2 }}>
         {item.label}
       </span>
       {item.badge && (
@@ -171,11 +171,11 @@ function NavItemTier2({ item, active, onClick }) {
         width: '100%', display: 'flex', alignItems: 'center', gap: 9,
         padding: '5px 10px 5px 14px', textAlign: 'left', border: 'none', cursor: 'pointer',
         borderRadius: 8, marginBottom: 1, position: 'relative',
-        background: active ? 'rgba(255,255,255,0.55)' : 'transparent',
+        background: active ? 'rgba(255,255,255,0.88)' : 'transparent',
       }}
     >
       <MIcon m={item.icon} size={15} />
-      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: active ? 600 : 500, flex: 1, color: active ? 'var(--sb-strong)' : SB_TEXT, lineHeight: 1.2 }}>
+      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: active ? 600 : 500, flex: 1, color: active ? 'var(--sb-active-text)' : SB_TEXT, lineHeight: 1.2 }}>
         {item.label}
       </span>
     </button>
@@ -204,7 +204,7 @@ function SidebarFooterAction({ item, active, onClick }) {
       }}>
         <MIcon m={item.icon} size={16} />
       </span>
-      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: active ? 700 : 600, flex: 1, color: active ? 'var(--sb-strong)' : SB_TEXT, lineHeight: 1.15 }}>
+      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: active ? 700 : 600, flex: 1, color: active ? 'var(--sb-active-text)' : SB_TEXT, lineHeight: 1.15 }}>
         {item.label}
       </span>
       <MIcon m="chevron_right" size={18} />
@@ -258,7 +258,7 @@ function Sidebar({ current, onNav, aberta, user }) {
       {/* Logo */}
       <div style={{ height: 'var(--topbar-h)', boxSizing: 'border-box', padding: '0 20px', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--sb-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <LogoIcon size={52} />
+          <span className="brand-tile"><LogoIcon size={30} /></span>
           <p style={{ fontFamily: 'var(--ff-tight)', fontWeight: 800, fontSize: 'var(--fs-md)', color: 'var(--sb-strong)', lineHeight: 1 }}>
             SusPredict
           </p>
@@ -328,11 +328,11 @@ function Sidebar({ current, onNav, aberta, user }) {
               boxShadow: current === 'perfil' ? '0 1px 6px rgba(44,74,71,0.12)' : 'none',
             }}
           >
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--sb-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'white', flexShrink: 0 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--sb-icon-active-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-xs)', fontWeight: 700, color: 'white', flexShrink: 0 }}>
               {iniciaisUsuario}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <p title={nomeUsuario} style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--sb-strong)', lineHeight: 1.2, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nomeUsuario}</p>
+              <p title={nomeUsuario} style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: current === 'perfil' ? 'var(--sb-active-text)' : 'var(--sb-strong)', lineHeight: 1.2, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nomeUsuario}</p>
             </div>
           </button>
         </div>
@@ -406,7 +406,7 @@ function Topbar({ page, municipio, municipios, onTrocarMunicipio, onNavigate, si
             o app nunca fica sem identificação no canto superior esquerdo. */}
         {!sidebarAberta && (
           <div className="app-topbar-brand" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <LogoIcon size={40} />
+            <span className="brand-tile brand-tile--sm"><LogoIcon size={24} /></span>
             <p style={{ fontFamily: 'var(--ff-tight)', fontWeight: 800, fontSize: 'var(--fs-sm)', color: 'var(--sb-strong)', lineHeight: 1, margin: 0 }}>
               SusPredict
             </p>

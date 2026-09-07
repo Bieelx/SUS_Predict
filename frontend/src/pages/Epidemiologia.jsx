@@ -8,7 +8,7 @@ import { Badge, Card, MIcon, SectionTitle } from '../shared/ui.jsx';
 import { EstadoConsulta, FonteReal, Kpi, SeletorPeriodo, botao } from '../shared/dataUi.jsx';
 import { useDadosOperacionais } from '../shared/operationalClient.js';
 
-import { numero, inteiro, decimal, moeda, percentual, dias, janelaDados } from '../shared/formatters.js';
+import { numero, inteiro, decimal, moeda, percentual, dias } from '../shared/formatters.js';
 const mes = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '');
 const mesLongo = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -65,7 +65,7 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
 
       <EstadoConsulta carregando={carregando} erro={erro} onRetry={recarregar} />
       {dados && <>
-        <FonteReal meta={dados.meta} detalhe={`${dados.municipio.nome}, ${dados.municipio.uf} · ${periodo} · ${janelaDados(dados.casos)}`} />
+        <FonteReal janela={dados.casos} meta={dados.meta} detalhe={`${dados.municipio.nome}, ${dados.municipio.uf} · ${periodo}`} />
 
         <div className="responsive-grid-4" style={grid4}>
           <Kpi rotulo="Casos notificados" valor={inteiro(dados.casos?.casos_atual)} detalhe={dados.casos?.possui_base_comparacao ? `${decimal(dados.casos.variacao_pct)}% vs. janela anterior` : 'Sem base comparável'} />

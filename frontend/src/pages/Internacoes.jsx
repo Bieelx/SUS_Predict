@@ -5,7 +5,7 @@ import { Card, SectionTitle } from '../shared/ui.jsx';
 import { EstadoConsulta, FonteReal, Kpi, SeletorPeriodo } from '../shared/dataUi.jsx';
 import { useDadosOperacionais } from '../shared/operationalClient.js';
 
-import { numero, inteiro, decimal, moeda, percentual, dias, janelaDados } from '../shared/formatters.js';
+import { numero, inteiro, decimal, moeda, percentual, dias } from '../shared/formatters.js';
 
 export default function Internacoes() {
   const [periodo, setPeriodo] = useState('12 Meses');
@@ -34,7 +34,7 @@ export default function Internacoes() {
       </header>
       <EstadoConsulta carregando={carregando} erro={erro} onRetry={recarregar} quantidadeCards={3} />
       {dados && <>
-        <FonteReal meta={dados.meta} detalhe={`${cnes === 'TODOS' ? 'Todos os estabelecimentos' : dados.estabelecimentos?.find(item => item.cnes === cnes)?.nome_hospital || cnes} · ${periodo} · ${janelaDados(dados.consolidado)}`} />
+        <FonteReal janela={dados.consolidado} meta={dados.meta} detalhe={`${cnes === 'TODOS' ? 'Todos os estabelecimentos' : dados.estabelecimentos?.find(item => item.cnes === cnes)?.nome_hospital || cnes} · ${periodo}`} />
         <div className="responsive-grid-3" style={grid3}>
           <Kpi rotulo="Internações" valor={inteiro(dados.consolidado?.internacoes_atual)} detalhe={dados.consolidado?.possui_base_comparacao ? `${decimal(dados.consolidado.variacao_percentual)}% vs. período anterior` : 'Consolidado SIH'} />
           <Kpi rotulo="Permanência média" valor={dias(dados.permanencia?.permanencia_media_atual)} detalhe={dados.permanencia?.possui_base_comparacao ? `${decimal(dados.permanencia.diferenca_dias)} dias de diferença` : 'Sem base comparável'} />
