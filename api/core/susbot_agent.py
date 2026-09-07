@@ -4,8 +4,9 @@ Agente da Clara com stream SSE.
 O fluxo usa uma cascata de custo:
 1. Roteamento local para intenções operacionais de alta confiança
 2. Planejamento por LLM somente para perguntas não resolvidas localmente
-3. Execução da tool escolhida e resposta determinística quando possível
-4. Geração por LLM apenas quando ainda for necessária
+3. Execução da tool escolhida
+4. Redação final por LLM ancorada no payload da tool; recusa e texto institucional
+   continuam sendo gerados em código, sem LLM
 
 LangGraph e Gemini entram por adaptação opcional. Nos testes, o LLM pode ser
 substituído por um mock simples com `planejar()` e `stream_resposta()`.
@@ -17,6 +18,7 @@ import json
 import logging
 import os
 import re
+from datetime import datetime
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -24,6 +26,7 @@ from typing import Any, Callable, Iterable
 
 from api.core.prompts import (
     FERRAMENTAS_PLANEJAVEIS,
+    limpar_vazios,
     MENSAGEM_FORA_DO_ESCOPO,
     MENSAGEM_IDENTIDADE,
     SYSTEM_PROMPT_RESPOSTA,
@@ -88,10 +91,8 @@ def _sse(evento: str, dados: dict[str, Any]) -> str:
     return f"event: {evento}\ndata: {json.dumps(_jsonable(dados), ensure_ascii=False)}\n\n"
 
 
-# O LLM não é confiável pra narrar fielmente o resultado da tool — modelos rápidos
-# tendem a hedgear ("não possuo acesso a dados atualizados") mesmo com o dado real
-# no contexto. Quando existe resultado de ferramenta, a resposta é montada aqui, sem
-# LLM: o texto que o usuário lê é sempre exatamente o que a tool devolveu.
+# Recusa e texto institucional continuam saindo em código, nunca pelo LLM: são a
+# garantia de que a indisponibilidade é dita com as palavras exatas da ferramenta.
 def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) -> str | None:
     if not resultado:
         return None
@@ -103,6 +104,16 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
 
     if ferramenta == "sobre_o_projeto":
         return str(resultado.get("texto") or "")
+
+    return None
+
+
+# Rede de segurança: o payload narrado campo a campo, em código. Só é usado quando o
+# LLM não devolve texto (falha de provedor ou resposta vazia) — antes esse era o
+# caminho normal, e era ele que despejava o dado cru na tela.
+def _narrativa_de_reserva(ferramenta: str, resultado: dict[str, Any] | None) -> str | None:
+    if not resultado or not resultado.get("encontrado"):
+        return None
 
     if ferramenta == "consultar_estoque":
         linhas = []
@@ -143,11 +154,11 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
         stats = (resultado.get("dados") or {}).get("stats") or {}
         if not stats:
             return None
+        stats = limpar_vazios(stats)
         linhas = [f"- **{chave.replace('_', ' ')}**: {valor}" for chave, valor in stats.items()]
-        resposta = (
-            f"Dados de {resultado.get('sistema')} ({resultado.get('ano_ini')}–{resultado.get('ano_fim')}):\n"
-            + "\n".join(linhas)
-        )
+        rotulo = _rotulo_periodo(resultado)
+        cabecalho = f"Dados de {resultado.get('sistema')}"
+        resposta = (f"{cabecalho} ({rotulo}):\n" if rotulo else f"{cabecalho}:\n") + "\n".join(linhas)
         if resultado.get("escopo_solicitado") == "uti":
             resposta += (
                 "\n\n**Limitação:** o SIH descreve internações hospitalares e não informa "
@@ -162,6 +173,32 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
         )
 
     return None
+
+
+def _data_br(valor: Any) -> str:
+    texto = str(valor)
+    try:
+        return datetime.fromisoformat(texto.replace("Z", "+00:00")).strftime("%d/%m/%Y")
+    except ValueError:
+        return texto
+
+
+def _rotulo_periodo(resultado: dict[str, Any]) -> str | None:
+    """Rótulo do período para o título do card. Nunca devolve 'None-None'.
+
+    Prioridade: datas reais no payload > intervalo de anos pedido > janela curada
+    ("12 Meses"). Sem nenhum dos três, o título fica só com o sistema.
+    """
+
+    stats = (resultado.get("dados") or {}).get("stats") or {}
+    inicio = next((v for k, v in stats.items() if "inicio" in k and v), None)
+    fim = next((v for k, v in stats.items() if ("fim" in k or "final" in k) and v), None)
+    if inicio and fim:
+        return f"{_data_br(inicio)} a {_data_br(fim)}"
+    ano_ini, ano_fim = resultado.get("ano_ini"), resultado.get("ano_fim")
+    if ano_ini and ano_fim:
+        return f"{ano_ini}–{ano_fim}"
+    return str(resultado.get("periodo") or "").strip() or None
 
 
 # ponytail: um artefato por ferramenta, formato fixo (tabela/resumo/etp) — sem
@@ -214,12 +251,13 @@ def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> di
         }
 
     if ferramenta == "consultar_epidemiologia":
-        stats = (resultado.get("dados") or {}).get("stats") or {}
+        stats = limpar_vazios((resultado.get("dados") or {}).get("stats") or {})
         if not stats:
             return None
+        rotulo = _rotulo_periodo(resultado)
         return {
             "tipo": "resumo",
-            "titulo": f"{resultado.get('sistema')} {resultado.get('ano_ini')}–{resultado.get('ano_fim')}",
+            "titulo": f"{resultado.get('sistema')} — {rotulo}" if rotulo else str(resultado.get("sistema") or "Epidemiologia"),
             "campos": stats,
         }
 
@@ -754,9 +792,6 @@ class ClaraAgent:
             }
 
         artefato = _construir_artefato(ferramenta_executada, resultado_ferramenta) if ferramenta_executada else None
-        if artefato:
-            yield {"event": "artefato", "data": artefato}
-
         texto_fixo = _resposta_deterministica(ferramenta_executada, resultado_ferramenta) if ferramenta_executada else None
 
         resposta_final = []
@@ -767,11 +802,25 @@ class ClaraAgent:
             execucao_final["llm_resposta"] = True
             execucao_final["sem_llm"] = False
             yield {"event": "status", "data": {"mensagem": "Gerando resposta final"}}
-            for token in self._obter_llm().stream_resposta(pergunta, contexto, plano, resultado_ferramenta):
-                if not token:
-                    continue
-                resposta_final.append(token)
-                yield {"event": "token", "data": {"texto": token}}
+            try:
+                for token in self._obter_llm().stream_resposta(pergunta, contexto, plano, resultado_ferramenta):
+                    if not token:
+                        continue
+                    resposta_final.append(token)
+                    yield {"event": "token", "data": {"texto": token}}
+            except Exception as exc:  # provedor fora do ar, quota, timeout
+                log.warning("stream_resposta falhou (%s); usando narrativa de reserva", type(exc).__name__)
+
+            if not "".join(resposta_final).strip():
+                reserva = _narrativa_de_reserva(ferramenta_executada, resultado_ferramenta) if ferramenta_executada else None
+                if reserva:
+                    execucao_final["resposta_reserva"] = True
+                    resposta_final = [reserva]
+                    yield {"event": "token", "data": {"texto": reserva}}
+
+        # Card depois do texto: é evidência da fonte, não a resposta.
+        if artefato:
+            yield {"event": "artefato", "data": artefato}
 
         texto_final = "".join(resposta_final)
         execucao_final.setdefault("llm_planejamento", False)
