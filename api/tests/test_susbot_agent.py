@@ -561,3 +561,68 @@ def test_payload_chega_ao_llm_sem_campos_nulos_ou_vazios():
     assert "24131" in mensagem
     # zero e False são valores, não vazios
     assert limpar_vazios({"total": 0, "encontrado": False, "vazio": None}) == {"total": 0, "encontrado": False}
+
+
+def test_card_de_epidemiologia_mostra_essenciais_e_recolhe_o_resto():
+    from api.core.susbot_agent import _construir_artefato
+
+    resultado = {
+        "encontrado": True,
+        "sistema": "SINAN",
+        "dados": {"stats": {
+            "janela": "12 Meses",
+            "casos_atual": 1030,
+            "casos_anterior": 915,
+            "variacao_pct": 12.5,
+            "incidencia_atual": 355.79,
+            "populacao": 289500,
+            "periodo_inicio": "2025-01-01",
+            "periodo_fim": "2025-12-31",
+            "nome_municipio": "Cotia",
+            "observacao": None,
+            "possui_base_comparacao": True,
+        }},
+    }
+    card = _construir_artefato("consultar_epidemiologia", resultado)
+
+    # o número citado + a origem do dado, nessa ordem
+    assert list(card["campos"]) == [
+        "casos_atual", "incidencia_atual", "janela", "periodo_inicio", "periodo_fim",
+    ]
+    assert card["titulo"] == "SINAN — 01/01/2025 a 31/12/2025"
+    # nada some: o resto fica no bloco recolhido
+    assert card["detalhes"]["casos_anterior"] == 915
+    assert card["detalhes"]["populacao"] == 289500
+    assert card["detalhes"]["possui_base_comparacao"] is True
+    # campo nulo não aparece em lugar nenhum
+    assert "observacao" not in card["campos"] and "observacao" not in card["detalhes"]
+
+
+def test_card_de_estoque_separa_colunas_essenciais_das_de_detalhe(db):
+    from api.core.susbot_agent import _construir_artefato
+    from api.core.susbot_tools import criar_susbot_tools
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
+
+    seed_susbot_municipio("351300")
+    resultado = criar_susbot_tools("351300")["consultar_estoque"]()
+    card = _construir_artefato("consultar_estoque", resultado)
+
+    assert card["colunas"] == ["item", "cobertura_dias", "confiança"]
+    assert "quantidade_atual" in card["colunas_detalhe"]
+    assert "consumo_medio_dia" in card["colunas_detalhe"]
+    # a linha carrega tudo; quem decide o que mostrar é a coluna
+    assert card["linhas"][0]["quantidade_atual"] is not None
+
+
+def test_coluna_inteiramente_vazia_nao_vai_para_a_tela():
+    from api.core.susbot_agent import _construir_artefato
+
+    resultado = {
+        "encontrado": True,
+        "dados": [{"tipo": "ruptura", "severidade": "alta", "descricao": "Ruptura iminente",
+                   "status": "novo", "item_ou_condicao": None, "criado_em": None}],
+    }
+    card = _construir_artefato("consultar_alertas", resultado)
+
+    assert card["colunas"] == ["tipo", "severidade", "descricao"]
+    assert card["colunas_detalhe"] == ["status"]

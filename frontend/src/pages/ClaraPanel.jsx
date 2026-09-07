@@ -294,6 +294,78 @@ const ROTULO_META = {
 // A resposta do bot não é balão: é um bloco de texto com régua lateral — o
 // mesmo idioma do card de insight na Visão Geral. A pergunta do usuário é um
 // bloco alinhado à direita, sem rabinho.
+// Campo sem valor não vai à tela (nem nos detalhes): o card é evidência da
+// fonte, e célula vazia lida como zero é pior do que ausência.
+function temValor(valor) {
+  if (valor === null || valor === undefined) return false;
+  const texto = String(valor).trim();
+  return texto !== '' && texto !== 'null' && texto !== 'undefined';
+}
+
+const detalhesResumo = {
+  margin: 0, padding: '6px 10px', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase',
+  letterSpacing: '0.05em', color: 'var(--ink-400)', cursor: 'pointer',
+};
+
+// Bloco recolhido: <details> nativo, sem estado nem lib de acordeão.
+function Detalhes({ children }) {
+  return (
+    <details style={{ borderTop: '1px solid var(--ink-100)' }}>
+      <summary style={detalhesResumo}>Ver detalhes</summary>
+      <div style={{ padding: '0 10px 10px' }}>{children}</div>
+    </details>
+  );
+}
+
+function GradeCampos({ entradas }) {
+  return (
+    <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(entradas.length, 3)}, 1fr)`, gap: 8 }}>
+      {entradas.map(([chave, valor]) => (
+        <div key={chave} className="susbot-resumo-card">
+          <p style={{ margin: 0, fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
+            {chave.replace(/_/g, ' ')}
+          </p>
+          <p style={{ margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: 'var(--ink-900)' }}>
+            {String(valor)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TabelaCampos({ colunas, linhas }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr>
+            {colunas.map(col => (
+              <th key={col} style={{
+                textAlign: 'left', padding: '6px 10px', color: 'var(--ink-500)',
+                fontWeight: 700, borderBottom: '1px solid var(--ink-100)', whiteSpace: 'nowrap',
+              }}>
+                {col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map((linha, i) => (
+            <tr key={i}>
+              {colunas.map(col => (
+                <td key={col} style={{ padding: '6px 10px', borderTop: '1px solid var(--ink-50)', color: 'var(--ink-700)', whiteSpace: 'nowrap' }}>
+                  {temValor(linha[col]) ? String(linha[col]) : '—'}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ArtefatoView({ artefato }) {
   if (!artefato) return null;
 
@@ -307,33 +379,15 @@ function ArtefatoView({ artefato }) {
         }}>
           {artefato.titulo}
         </p>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr>
-                {artefato.colunas.map(col => (
-                  <th key={col} style={{
-                    textAlign: 'left', padding: '6px 10px', color: 'var(--ink-500)',
-                    fontWeight: 700, borderBottom: '1px solid var(--ink-100)', whiteSpace: 'nowrap',
-                  }}>
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {artefato.linhas.map((linha, i) => (
-                <tr key={i}>
-                  {artefato.colunas.map(col => (
-                    <td key={col} style={{ padding: '6px 10px', borderTop: '1px solid var(--ink-50)', color: 'var(--ink-700)', whiteSpace: 'nowrap' }}>
-                      {String(linha[col] ?? '—')}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <TabelaCampos colunas={artefato.colunas} linhas={artefato.linhas} />
+        {!!artefato.colunas_detalhe?.length && (
+          <Detalhes>
+            <TabelaCampos
+              colunas={[artefato.colunas[0], ...artefato.colunas_detalhe]}
+              linhas={artefato.linhas}
+            />
+          </Detalhes>
+        )}
         {artefato.evidencia && (
           <div style={{ padding: '9px 10px', borderTop: '1px solid var(--ink-100)', background: 'var(--subtle)' }}>
             <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--ink-500)' }}>
@@ -355,25 +409,20 @@ function ArtefatoView({ artefato }) {
   }
 
   if (artefato.tipo === 'resumo') {
-    const entradas = Object.entries(artefato.campos || {});
-    if (!entradas.length) return null;
+    const entradas = Object.entries(artefato.campos || {}).filter(([, v]) => temValor(v));
+    const detalhes = Object.entries(artefato.detalhes || {}).filter(([, v]) => temValor(v));
+    if (!entradas.length && !detalhes.length) return null;
     return (
       <div style={{ marginTop: 10 }}>
         <p style={{ margin: '0 0 6px', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
           {artefato.titulo}
         </p>
-        <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(entradas.length, 3)}, 1fr)`, gap: 8 }}>
-          {entradas.map(([chave, valor]) => (
-            <div key={chave} className="susbot-resumo-card">
-              <p style={{ margin: 0, fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
-                {chave.replace(/_/g, ' ')}
-              </p>
-              <p style={{ margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: 'var(--ink-900)' }}>
-                {String(valor)}
-              </p>
-            </div>
-          ))}
-        </div>
+        {!!entradas.length && <GradeCampos entradas={entradas} />}
+        {!!detalhes.length && (
+          <Detalhes>
+            <GradeCampos entradas={detalhes} />
+          </Detalhes>
+        )}
       </div>
     );
   }
@@ -387,6 +436,11 @@ function ArtefatoView({ artefato }) {
       }}>
         <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--good)' }}>{artefato.titulo}</p>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-700)', lineHeight: 1.5 }}>{artefato.justificativa}</p>
+        {!!Object.keys(artefato.detalhes || {}).length && (
+          <Detalhes>
+            <GradeCampos entradas={Object.entries(artefato.detalhes).filter(([, v]) => temValor(v))} />
+          </Detalhes>
+        )}
       </div>
     );
   }

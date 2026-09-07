@@ -175,6 +175,48 @@ def _narrativa_de_reserva(ferramenta: str, resultado: dict[str, Any] | None) -> 
     return None
 
 
+# Campos que entram no card por padrão: só o que sustenta o número citado na
+# resposta, mais o que identifica a origem do dado. Todo o resto vai para o bloco
+# "ver detalhes" — nada é descartado. Ordem da tupla = ordem no card.
+_ESSENCIAIS_EPI = (
+    # SINAN (municipal)
+    "casos_atual", "incidencia_atual", "taxa_hosp_atual", "taxa_obito_atual",
+    # SIH (consolidado estadual por estabelecimento)
+    "internacoes_atual", "internacoes", "permanencia_media_atual", "taxa_mortalidade", "obitos",
+)
+# Origem do dado: sempre no card, depois dos números.
+_ORIGEM_EPI = ("abrangencia", "janela", "periodo_inicio", "periodo_fim", "data_referencia")
+_ESSENCIAIS_ESTOQUE = ("item", "cobertura_dias", "confiança")
+_DETALHE_ESTOQUE = ("status", "quantidade_atual", "consumo_medio_dia", "competência", "defasagem_dias")
+_ESSENCIAIS_ALERTA = ("tipo", "severidade", "descricao")
+_DETALHE_ALERTA = ("status", "item_ou_condicao", "criado_em")
+
+
+def _particionar(campos: dict[str, Any], essenciais: tuple[str, ...],
+                 origem: tuple[str, ...] = ()) -> tuple[dict, dict]:
+    """Separa o dicionário em (card, detalhes), já sem valores vazios.
+
+    A ordem do card segue as tuplas; os detalhes preservam a ordem original do
+    payload. Chave essencial ausente simplesmente não aparece.
+    """
+
+    campos = limpar_vazios(campos)
+    ordenados = [chave for chave in (*essenciais, *origem) if chave in campos]
+    card = {chave: campos[chave] for chave in ordenados}
+    detalhes = {chave: valor for chave, valor in campos.items() if chave not in card}
+    return card, detalhes
+
+
+def _colunas_uteis(linhas: list[dict], candidatas: tuple[str, ...]) -> list[str]:
+    """Colunas que têm valor em pelo menos uma linha — coluna toda vazia não vai à tela."""
+
+    return [col for col in candidatas if any(not _vazio(linha.get(col)) for linha in linhas)]
+
+
+def _vazio(valor: Any) -> bool:
+    return valor is None or (isinstance(valor, (str, list, tuple, dict, set)) and not valor)
+
+
 def _data_br(valor: Any) -> str:
     texto = str(valor)
     try:
@@ -213,6 +255,11 @@ def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> di
                 "item": d.get("item"),
                 "cobertura_dias": d.get("dias_restantes") if d.get("dias_restantes") is not None else "indisponível",
                 "confiança": (d.get("qualidade") or {}).get("confianca"),
+                "status": d.get("status"),
+                "quantidade_atual": d.get("quantidade_atual"),
+                "consumo_medio_dia": d.get("consumo_medio_dia"),
+                "competência": (d.get("qualidade") or {}).get("competencia"),
+                "defasagem_dias": (d.get("qualidade") or {}).get("defasagem_dias"),
             }
             for d in resultado.get("dados", [])
         ]
@@ -222,7 +269,8 @@ def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> di
         return {
             "tipo": "tabela",
             "titulo": "Cobertura de estoque",
-            "colunas": ["item", "cobertura_dias", "confiança"],
+            "colunas": _colunas_uteis(linhas, _ESSENCIAIS_ESTOQUE),
+            "colunas_detalhe": _colunas_uteis(linhas, _DETALHE_ESTOQUE),
             "linhas": linhas,
             "evidencia": {
                 "fonte": "Estoque local informado pelo município",
@@ -236,8 +284,10 @@ def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> di
             {
                 "tipo": a.get("tipo"),
                 "severidade": a.get("severidade"),
-                "status": a.get("status"),
                 "descricao": a.get("descricao"),
+                "status": a.get("status"),
+                "item_ou_condicao": a.get("item_ou_condicao"),
+                "criado_em": a.get("criado_em"),
             }
             for a in resultado.get("dados", [])
         ]
@@ -246,28 +296,42 @@ def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> di
         return {
             "tipo": "tabela",
             "titulo": "Alertas",
-            "colunas": ["tipo", "severidade", "status", "descricao"],
+            "colunas": _colunas_uteis(linhas, _ESSENCIAIS_ALERTA),
+            "colunas_detalhe": _colunas_uteis(linhas, _DETALHE_ALERTA),
             "linhas": linhas,
         }
 
     if ferramenta == "consultar_epidemiologia":
-        stats = limpar_vazios((resultado.get("dados") or {}).get("stats") or {})
-        if not stats:
+        stats = (resultado.get("dados") or {}).get("stats") or {}
+        campos, detalhes = _particionar(stats, _ESSENCIAIS_EPI, _ORIGEM_EPI)
+        if not campos and not detalhes:
             return None
+        if not campos:  # nenhum KPI conhecido: mostra o que veio, sem esconder tudo
+            campos, detalhes = detalhes, {}
         rotulo = _rotulo_periodo(resultado)
         return {
             "tipo": "resumo",
             "titulo": f"{resultado.get('sistema')} — {rotulo}" if rotulo else str(resultado.get("sistema") or "Epidemiologia"),
-            "campos": stats,
+            "campos": campos,
+            "detalhes": detalhes,
         }
 
     if ferramenta == "gerar_etp":
+        qualidade = resultado.get("qualidade") or {}
         return {
             "tipo": "etp",
             "titulo": f"ETP — {resultado.get('item')}",
             "etp_id": resultado.get("etp_id"),
             "dias_restantes": resultado.get("dias_restantes"),
             "justificativa": resultado.get("justificativa"),
+            "detalhes": limpar_vazios({
+                "criado_em": resultado.get("criado_em"),
+                "alerta_id": resultado.get("alerta_id"),
+                "confiança": qualidade.get("confianca"),
+                "competência": qualidade.get("competencia"),
+                "fonte": qualidade.get("fonte"),
+                "limitações": qualidade.get("limitacoes"),
+            }),
         }
 
     return None
