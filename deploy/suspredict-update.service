@@ -1,0 +1,16 @@
+[Unit]
+Description=Update SusPredict from GitHub main
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=gabriel
+WorkingDirectory=/home/gabriel/suspredict
+ExecStart=/usr/local/bin/suspredict-update
+TimeoutStartSec=30min
+TimeoutStopSec=5min
+KillMode=mixed
+UMask=0077
+StandardOutput=journal
+StandardError=journal
