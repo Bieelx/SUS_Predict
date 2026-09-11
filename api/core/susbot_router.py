@@ -23,6 +23,7 @@ from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
     apagar_memorias,
     aprender_da_mensagem,
+    aprender_do_usuario_autenticado,
     contexto_para_agente,
     executar_comando_memoria,
     resumo_transparente,
@@ -145,6 +146,8 @@ def perguntar(
 
     comando_memoria = executar_comando_memoria(usuario, pergunta) if pergunta else None
     if pergunta and comando_memoria is None:
+        # Nome do perfil logado (só grava se ainda não houver nome na memória).
+        aprender_do_usuario_autenticado(usuario, user, origem="perfil_autenticado")
         aprender_da_mensagem(usuario, pergunta, origem=req.tela_origem or "web")
 
     historico = _historico_da_conversa(usuario, conversa["id"])

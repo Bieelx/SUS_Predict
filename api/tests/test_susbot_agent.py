@@ -698,3 +698,16 @@ def test_etp_sem_item_nao_pede_confirmacao_nem_interrompe_stream(db, monkeypatch
     assert not any(e["event"] in {"erro", "confirmacao_pendente"} for e in eventos)
     fim = next(e["data"] for e in eventos if e["event"] == "fim")
     assert "informe qual medicamento ou insumo" in fim["resposta"]
+
+
+def test_quem_sou_eu_sem_nome_mostra_perfil_e_como_ensinar(db):
+    from api.core.susbot_agent import criar_susbot_agente
+
+    llm = LLMMock()
+    agente = criar_susbot_agente("351300", usuario="user-abc", llm=llm, memoria_usuario={}, perfil="gestor")
+
+    eventos = list(agente.stream_eventos("mas o que você sabe sobre mim?"))
+    resposta = next(evento["data"]["resposta"] for evento in eventos if evento["event"] == "fim")
+
+    assert "**gestor**" in resposta and "meu nome é" in resposta
+    assert not llm.planejar_chamadas

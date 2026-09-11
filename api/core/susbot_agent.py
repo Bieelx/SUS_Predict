@@ -782,12 +782,16 @@ class ClaraAgent:
             if fatos.get("nome"):
                 partes.append(f"Seu nome é **{fatos['nome']}**")
             else:
-                partes.append("Você está autenticado no SusPredict")
+                partes.append("Você está autenticado no SusPredict, mas ainda não sei seu nome")
+            if self.perfil:
+                partes.append(f"seu perfil de acesso é **{self.perfil}**")
             if fatos.get("preferencia_resposta"):
                 partes.append(f"você prefere respostas **{fatos['preferencia_resposta']}**")
             resposta = "; ".join(partes) + "."
             if topicos:
                 resposta += " Seus assuntos mais frequentes são: " + ", ".join(topicos) + "."
+            if not fatos.get("nome"):
+                resposta += " Se quiser, diga “meu nome é …” que eu guardo."
             resposta += " Você pode pedir para eu esquecer uma informação a qualquer momento."
             return resposta
 

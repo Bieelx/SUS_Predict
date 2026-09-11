@@ -230,3 +230,13 @@ def test_endpoint_de_metricas_expoe_somente_contagens_anonimas(router):
     assert resposta["taxa_respostas_sem_llm"] == 1.0
     assert resposta["dados_pessoais_coletados"] is False
     assert "usuario" not in resposta
+
+
+def test_web_aprende_nome_do_perfil_autenticado(router):
+    router_module, _db = router
+    user = {"id": "user-abc", "email": "user@example.com", "user_metadata": {"nome": "Gabriel Araujo"}}
+    req = router_module.PerguntaClaraRequest(pergunta="quem sou eu?", ibge6="355030", tela_origem="alertas")
+
+    asyncio.run(_ler_streaming_response(router_module.perguntar(req, user=user)))
+
+    assert router_module.contexto_para_agente("user-abc")["fatos"]["nome"] == "Gabriel Araujo"
