@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import urllib.error
 import urllib.parse
@@ -27,6 +29,43 @@ def _ler_resposta_limitada(resposta: Any, limite: int) -> bytes:
     if len(conteudo) > limite:
         raise AudioInvalido("O áudio ultrapassa o limite de tamanho permitido.")
     return conteudo
+
+
+def baixar_audio_openwa(
+    base_url: str,
+    api_key: str,
+    sessao: str,
+    chat_id: str,
+    message_id: str,
+    base64_inline: str | None = None,
+) -> bytes:
+    """Usa o base64 do webhook quando veio; senão baixa a mídia guardada pelo OpenWA."""
+
+    limite = limite_audio_bytes()
+    if base64_inline:
+        try:
+            conteudo = base64.b64decode(str(base64_inline).split(",", 1)[-1], validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise MidiaCanalIndisponivel("O WhatsApp enviou um áudio corrompido.") from exc
+        if len(conteudo) > limite:
+            raise AudioInvalido("O áudio ultrapassa o limite de tamanho permitido.")
+        return conteudo
+
+    if not api_key or not sessao or not chat_id or not message_id:
+        raise MidiaCanalIndisponivel("WhatsApp não configurado para baixar o áudio.")
+    rota = "/".join(urllib.parse.quote(parte, safe="") for parte in (sessao, "messages", chat_id, message_id, "media"))
+    requisicao = urllib.request.Request(
+        f"{base_url}/api/sessions/{rota}",
+        headers={"X-API-Key": api_key, "Accept": "audio/*,application/octet-stream"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(requisicao, timeout=30) as resposta:
+            return _ler_resposta_limitada(resposta, limite)
+    except AudioInvalido:
+        raise
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise MidiaCanalIndisponivel("Não foi possível baixar o áudio do WhatsApp.") from exc
 
 
 def baixar_audio_telegram(token: str, file_id: str) -> bytes:

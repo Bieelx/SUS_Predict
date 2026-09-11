@@ -293,7 +293,7 @@ def listar_conversas(
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
     canal_normalizado = str(canal or "").strip().lower() or None
-    if canal_normalizado not in {None, "app", "telegram"}:
+    if canal_normalizado not in {None, "app", "telegram", "whatsapp"}:
         raise HTTPException(400, "canal invalido")
 
     page, page_size = _clamp_pagination(page, page_size)

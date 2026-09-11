@@ -164,7 +164,7 @@ def test_telegram_seleciona_web_resume_e_preserva_contexto(banco, monkeypatch):
     from api.core import channel_router as canal, conversation_hub as hub
     c = conversa(banco)
     banco.adicionar_mensagem(c["id"], "alertas", "Qual a prioridade?", "Revisar aquisição de soro.", None)
-    conexao = {"id": "link", "usuario": "gestor", "external_chat_id": "100", "ibge6": "355030", "conversa_atual_id": None}
+    conexao = {"id": "link", "usuario": "gestor", "provedor": "telegram", "external_chat_id": "100", "ibge6": "355030", "conversa_atual_id": None}
     enviados, selecionados = [], []
     monkeypatch.setattr(canal, "_telegram_send", lambda chat, texto, **kwargs: enviados.append((texto, kwargs)))
     monkeypatch.setattr(canal, "_responder_callback", lambda _: None)

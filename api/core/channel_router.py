@@ -1,4 +1,4 @@
-"""Pareamento seguro e adaptador inicial do Telegram para a Clara."""
+"""Pareamento seguro e adaptadores de Telegram e WhatsApp para a Clara."""
 
 from __future__ import annotations
 
@@ -11,11 +11,13 @@ import os
 import re
 import secrets
 import urllib.error
+import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from api.core import db, conversation_hub as hub
@@ -29,7 +31,7 @@ from api.core.audio_transcription import (
 from api.core.auth import require_user
 from api.core.identidade import usuario_referencia
 from api.core.permissoes import AcessoNegado, carregar_acesso, ferramentas_no_municipio
-from api.core.channel_media import MidiaCanalIndisponivel, baixar_audio_telegram
+from api.core.channel_media import MidiaCanalIndisponivel, baixar_audio_openwa, baixar_audio_telegram
 from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
     aprender_da_mensagem,
@@ -42,7 +44,8 @@ from api.core.susbot_memory import (
 log = logging.getLogger("sus_predict.channel_router")
 
 router = APIRouter(prefix="/api/susbot", tags=["susbot-canais"])
-PROVEDORES_SUPORTADOS = {"telegram"}
+PROVEDORES_SUPORTADOS = {"telegram", "whatsapp"}
+NOMES_CANAL = {"telegram": "Telegram", "whatsapp": "WhatsApp"}
 PAREAMENTO_TTL_MINUTOS = 10
 TELEGRAM_SESSAO_INATIVIDADE_MINUTOS_PADRAO = 30
 
@@ -54,7 +57,7 @@ class CriarPareamentoRequest(BaseModel):
 
 def _token_hash(token: str) -> str:
     segredo_texto = os.getenv("CHANNEL_PAIRING_SECRET", "").strip()
-    if not segredo_texto and _telegram_bot_token():
+    if not segredo_texto and (_telegram_bot_token() or _openwa_config()[1]):
         raise HTTPException(503, "CHANNEL_PAIRING_SECRET precisa ser configurado")
     segredo = (segredo_texto or "sus-predict-pairing-dev").encode("utf-8")
     return hmac.new(segredo, token.encode("utf-8"), hashlib.sha256).hexdigest()
@@ -320,22 +323,27 @@ def criar_pareamento(req: CriarPareamentoRequest, user: dict = Depends(require_u
     ibge6 = str(req.ibge6 or "").strip()[:6]
     if not usuario:
         raise HTTPException(401, "Usuario autenticado invalido")
-    if usuario.startswith("dev-"):
-        raise HTTPException(403, "Conecte uma conta regular do SusPredict antes de vincular o Telegram")
     if provedor not in PROVEDORES_SUPORTADOS:
         raise HTTPException(400, "Provedor ainda nao suportado")
+    if usuario.startswith("dev-"):
+        raise HTTPException(403, f"Conecte uma conta regular do SusPredict antes de vincular o {NOMES_CANAL[provedor]}")
     if len(ibge6) != 6 or not ibge6.isdigit():
         raise HTTPException(400, "ibge6 invalido")
 
     token = secrets.token_urlsafe(32)
     expira_em = (datetime.now(timezone.utc) + timedelta(minutes=PAREAMENTO_TTL_MINUTOS)).isoformat()
     pareamento = db.criar_pareamento_canal(usuario, provedor, _token_hash(token), ibge6, expira_em)
-    username = _telegram_bot_username()
+    if provedor == "whatsapp":
+        numero = _whatsapp_numero()
+        deep_link = f"https://wa.me/{numero}?text={urllib.parse.quote(f'conectar {token}')}" if numero else None
+    else:
+        username = _telegram_bot_username()
+        deep_link = f"https://t.me/{username}?start={token}" if username else None
     return {
         **_resumo_pareamento(pareamento),
         "codigo": token,
-        "deep_link": f"https://t.me/{username}?start={token}" if username else None,
-        "configurado": bool(username),
+        "deep_link": deep_link,
+        "configurado": bool(deep_link),
     }
 
 
@@ -358,7 +366,8 @@ def confirmar_pareamento(pareamento_id: str, user: dict = Depends(require_user))
     if not conexao:
         raise HTTPException(410, "Pareamento expirado ou indisponivel")
     aprender_do_usuario_autenticado(usuario, user, origem="perfil_autenticado")
-    _telegram_send(conexao["external_chat_id"], "Telegram conectado ao SusPredict. Suas novas conversas aparecerao tambem no historico web.")
+    nome = NOMES_CANAL.get(conexao["provedor"], conexao["provedor"])
+    _enviar(conexao["provedor"], conexao["external_chat_id"], f"{nome} conectado ao SusPredict. Suas novas conversas aparecerao tambem no historico web.")
     _quadro_conversas(conexao)
     return _resumo_conexao(conexao)
 
@@ -380,39 +389,41 @@ def revogar_canal(provedor: str, user: dict = Depends(require_user)):
     if not conexao:
         raise HTTPException(404, "Canal conectado nao encontrado")
     db.revogar_conexao_canal(usuario, provedor)
-    _telegram_send(conexao["external_chat_id"], "A conexao com o SusPredict foi removida. Para usar a Clara novamente, faca um novo pareamento no aplicativo.")
+    _enviar(provedor, conexao["external_chat_id"], "A conexao com o SusPredict foi removida. Para usar a Clara novamente, faca um novo pareamento no aplicativo.")
     return None
 
 
-def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
+def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
     usuario = conexao["usuario"]
     ibge6 = conexao["ibge6"]
+    canal = conexao["provedor"]
+    nome = NOMES_CANAL.get(canal, canal)
     # docs/09: acesso carregado a cada mensagem — desativar na tabela vale na proxima.
     try:
         acesso = carregar_acesso(usuario)
     except AcessoNegado as exc:
-        log.warning("Telegram recusado (usuario=%s): %s", usuario, exc)
+        log.warning("%s recusado (usuario=%s): %s", nome, usuario, exc)
         return str(exc), str(exc)
     conversa_id_atual = None if _telegram_sessao_expirada(conexao) else conexao.get("conversa_atual_id")
     conversa = db.get_conversa(conversa_id_atual) if conversa_id_atual else None
     if not conversa or conversa.get("usuario") != usuario:
-        titulo = " ".join(texto.split()).strip()[:60] or "Conversa pelo Telegram"
+        titulo = " ".join(texto.split()).strip()[:60] or f"Conversa pelo {nome}"
         conversa = db.criar_conversa(usuario, titulo)
         db.atualizar_conversa_canal(conexao["id"], conversa["id"])
 
     comando_memoria = executar_comando_memoria(usuario, texto)
     if comando_memoria is not None:
-        db.adicionar_mensagem(conversa["id"], "telegram", texto, comando_memoria, None)
+        db.adicionar_mensagem(conversa["id"], canal, texto, comando_memoria, None)
         db.atualizar_conversa_canal(conexao["id"], conversa["id"])
         return comando_memoria, comando_memoria
 
-    contexto = hub.fixar_contexto(conversa["id"], usuario, ibge6, {"tela": "telegram"})
+    contexto = hub.fixar_contexto(conversa["id"], usuario, ibge6, {"tela": canal})
     ibge6 = contexto["ibge6"]
-    aprender_da_mensagem(usuario, texto, origem="telegram")
+    aprender_da_mensagem(usuario, texto, origem=canal)
     historico = _historico_da_conversa(usuario, conversa["id"])
     agente = criar_susbot_agente(
         ibge6,
-        tela_origem="telegram",
+        tela_origem=canal,
         usuario=usuario,
         historico=historico,
         memoria_usuario=contexto_para_agente(usuario),
@@ -440,25 +451,33 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
     try:
         atualizar_resumo(usuario, texto, agente._obter_llm())
     except Exception as exc:  # pragma: no cover - LLM sem configuração
-        log.warning("Falha ao atualizar resumo da memória (telegram): %s", exc)
+        log.warning("Falha ao atualizar resumo da memória (%s): %s", canal, exc)
     resposta_base = resposta.strip() or proposta or "Nao consegui concluir esta consulta agora. Tente novamente em instantes."
     resposta = resposta_base
     if confirmacao_pendente:
-        resposta += "\n\nEsta acao precisa ser confirmada no SusPredict. Nenhuma alteracao foi executada pelo Telegram."
-    mensagem = db.adicionar_mensagem(conversa["id"], "telegram", texto, resposta, referencia)
+        resposta += f"\n\nEsta acao precisa ser confirmada no SusPredict. Nenhuma alteracao foi executada pelo {nome}."
+    mensagem = db.adicionar_mensagem(conversa["id"], canal, texto, resposta, referencia)
     if (dados_fim or {}).get("artefato"):
         hub.salvar_evidencia(conversa["id"], mensagem["id"], dados_fim["artefato"])
     db.atualizar_conversa_canal(conexao["id"], conversa["id"])
-    resposta_telegram = _formatar_resposta_telegram(resposta_base, dados_fim)
+    resposta_canal = _formatar_resposta_telegram(resposta_base, dados_fim)
     if confirmacao_pendente:
-        resposta_telegram += "\n\n⚠️ Esta ação precisa ser confirmada no SusPredict."
-    return resposta, resposta_telegram
+        resposta_canal += "\n\n⚠️ Esta ação precisa ser confirmada no SusPredict."
+    return resposta, resposta_canal
 
 
 def _quadro_conversas(conexao: dict) -> None:
     conversas = db.listar_conversas(conexao["usuario"], page_size=6)
-    botoes = [[{"text": f"{_data_curta(c.get('atualizada_em')) or ''} · {c['titulo'][:42] or 'Conversa sem título'}",
-                "callback_data": f"clara:abrir:{c['id']}"}] for c in conversas]
+    rotulos = [f"{_data_curta(c.get('atualizada_em')) or ''} · {c['titulo'][:42] or 'Conversa sem título'}" for c in conversas]
+    if conexao["provedor"] == "whatsapp":
+        # ponytail: lista numerada em texto; botões interativos não são confiáveis no Baileys.
+        linhas = [f"{indice}. {rotulo}" for indice, rotulo in enumerate(rotulos, start=1)]
+        linhas.append("0. Nova conversa")
+        _enviar("whatsapp", conexao["external_chat_id"],
+                "**Suas conversas recentes**\n" + "\n".join(linhas)
+                + "\n\nResponda só com o número para continuar um assunto. Depois da seleção, envie sua pergunta.")
+        return
+    botoes = [[{"text": rotulo, "callback_data": f"clara:abrir:{c['id']}"}] for c, rotulo in zip(conversas, rotulos)]
     botoes.append([{"text": "Nova conversa", "callback_data": "clara:nova"}])
     _telegram_send(conexao["external_chat_id"],
                    "**Suas conversas recentes**\nEscolha um assunto para ver o resumo e continuar, ou comece uma nova conversa. Depois da seleção, envie sua pergunta.",
@@ -480,6 +499,27 @@ def _responder_callback(callback_id: str) -> None:
         log.warning("Não foi possível encerrar o indicador do botão Telegram")
 
 
+def _selecionar_conversa(conexao: dict, conversa_id: str | None) -> None:
+    """Troca a conversa ativa do canal; `None` inicia uma nova."""
+
+    chat_id = conexao["external_chat_id"]
+    provedor = conexao["provedor"]
+    try:
+        carregar_acesso(conexao["usuario"])
+        if conversa_id is None:
+            db.atualizar_conversa_canal(conexao["id"], None)
+            _enviar(provedor, chat_id, "Nova conversa pronta. Qual assunto você quer começar?")
+            return
+        conversa = hub.verificar_dono(conversa_id, conexao["usuario"])
+        if not hub.obter_contexto(conversa_id):
+            _enviar(provedor, chat_id, "Esta conversa antiga ainda não tem município e período registrados. Abra-a no SusPredict para definir o contexto antes de continuar aqui.")
+            return
+        db.atualizar_conversa_canal(conexao["id"], conversa_id)
+        _enviar(provedor, chat_id, hub.resumo_conversa(conversa))
+    except (HTTPException, AcessoNegado):
+        _enviar(provedor, chat_id, "Esta conversa não está disponível para seu acesso. Use /conversas para atualizar a lista.")
+
+
 def _processar_callback(callback: dict) -> None:
     _responder_callback(str(callback.get("id") or ""))
     remetente = str((callback.get("from") or {}).get("id") or "")
@@ -487,24 +527,92 @@ def _processar_callback(callback: dict) -> None:
     conexao = db.get_conexao_canal_por_externo("telegram", remetente)
     if not conexao or chat.get("type") != "private" or str(chat.get("id")) != conexao["external_chat_id"]:
         return
+    comando = str(callback.get("data") or "")
+    if comando == "clara:nova":
+        _selecionar_conversa(conexao, None)
+    elif comando.startswith("clara:abrir:"):
+        _selecionar_conversa(conexao, comando.removeprefix("clara:abrir:"))
+
+
+def _processar_mensagem_canal(
+    provedor: str,
+    chat_id: str,
+    external_user_id: str,
+    username: str | None,
+    texto: str,
+    token_pareamento: str | None,
+    transcrever: Callable[[], ResultadoTranscricao] | None,
+) -> None:
+    """Fluxo comum a Telegram e WhatsApp depois que o adaptador normalizou a mensagem.
+
+    `token_pareamento` é o código quando a mensagem é um pedido de pareamento
+    (string vazia = comando sem código). `transcrever` só existe para áudio.
+    """
+
+    nome = NOMES_CANAL[provedor]
+
+    def enviar(mensagem: str) -> None:
+        _enviar(provedor, chat_id, mensagem)
+
+    if token_pareamento is not None:
+        if not token_pareamento:
+            enviar("Abra SusPredict, entre em Clara > Canais e gere um novo link de conexao.")
+            return
+        pareamento = db.reivindicar_pareamento_canal(
+            _token_hash(token_pareamento), provedor, external_user_id, chat_id, username,
+        )
+        if not pareamento:
+            enviar("Este link e invalido, expirou ou ja foi usado. Gere um novo no SusPredict.")
+            return
+        enviar(f"Conta localizada. Volte ao SusPredict para confirmar a conexao com este {nome}.")
+        return
+
+    conexao = db.get_conexao_canal_por_externo(provedor, external_user_id)
+    if not conexao:
+        enviar(f"Este {nome} ainda nao esta conectado. Gere um link em Clara > Canais no SusPredict.")
+        return
     try:
         carregar_acesso(conexao["usuario"])
-        comando = str(callback.get("data") or "")
-        if comando == "clara:nova":
-            db.atualizar_conversa_canal(conexao["id"], None)
-            _telegram_send(conexao["external_chat_id"], "Nova conversa pronta. Qual assunto você quer começar?")
+    except AcessoNegado:
+        enviar("Seu acesso está desativado. Fale com o administrador.")
+        return
+    comando = texto.lower()
+    if provedor == "whatsapp" and re.fullmatch(r"[0-6]", comando):
+        indice = int(comando)
+        if indice == 0:
+            _selecionar_conversa(conexao, None)
             return
-        if not comando.startswith("clara:abrir:"):
+        conversas = db.listar_conversas(conexao["usuario"], page_size=6)
+        if indice <= len(conversas):
+            _selecionar_conversa(conexao, conversas[indice - 1]["id"])
             return
-        conversa_id = comando.removeprefix("clara:abrir:")
-        conversa = hub.verificar_dono(conversa_id, conexao["usuario"])
-        if not hub.obter_contexto(conversa_id):
-            _telegram_send(conexao["external_chat_id"], "Esta conversa antiga ainda não tem município e período registrados. Abra-a no SusPredict para definir o contexto antes de continuar aqui.")
+    if comando in {"/start", "/conversas", "/continuar", "/menu"} or (_telegram_sessao_expirada(conexao) and not comando.startswith("/nova")):
+        _quadro_conversas(conexao)
+        return
+    if comando in {"/nova", "/new", "/clear"}:
+        db.atualizar_conversa_canal(conexao["id"], None)
+        enviar("Nova conversa pronta. Qual decisao voce precisa tomar agora?")
+        return
+    if transcrever is not None:
+        enviar("🎙️ Recebi seu áudio. Estou transcrevendo com processamento local…")
+        try:
+            texto = transcrever().texto
+        except AudioInvalido as exc:
+            enviar(f"Não consegui usar este áudio: {exc}")
             return
-        db.atualizar_conversa_canal(conexao["id"], conversa_id)
-        _telegram_send(conexao["external_chat_id"], hub.resumo_conversa(conversa))
-    except (HTTPException, AcessoNegado):
-        _telegram_send(conexao["external_chat_id"], "Esta conversa não está disponível para seu acesso. Use /conversas para atualizar a lista.")
+        except (MidiaCanalIndisponivel, TranscricaoIndisponivel) as exc:
+            log.warning("Falha ao preparar áudio do %s para transcrição: %s", nome, exc)
+            enviar("Não consegui transcrever este áudio agora. Você pode tentar novamente ou enviar a pergunta em texto.")
+            return
+
+        resumo = texto if len(texto) <= 600 else f"{texto[:597].rstrip()}…"
+        enviar(f"🎙️ Entendi seu áudio como:\n\n“{resumo}”\n\nVou analisar a pergunta.")
+    try:
+        _resposta_historico, resposta_canal = _processar_pergunta_canal(conexao, texto)
+    except Exception as exc:  # pragma: no cover - defesa para webhook externo
+        log.exception("Falha ao processar mensagem do %s: %s", nome, exc)
+        resposta_canal = "Nao consegui consultar a Clara agora. Tente novamente em instantes."
+    enviar(resposta_canal)
 
 
 def processar_update_telegram(update: dict) -> None:
@@ -527,64 +635,14 @@ def processar_update_telegram(update: dict) -> None:
         _telegram_send(chat_id, "Por seguranca, conecte e use a Clara apenas em uma conversa privada.")
         return
 
+    token = None
     if texto.startswith("/start "):
         partes = texto.split(maxsplit=1)
-        if len(partes) != 2:
-            _telegram_send(chat_id, "Abra SusPredict, entre em Clara > Canais e gere um novo link de conexao.")
-            return
-        pareamento = db.reivindicar_pareamento_canal(
-            _token_hash(partes[1].strip()),
-            "telegram",
-            external_user_id,
-            chat_id,
-            remetente.get("username"),
-        )
-        if not pareamento:
-            _telegram_send(chat_id, "Este link e invalido, expirou ou ja foi usado. Gere um novo no SusPredict.")
-            return
-        _telegram_send(chat_id, "Conta localizada. Volte ao SusPredict para confirmar a conexao com este Telegram.")
-        return
-
-    conexao = db.get_conexao_canal_por_externo("telegram", external_user_id)
-    if not conexao:
-        _telegram_send(chat_id, "Este Telegram ainda nao esta conectado. Gere um link em Clara > Canais no SusPredict.")
-        return
-    try:
-        carregar_acesso(conexao["usuario"])
-    except AcessoNegado:
-        _telegram_send(chat_id, "Seu acesso está desativado. Fale com o administrador.")
-        return
-    if texto.lower() in {"/start", "/conversas", "/continuar", "/menu"} or (_telegram_sessao_expirada(conexao) and not texto.startswith("/nova")):
-        _quadro_conversas(conexao)
-        return
-    if texto.lower() in {"/nova", "/new", "/clear"}:
-        db.atualizar_conversa_canal(conexao["id"], None)
-        _telegram_send(chat_id, "Nova conversa pronta. Qual decisao voce precisa tomar agora?")
-        return
-    if tem_audio:
-        _telegram_send(chat_id, "🎙️ Recebi seu áudio. Estou transcrevendo com processamento local…")
-        try:
-            transcricao = _transcrever_audio_telegram(mensagem)
-            texto = transcricao.texto
-        except AudioInvalido as exc:
-            _telegram_send(chat_id, f"Não consegui usar este áudio: {exc}")
-            return
-        except (MidiaCanalIndisponivel, TranscricaoIndisponivel) as exc:
-            log.warning("Falha ao preparar áudio do Telegram para transcrição: %s", exc)
-            _telegram_send(
-                chat_id,
-                "Não consegui transcrever este áudio agora. Você pode tentar novamente ou enviar a pergunta em texto.",
-            )
-            return
-
-        resumo = texto if len(texto) <= 600 else f"{texto[:597].rstrip()}…"
-        _telegram_send(chat_id, f"🎙️ Entendi seu áudio como:\n\n“{resumo}”\n\nVou analisar a pergunta.")
-    try:
-        _resposta_historico, resposta_telegram = _processar_pergunta_telegram(conexao, texto)
-    except Exception as exc:  # pragma: no cover - defesa para webhook externo
-        log.exception("Falha ao processar mensagem do Telegram: %s", exc)
-        resposta_telegram = "Nao consegui consultar a Clara agora. Tente novamente em instantes."
-    _telegram_send(chat_id, resposta_telegram)
+        token = partes[1].strip() if len(partes) == 2 else ""
+    _processar_mensagem_canal(
+        "telegram", chat_id, external_user_id, remetente.get("username"), texto, token,
+        (lambda: _transcrever_audio_telegram(mensagem)) if tem_audio else None,
+    )
 
 
 @router.post("/telegram/webhook")
@@ -599,4 +657,113 @@ def telegram_webhook(
     if not hmac.compare_digest(x_telegram_bot_api_secret_token or "", segredo):
         raise HTTPException(403, "Webhook do Telegram nao autorizado")
     background_tasks.add_task(processar_update_telegram, update)
+    return {"ok": True}
+
+
+# ─── WhatsApp (gateway OpenWA, ver deploy/openwa.sh) ──────────────────────────
+
+
+def _whatsapp_numero() -> str:
+    return re.sub(r"\D", "", os.getenv("WHATSAPP_BOT_NUMBER", ""))
+
+
+def _openwa_config() -> tuple[str, str, str]:
+    return (
+        os.getenv("OPENWA_BASE_URL", "http://127.0.0.1:2785").strip().rstrip("/"),
+        os.getenv("OPENWA_API_KEY", "").strip(),
+        os.getenv("OPENWA_SESSION_ID", "").strip(),
+    )
+
+
+def _markdown_para_whatsapp(texto: str) -> str:
+    """WhatsApp usa *negrito* e não tem títulos; o `código` inline já é nativo."""
+
+    texto = re.sub(r"(?m)^#{1,6}\s+(.+)$", r"*\1*", str(texto or ""))
+    return re.sub(r"\*\*(.+?)\*\*", r"*\1*", texto, flags=re.DOTALL)
+
+
+def _whatsapp_send(chat_id: str, texto: str) -> bool:
+    base_url, api_key, sessao = _openwa_config()
+    if not api_key or not sessao:
+        log.info("OPENWA_API_KEY/OPENWA_SESSION_ID ausentes; mensagem para %s nao enviada", chat_id)
+        return False
+    for parte in _dividir_texto_telegram(texto):
+        request = urllib.request.Request(
+            f"{base_url}/api/sessions/{urllib.parse.quote(sessao, safe='')}/messages/send-text",
+            data=json.dumps({"chatId": chat_id, "text": _markdown_para_whatsapp(parte)}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-API-Key": api_key},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=15):
+                pass
+        except (urllib.error.URLError, TimeoutError) as exc:
+            log.warning("Falha ao enviar mensagem ao WhatsApp: %s", exc)
+            return False
+    return True
+
+
+def _enviar(provedor: str, chat_id: str, texto: str) -> bool:
+    if provedor == "whatsapp":
+        return _whatsapp_send(chat_id, texto)
+    return _telegram_send(chat_id, texto)
+
+
+def _transcrever_audio_whatsapp(mensagem: dict[str, Any]) -> ResultadoTranscricao:
+    midia = mensagem.get("media") if isinstance(mensagem.get("media"), dict) else {}
+    mime_type = str(midia.get("mimetype") or "audio/ogg").strip()
+    validar_metadados_audio(tamanho_bytes=midia.get("sizeBytes"), duracao_segundos=None, mime_type=mime_type)
+    base_url, api_key, sessao = _openwa_config()
+    conteudo = baixar_audio_openwa(
+        base_url, api_key, sessao,
+        str(mensagem.get("chatId") or mensagem.get("from") or ""),
+        str(mensagem.get("id") or ""),
+        midia.get("data"),
+    )
+    return transcrever_audio(conteudo, mime_type=mime_type, duracao_segundos=None)
+
+
+def processar_evento_whatsapp(evento: dict) -> None:
+    if evento.get("event") != "message.received":
+        return
+    mensagem = evento.get("data") if isinstance(evento.get("data"), dict) else {}
+    chave = str(evento.get("idempotencyKey") or mensagem.get("id") or "").strip()
+    if chave and not db.registrar_evento_canal("whatsapp", chave):
+        return
+    chat_id = str(mensagem.get("from") or "").strip()
+    # ponytail: grupos, status e mensagens do próprio número são ignorados em silêncio —
+    # responder num grupo exporia a Clara a quem não pareou.
+    if mensagem.get("fromMe") or mensagem.get("isGroup") or mensagem.get("kind", "individual") != "individual" or not chat_id:
+        return
+    texto = str(mensagem.get("body") or "").strip()
+    tem_audio = mensagem.get("type") in {"voice", "audio"}
+    if not texto and not tem_audio:
+        return
+
+    contato = mensagem.get("contact") if isinstance(mensagem.get("contact"), dict) else {}
+    username = (contato.get("pushname") or contato.get("name") or mensagem.get("senderPhone")
+                or chat_id.split("@", 1)[0])
+    pedido = re.fullmatch(r"conectar(?:\s+(\S+))?", texto, flags=re.IGNORECASE)
+    _processar_mensagem_canal(
+        "whatsapp", chat_id, chat_id, str(username)[:80], texto,
+        (pedido.group(1) or "") if pedido else None,
+        (lambda: _transcrever_audio_whatsapp(mensagem)) if tem_audio else None,
+    )
+
+
+@router.post("/whatsapp/webhook")
+async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
+    segredo = os.getenv("OPENWA_WEBHOOK_SECRET", "").strip()
+    if not segredo:
+        raise HTTPException(503, "OPENWA_WEBHOOK_SECRET precisa ser configurado")
+    corpo = await request.body()
+    esperado = "sha256=" + hmac.new(segredo.encode("utf-8"), corpo, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(request.headers.get("x-openwa-signature", ""), esperado):
+        raise HTTPException(403, "Webhook do WhatsApp nao autorizado")
+    try:
+        evento = json.loads(corpo)
+    except ValueError as exc:
+        raise HTTPException(400, "Payload invalido") from exc
+    if isinstance(evento, dict):
+        background_tasks.add_task(processar_evento_whatsapp, evento)
     return {"ok": True}

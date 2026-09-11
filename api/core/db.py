@@ -740,7 +740,7 @@ def deletar_conversa(conversa_id: str, usuario: str) -> bool:
 
 def _normalizar_canal_conversa(canal: str | None) -> str | None:
     valor = str(canal or "").strip().lower()
-    return valor if valor in {"app", "telegram"} else None
+    return valor if valor in {"app", "telegram", "whatsapp"} else None
 
 
 def listar_conversas(
@@ -768,7 +768,7 @@ def listar_conversas(
                     c.criada_em,
                     COALESCE((
                         SELECT CASE
-                            WHEN m.tela_origem = 'telegram' THEN 'telegram'
+                            WHEN m.tela_origem IN ('telegram', 'whatsapp') THEN m.tela_origem
                             ELSE 'app'
                         END
                         FROM susbot_mensagens m
@@ -810,7 +810,7 @@ def contar_conversas(usuario: str, canal: str | None = None) -> int:
                     c.id,
                     COALESCE((
                         SELECT CASE
-                            WHEN m.tela_origem = 'telegram' THEN 'telegram'
+                            WHEN m.tela_origem IN ('telegram', 'whatsapp') THEN m.tela_origem
                             ELSE 'app'
                         END
                         FROM susbot_mensagens m

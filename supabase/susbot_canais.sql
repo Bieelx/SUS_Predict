@@ -123,7 +123,7 @@ create or replace view public.susbot_conversas_resumo with (security_invoker = t
 select
   c.id, c.usuario, c.titulo, c.criada_em,
   coalesce((
-    select case when m.tela_origem = 'telegram' then 'telegram' else 'app' end
+    select case when m.tela_origem in ('telegram', 'whatsapp') then m.tela_origem else 'app' end
     from public.susbot_mensagens m
     where m.conversa_id = c.id
     order by m.criado_em, m.id

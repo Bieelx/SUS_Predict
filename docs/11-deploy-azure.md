@@ -418,3 +418,29 @@ Referências: [fast-forward no Git](https://git-scm.com/docs/git-pull) e
   Agora pede o medicamento/insumo antes de confirmar; a ferramenta também valida o item
   para confirmações antigas. Não cria ETP com item ausente, vazio ou de tipo inválido.
 - 60 testes locais do agente, ferramentas e adaptador aprovados.
+
+
+## 14. WhatsApp via OpenWA (plano B da Meta Cloud API)
+
+A Meta recusou envio para o Brasil na conta de teste (`Business account is restricted from
+messaging users in this country`). O canal usa o gateway **não oficial** OpenWA (Baileys),
+pareado por QR. Risco de banimento: usar **chip dedicado**, nunca número pessoal.
+
+Mesma lógica do Telegram (`api/core/channel_router.py`): pareamento por link
+`wa.me/<número>?text=conectar <token>` + confirmação no painel, só número pareado conversa,
+histórico, sessão de 30 min, memória e áudio. Diferenças: lista de conversas numerada
+(responder `1`–`6`, `0` = nova) em vez de botões; grupos e status são ignorados.
+
+```bash
+bash deploy/openwa.sh up        # container na 2785 (só loopback)
+bash deploy/openwa.sh chave     # → OPENWA_API_KEY no .env
+bash deploy/openwa.sh sessao    # → OPENWA_SESSION_ID no .env
+bash deploy/openwa.sh qr        # escanear no chip em Aparelhos conectados
+# .env: WHATSAPP_BOT_NUMBER=55DDNUMERO e OPENWA_WEBHOOK_SECRET (>= 16 caracteres)
+sudo systemctl restart suspredict
+bash deploy/openwa.sh webhook   # registra http://127.0.0.1:8000/api/susbot/whatsapp/webhook
+```
+
+O webhook fica em loopback (não passa pelo Caddy) e é validado por HMAC
+(`X-OpenWA-Signature`). No Supabase, reaplicar a view `susbot_conversas_resumo` de
+`supabase/susbot_canais.sql` para o filtro de histórico reconhecer `whatsapp`.

@@ -72,7 +72,7 @@
   font-family: 'Material Symbols Rounded';
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  font-display: block;
   src: url(/fonts/font-10.ttf) format('truetype');
 }
 
@@ -88,4 +88,12 @@
   white-space: nowrap;
   word-wrap: normal;
   direction: ltr;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.material-symbols-ready .material-symbols-rounded {
+  visibility: visible;
 }

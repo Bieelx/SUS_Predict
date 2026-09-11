@@ -40,6 +40,9 @@ def canais(monkeypatch):
     importlib.reload(router_module)
     mensagens_enviadas = []
     monkeypatch.setattr(router_module, "_telegram_send", lambda chat_id, texto, **kwargs: mensagens_enviadas.append((chat_id, texto)) or True)
+    monkeypatch.setattr(router_module, "_whatsapp_send", lambda chat_id, texto: mensagens_enviadas.append((chat_id, texto)) or True)
+    monkeypatch.setenv("WHATSAPP_BOT_NUMBER", "+55 11 91234-5678")
+    monkeypatch.setenv("OPENWA_WEBHOOK_SECRET", "segredo-openwa-de-teste")
     monkeypatch.setattr(router_module, "criar_susbot_agente", lambda *args, **kwargs: FakeAgent())
 
     yield router_module, db_module, mensagens_enviadas
@@ -414,3 +417,93 @@ def test_divisao_de_mensagem_longa_preserva_blocos(canais):
     assert len(partes) > 1
     assert all(len(parte) <= 3500 for parte in partes)
     assert "".join(partes).replace("\n", "") == texto.replace("\n", "")
+
+
+# ─── WhatsApp (OpenWA) ────────────────────────────────────────────────────────
+
+WA_CHAT = "5511998877665@c.us"
+
+
+def _wa_evento(msg_id, texto, chat=WA_CHAT, **extra):
+    return {
+        "event": "message.received",
+        "idempotencyKey": f"msg_clara_{msg_id}",
+        "data": {"id": msg_id, "from": chat, "body": texto, "type": "text", "fromMe": False,
+                 "isGroup": False, "kind": "individual", "contact": {"pushname": "Marcia"}, **extra},
+    }
+
+
+def _parear_whatsapp(canais):
+    router_module, _db, _mensagens = canais
+    criado = router_module.criar_pareamento(
+        router_module.CriarPareamentoRequest(provedor="whatsapp", ibge6="351300"), user=_user(),
+    )
+    router_module.processar_evento_whatsapp(_wa_evento("m-par", f"conectar {criado['codigo']}"))
+    return criado, router_module.confirmar_pareamento(criado["id"], user=_user())
+
+
+def test_whatsapp_pareia_por_link_wa_me_e_conversa_no_mesmo_historico(canais):
+    router_module, db_module, mensagens = canais
+    criado, conexao = _parear_whatsapp(canais)
+
+    assert criado["deep_link"].startswith("https://wa.me/5511912345678?text=conectar%20")
+    assert conexao["provedor"] == "whatsapp"
+    assert conexao["external_username"] == "Marcia"
+    assert any(texto.startswith("WhatsApp conectado") for _, texto in mensagens)
+    assert "0. Nova conversa" in mensagens[-1][1]
+
+    router_module.processar_evento_whatsapp(_wa_evento("m-1", "Qual e o alerta mais urgente?"))
+    conversa = db_module.listar_conversas("user-abc", canal="whatsapp")[0]
+    assert db_module.listar_mensagens(conversa["id"])[0]["tela_origem"] == "whatsapp"
+    assert mensagens[-1] == (WA_CHAT, "Leitura municipal: Qual e o alerta mais urgente?")
+
+    router_module.processar_evento_whatsapp(_wa_evento("m-2", "0"))
+    assert "Nova conversa pronta" in mensagens[-1][1]
+    assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] is None
+
+
+def test_whatsapp_ignora_nao_pareado_grupo_proprio_e_duplicado(canais):
+    router_module, db_module, mensagens = canais
+    router_module.processar_evento_whatsapp(_wa_evento("x-1", "oi"))
+    assert "ainda nao esta conectado" in mensagens[-1][1]
+
+    _parear_whatsapp(canais)
+    total = len(mensagens)
+    router_module.processar_evento_whatsapp(_wa_evento("x-2", "oi", chat="1203@g.us", isGroup=True, kind="group"))
+    router_module.processar_evento_whatsapp(_wa_evento("x-3", "oi", fromMe=True))
+    router_module.processar_evento_whatsapp({"event": "session.status", "data": {}})
+    assert len(mensagens) == total
+
+    router_module.processar_evento_whatsapp(_wa_evento("x-4", "Pergunta"))
+    router_module.processar_evento_whatsapp(_wa_evento("x-4", "Pergunta"))
+    assert db_module.contar_mensagens(db_module.listar_conversas("user-abc")[0]["id"]) == 1
+
+
+def test_whatsapp_webhook_valida_assinatura_hmac(canais):
+    import asyncio
+    import hashlib
+    import hmac as hmac_lib
+
+    router_module, _db, _mensagens = canais
+    corpo = json.dumps(_wa_evento("w-1", "oi")).encode()
+
+    class RequestFake:
+        def __init__(self, assinatura):
+            self.headers = {"x-openwa-signature": assinatura}
+
+        async def body(self):
+            return corpo
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(router_module.whatsapp_webhook(RequestFake("sha256=errado"), BackgroundTasks()))
+    assert exc.value.status_code == 403
+
+    assinatura = "sha256=" + hmac_lib.new(b"segredo-openwa-de-teste", corpo, hashlib.sha256).hexdigest()
+    tarefas = BackgroundTasks()
+    assert asyncio.run(router_module.whatsapp_webhook(RequestFake(assinatura), tarefas)) == {"ok": True}
+    assert len(tarefas.tasks) == 1
+
+
+def test_markdown_para_whatsapp_usa_negrito_simples(canais):
+    router_module, _db, _mensagens = canais
+    assert router_module._markdown_para_whatsapp("## Estoque\n**Dipirona** `ok`") == "*Estoque*\n*Dipirona* `ok`"

@@ -138,7 +138,7 @@ function conversaParaThread(conversa, mensagens = []) {
     titulo: conversa.titulo || '',
     criadaEm: parseIsoDate(conversa.criada_em),
     atualizadaEm: parseIsoDate(conversa.atualizada_em || conversa.criada_em),
-    canal: conversa.canal === 'telegram' ? 'telegram' : 'app',
+    canal: ['telegram', 'whatsapp'].includes(conversa.canal) ? conversa.canal : 'app',
     totalMensagens: Number(conversa.total_mensagens || 0),
     mensagens,
   };
@@ -650,28 +650,25 @@ function IconeWhatsApp({ size = 19 }) {
   );
 }
 
-function ContinuidadeCanais({ ibge6 }) {
-  const [conexoes, setConexoes] = useState([]);
+const CANAIS_EXTERNOS = [
+  {
+    provedor: 'telegram', nome: 'Telegram', Icone: IconeTelegram, envConfig: 'TELEGRAM_BOT_USERNAME',
+    descricao: 'Converse com a Clara pelo celular.',
+    identificacao: conexao => (conexao?.external_username ? `@${conexao.external_username}` : ''),
+  },
+  {
+    provedor: 'whatsapp', nome: 'WhatsApp', Icone: IconeWhatsApp, envConfig: 'WHATSAPP_BOT_NUMBER',
+    descricao: 'Mesmo pareamento seguro, mesmo histórico.',
+    identificacao: conexao => conexao?.external_username || '',
+  },
+];
+
+function CartaoCanalExterno({ canal, ibge6, conexao, carregando, onConectado, onDesconectado }) {
+  const { provedor, nome, Icone, envConfig, descricao, identificacao } = canal;
   const [pareamento, setPareamento] = useState(null);
-  const [carregando, setCarregando] = useState(true);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState('');
   const [copiado, setCopiado] = useState(false);
-  const telegram = conexoes.find(item => item.provedor === 'telegram');
-
-  async function carregarCanais() {
-    setErro('');
-    try {
-      const data = await listarCanaisSusbot({ baseUrl: API_BASE, headers: getAuthHeaders() });
-      setConexoes(Array.isArray(data?.itens) ? data.itens : []);
-    } catch (error) {
-      setErro(error?.message || 'Não foi possível consultar os canais conectados.');
-    } finally {
-      setCarregando(false);
-    }
-  }
-
-  useEffect(() => { void carregarCanais(); }, []);
 
   useEffect(() => {
     if (!pareamento?.id || !['emitido', 'reivindicado'].includes(pareamento.status)) return undefined;
@@ -690,79 +687,178 @@ function ContinuidadeCanais({ ibge6 }) {
     return () => window.clearInterval(timer);
   }, [pareamento?.id, pareamento?.status]);
 
-  async function iniciarPareamento() {
+  async function executar(acao, mensagemErro) {
     setProcessando(true);
     setErro('');
     try {
-      const novo = await criarPareamentoCanalSusbot({
-        provedor: 'telegram', ibge6, baseUrl: API_BASE, headers: getAuthHeaders(),
-      });
-      setPareamento(novo);
+      await acao();
     } catch (error) {
-      setErro(error?.detail || error?.message || 'Não foi possível iniciar a conexão.');
+      setErro(error?.detail || error?.message || mensagemErro);
     } finally {
       setProcessando(false);
     }
   }
 
-  async function confirmarPareamento() {
-    setProcessando(true);
-    setErro('');
-    try {
-      const conexao = await confirmarPareamentoCanalSusbot({
-        pareamentoId: pareamento.id, baseUrl: API_BASE, headers: getAuthHeaders(),
-      });
-      setConexoes(items => [...items.filter(item => item.provedor !== 'telegram'), conexao]);
-      setPareamento(null);
-    } catch (error) {
-      setErro(error?.message || 'Não foi possível confirmar a conexão.');
-    } finally {
-      setProcessando(false);
-    }
-  }
+  const iniciarPareamento = () => executar(async () => {
+    setPareamento(await criarPareamentoCanalSusbot({ provedor, ibge6, baseUrl: API_BASE, headers: getAuthHeaders() }));
+  }, 'Não foi possível iniciar a conexão.');
 
-  async function cancelarPareamento() {
-    setProcessando(true);
-    try {
-      await cancelarPareamentoCanalSusbot({
-        pareamentoId: pareamento.id, baseUrl: API_BASE, headers: getAuthHeaders(),
-      });
-      setPareamento(null);
-    } catch (error) {
-      setErro(error?.message || 'Não foi possível cancelar o pareamento.');
-    } finally {
-      setProcessando(false);
-    }
-  }
+  const confirmarPareamento = () => executar(async () => {
+    onConectado(await confirmarPareamentoCanalSusbot({
+      pareamentoId: pareamento.id, baseUrl: API_BASE, headers: getAuthHeaders(),
+    }));
+    setPareamento(null);
+  }, 'Não foi possível confirmar a conexão.');
 
-  async function desconectarTelegram() {
-    setProcessando(true);
-    setErro('');
-    try {
-      await revogarCanalSusbot({ provedor: 'telegram', baseUrl: API_BASE, headers: getAuthHeaders() });
-      setConexoes(items => items.filter(item => item.provedor !== 'telegram'));
-    } catch (error) {
-      setErro(error?.message || 'Não foi possível desconectar o Telegram.');
-    } finally {
-      setProcessando(false);
-    }
-  }
+  const cancelarPareamento = () => executar(async () => {
+    await cancelarPareamentoCanalSusbot({ pareamentoId: pareamento.id, baseUrl: API_BASE, headers: getAuthHeaders() });
+    setPareamento(null);
+  }, 'Não foi possível cancelar o pareamento.');
 
-  async function copiarLinkTelegram() {
+  const desconectar = () => executar(async () => {
+    await revogarCanalSusbot({ provedor, baseUrl: API_BASE, headers: getAuthHeaders() });
+    onDesconectado(provedor);
+  }, `Não foi possível desconectar o ${nome}.`);
+
+  async function copiarLink() {
     try {
       await navigator.clipboard.writeText(pareamento.deep_link);
       setCopiado(true);
       window.setTimeout(() => setCopiado(false), 1800);
     } catch {
-      setErro('Não foi possível copiar o link. Use o botão Abrir no Telegram.');
+      setErro(`Não foi possível copiar o link. Use o botão Abrir no ${nome}.`);
     }
   }
 
-  const statusTelegram = telegram ? 'on' : pareamento && ['emitido', 'reivindicado'].includes(pareamento.status) ? 'wait' : 'off';
-  const rotuloTelegram = telegram ? 'Conectado' : statusTelegram === 'wait' ? 'Aguardando' : 'Não conectado';
+  const status = conexao ? 'on' : pareamento && ['emitido', 'reivindicado'].includes(pareamento.status) ? 'wait' : 'off';
+  const rotulo = conexao ? 'Conectado' : status === 'wait' ? 'Aguardando' : 'Não conectado';
+  const contaEncontrada = identificacao(pareamento);
 
   return (
-    <div className="susbot-panel-body susbot-canais" aria-busy={carregando || processando}>
+    <section className={`susbot-canal${status === 'wait' ? ' susbot-canal--ativo' : ''}`}>
+      <div className="susbot-canal__topo">
+        <span className={`susbot-canal__logo susbot-canal__logo--${provedor}`}><Icone /></span>
+        <div className="susbot-canal__nome">
+          <strong>{nome}</strong>
+          <span>{identificacao(conexao) || descricao}</span>
+        </div>
+        <span className={`susbot-status-pill susbot-status-pill--${status}`}>{rotulo}</span>
+      </div>
+
+      {erro && (
+        <p role="alert" className="susbot-canais__erro"><MIcon m="error" size={16} />{erro}</p>
+      )}
+
+      {!conexao && !pareamento && (
+        <div className="susbot-canal__corpo">
+          <button type="button" disabled={processando || carregando} onClick={() => void iniciarPareamento()} className="susbot-btn susbot-btn--primary">
+            <MIcon m="link" size={17} /> Conectar {nome}
+          </button>
+        </div>
+      )}
+
+      {conexao && (
+        <div className="susbot-canal__corpo">
+          <p className="susbot-canal__nota">Novas conversas no {nome} entram neste mesmo histórico. Ações continuam exigindo confirmação.</p>
+          <button type="button" disabled={processando} onClick={() => void desconectar()} className="susbot-btn susbot-btn--danger">
+            <MIcon m="link_off" size={17} /> Desconectar
+          </button>
+        </div>
+      )}
+
+      {pareamento?.status === 'emitido' && (
+        <div className="susbot-canal__corpo susbot-passos">
+          <div className="susbot-passo susbot-passo--atual">
+            <span className="susbot-passo__num">1</span>
+            <div className="susbot-passo__conteudo">
+              <strong>Abra a Clara no {nome}</strong>
+              <p>
+                No celular, toque no botão. Em outro aparelho, aponte a câmera para o código. O convite vale por 10 minutos e funciona uma vez.
+                {provedor === 'whatsapp' && ' Envie a mensagem que já vem escrita, sem alterar.'}
+              </p>
+              {pareamento.deep_link ? (
+                <div className="susbot-convite">
+                  <div className="susbot-convite__qr" aria-label={`QR Code para abrir a Clara no ${nome}`}>
+                    <QRCode value={pareamento.deep_link} size={132} bgColor="#ffffff" fgColor="#14324A" />
+                  </div>
+                  <div className="susbot-convite__acoes">
+                    <a href={pareamento.deep_link} target="_blank" rel="noopener noreferrer" className="susbot-btn susbot-btn--primary">
+                      Abrir no {nome} <MIcon m="open_in_new" size={15} />
+                    </a>
+                    <button type="button" onClick={() => void copiarLink()} className="susbot-btn susbot-btn--ghost">
+                      <MIcon m={copiado ? 'check' : 'content_copy'} size={15} /> {copiado ? 'Link copiado' : 'Copiar link'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p role="alert" className="susbot-canal__aviso">O {nome} da Clara ainda não foi configurado. Reinicie o ambiente depois de definir {envConfig}.</p>
+              )}
+            </div>
+          </div>
+          <div className="susbot-passo">
+            <span className="susbot-passo__num"><span className="susbot-passo__pulso" />2</span>
+            <div className="susbot-passo__conteudo">
+              <strong>Confirme a conta aqui</strong>
+              <p>Assim que o {nome} responder, a conta aparece nesta tela para você aprovar.</p>
+            </div>
+          </div>
+          <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-btn susbot-btn--ghost susbot-passos__cancelar">Cancelar convite</button>
+        </div>
+      )}
+
+      {pareamento?.status === 'reivindicado' && (
+        <div className="susbot-canal__corpo susbot-passos" role="group" aria-label={`Confirmar conta ${nome}`}>
+          <div className="susbot-passo susbot-passo--feito">
+            <span className="susbot-passo__num"><MIcon m="check" size={14} /></span>
+            <div className="susbot-passo__conteudo"><strong>Clara aberta no {nome}</strong></div>
+          </div>
+          <div className="susbot-passo susbot-passo--atual">
+            <span className="susbot-passo__num">2</span>
+            <div className="susbot-passo__conteudo">
+              <strong>Confirme a conta encontrada</strong>
+              <p>Conectar <b>{contaEncontrada || `esta conta do ${nome}`}</b> ao seu histórico SusPredict?</p>
+              <div className="susbot-convite__acoes susbot-convite__acoes--linha">
+                <button type="button" disabled={processando} onClick={() => void confirmarPareamento()} className="susbot-btn susbot-btn--primary">Confirmar conexão</button>
+                <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-btn susbot-btn--ghost">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pareamento && ['expirado', 'cancelado'].includes(pareamento.status) && (
+        <div className="susbot-canal__corpo">
+          <p className="susbot-canal__nota">Este convite não está mais disponível.</p>
+          <button type="button" onClick={() => { setPareamento(null); void iniciarPareamento(); }} className="susbot-btn susbot-btn--primary">
+            <MIcon m="refresh" size={17} /> Gerar novo convite
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ContinuidadeCanais({ ibge6 }) {
+  const [conexoes, setConexoes] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState('');
+
+  async function carregarCanais() {
+    setErro('');
+    try {
+      const data = await listarCanaisSusbot({ baseUrl: API_BASE, headers: getAuthHeaders() });
+      setConexoes(Array.isArray(data?.itens) ? data.itens : []);
+    } catch (error) {
+      setErro(error?.message || 'Não foi possível consultar os canais conectados.');
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  useEffect(() => { void carregarCanais(); }, []);
+
+  return (
+    <div className="susbot-panel-body susbot-canais" aria-busy={carregando}>
       <p className="susbot-canais__intro">
         A Clara é a mesma em qualquer canal: mesma identidade, mesmo histórico, mesmas confirmações. Conectar um canal novo sempre passa pela sua aprovação aqui.
       </p>
@@ -783,112 +879,17 @@ function ContinuidadeCanais({ ibge6 }) {
         </div>
       </section>
 
-      {/* Telegram */}
-      <section className={`susbot-canal${statusTelegram === 'wait' ? ' susbot-canal--ativo' : ''}`}>
-        <div className="susbot-canal__topo">
-          <span className="susbot-canal__logo susbot-canal__logo--telegram"><IconeTelegram /></span>
-          <div className="susbot-canal__nome">
-            <strong>Telegram</strong>
-            <span>{telegram?.external_username ? `@${telegram.external_username}` : 'Converse com a Clara pelo celular.'}</span>
-          </div>
-          <span className={`susbot-status-pill susbot-status-pill--${statusTelegram}`}>{rotuloTelegram}</span>
-        </div>
-
-        {!telegram && !pareamento && (
-          <div className="susbot-canal__corpo">
-            <button type="button" disabled={processando || carregando} onClick={() => void iniciarPareamento()} className="susbot-btn susbot-btn--primary">
-              <MIcon m="link" size={17} /> Conectar Telegram
-            </button>
-          </div>
-        )}
-
-        {telegram && (
-          <div className="susbot-canal__corpo">
-            <p className="susbot-canal__nota">Novas conversas no Telegram entram neste mesmo histórico. Ações continuam exigindo confirmação.</p>
-            <button type="button" disabled={processando} onClick={() => void desconectarTelegram()} className="susbot-btn susbot-btn--danger">
-              <MIcon m="link_off" size={17} /> Desconectar
-            </button>
-          </div>
-        )}
-
-        {pareamento?.status === 'emitido' && (
-          <div className="susbot-canal__corpo susbot-passos">
-            <div className="susbot-passo susbot-passo--atual">
-              <span className="susbot-passo__num">1</span>
-              <div className="susbot-passo__conteudo">
-                <strong>Abra a Clara no Telegram</strong>
-                <p>No celular, toque no botão. Em outro aparelho, aponte a câmera para o código. O convite vale por 10 minutos e funciona uma vez.</p>
-                {pareamento.deep_link ? (
-                  <div className="susbot-convite">
-                    <div className="susbot-convite__qr" aria-label="QR Code para abrir a Clara no Telegram">
-                      <QRCode value={pareamento.deep_link} size={132} bgColor="#ffffff" fgColor="#14324A" />
-                    </div>
-                    <div className="susbot-convite__acoes">
-                      <a href={pareamento.deep_link} target="_blank" rel="noopener noreferrer" className="susbot-btn susbot-btn--primary">
-                        Abrir no Telegram <MIcon m="open_in_new" size={15} />
-                      </a>
-                      <button type="button" onClick={() => void copiarLinkTelegram()} className="susbot-btn susbot-btn--ghost">
-                        <MIcon m={copiado ? 'check' : 'content_copy'} size={15} /> {copiado ? 'Link copiado' : 'Copiar link'}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p role="alert" className="susbot-canal__aviso">O usuário oficial do bot ainda não foi configurado. Reinicie o ambiente depois de definir TELEGRAM_BOT_USERNAME.</p>
-                )}
-              </div>
-            </div>
-            <div className="susbot-passo">
-              <span className="susbot-passo__num"><span className="susbot-passo__pulso" />2</span>
-              <div className="susbot-passo__conteudo">
-                <strong>Confirme a conta aqui</strong>
-                <p>Assim que o Telegram responder, a conta aparece nesta tela para você aprovar.</p>
-              </div>
-            </div>
-            <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-btn susbot-btn--ghost susbot-passos__cancelar">Cancelar convite</button>
-          </div>
-        )}
-
-        {pareamento?.status === 'reivindicado' && (
-          <div className="susbot-canal__corpo susbot-passos" role="group" aria-label="Confirmar conta Telegram">
-            <div className="susbot-passo susbot-passo--feito">
-              <span className="susbot-passo__num"><MIcon m="check" size={14} /></span>
-              <div className="susbot-passo__conteudo"><strong>Clara aberta no Telegram</strong></div>
-            </div>
-            <div className="susbot-passo susbot-passo--atual">
-              <span className="susbot-passo__num">2</span>
-              <div className="susbot-passo__conteudo">
-                <strong>Confirme a conta encontrada</strong>
-                <p>Conectar <b>{pareamento.external_username ? `@${pareamento.external_username}` : 'esta conta do Telegram'}</b> ao seu histórico SusPredict?</p>
-                <div className="susbot-convite__acoes susbot-convite__acoes--linha">
-                  <button type="button" disabled={processando} onClick={() => void confirmarPareamento()} className="susbot-btn susbot-btn--primary">Confirmar conexão</button>
-                  <button type="button" disabled={processando} onClick={() => void cancelarPareamento()} className="susbot-btn susbot-btn--ghost">Cancelar</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {pareamento && ['expirado', 'cancelado'].includes(pareamento.status) && (
-          <div className="susbot-canal__corpo">
-            <p className="susbot-canal__nota">Este convite não está mais disponível.</p>
-            <button type="button" onClick={() => { setPareamento(null); void iniciarPareamento(); }} className="susbot-btn susbot-btn--primary">
-              <MIcon m="refresh" size={17} /> Gerar novo convite
-            </button>
-          </div>
-        )}
-      </section>
-
-      {/* WhatsApp */}
-      <section className="susbot-canal susbot-canal--breve">
-        <div className="susbot-canal__topo">
-          <span className="susbot-canal__logo susbot-canal__logo--whatsapp"><IconeWhatsApp /></span>
-          <div className="susbot-canal__nome">
-            <strong>WhatsApp</strong>
-            <span>Mesmo pareamento seguro, mesmo histórico.</span>
-          </div>
-          <span className="susbot-status-pill susbot-status-pill--breve">Em breve</span>
-        </div>
-      </section>
+      {CANAIS_EXTERNOS.map(canal => (
+        <CartaoCanalExterno
+          key={canal.provedor}
+          canal={canal}
+          ibge6={ibge6}
+          carregando={carregando}
+          conexao={conexoes.find(item => item.provedor === canal.provedor)}
+          onConectado={conexao => setConexoes(items => [...items.filter(item => item.provedor !== conexao.provedor), conexao])}
+          onDesconectado={provedor => setConexoes(items => items.filter(item => item.provedor !== provedor))}
+        />
+      ))}
 
       <p className="susbot-canais__rodape">
         <MIcon m="verified_user" size={15} />
@@ -1517,7 +1518,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
   const totaisPorCanal = threads.reduce((totais, thread) => ({
     ...totais,
     [thread.canal]: (totais[thread.canal] || 0) + 1,
-  }), { app: 0, telegram: 0 });
+  }), { app: 0, telegram: 0, whatsapp: 0 });
 
   return (
     <>
@@ -1698,7 +1699,6 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         .susbot-canal:nth-child(4) { animation-delay: .10s; }
         .susbot-canal:nth-child(5) { animation-delay: .15s; }
         .susbot-canal--ativo { border-color: var(--primary-soft-border); box-shadow: 0 0 0 3px var(--primary-soft), 0 8px 20px -14px rgba(20,50,74,.25); }
-        .susbot-canal--breve { opacity: .72; }
         .susbot-canal__topo { display: flex; align-items: center; gap: 12px; padding: 13px 14px; }
         .susbot-canal__logo {
           width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; color: #fff;
@@ -1916,7 +1916,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
               role="tablist"
               aria-label="Origem das conversas"
               style={{
-                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4,
+                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4,
                 margin: '8px 0 10px', padding: 4, borderRadius: 10,
                 background: 'var(--subtle)', border: '1px solid var(--ink-100)',
               }}
@@ -1924,6 +1924,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
               {[
                 { id: 'app', label: 'App', icon: 'devices' },
                 { id: 'telegram', label: 'Telegram', icon: 'send' },
+                { id: 'whatsapp', label: 'WhatsApp', icon: 'chat' },
               ].map(canal => {
                 const selecionado = canalHistorico === canal.id;
                 return (
@@ -1983,11 +1984,11 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
               />
             ) : threadsDoCanal.length === 0 ? (
               <EstadoPainel
-                icone={canalHistorico === 'telegram' ? 'send' : 'forum'}
-                titulo={canalHistorico === 'telegram' ? 'Nenhuma conversa do Telegram' : 'Nenhuma conversa do app'}
-                texto={canalHistorico === 'telegram'
-                  ? 'Depois de conectar o Telegram e conversar com a Clara, as sessões aparecem aqui.'
-                  : 'Quando você fizer uma pergunta pelo app, a conversa aparece aqui.'}
+                icone={{ telegram: 'send', whatsapp: 'chat' }[canalHistorico] || 'forum'}
+                titulo={{ telegram: 'Nenhuma conversa do Telegram', whatsapp: 'Nenhuma conversa do WhatsApp' }[canalHistorico] || 'Nenhuma conversa do app'}
+                texto={canalHistorico === 'app'
+                  ? 'Quando você fizer uma pergunta pelo app, a conversa aparece aqui.'
+                  : `Depois de conectar o ${canalHistorico === 'whatsapp' ? 'WhatsApp' : 'Telegram'} e conversar com a Clara, as sessões aparecem aqui.`}
               />
             ) : (
               threadsDoCanal.map(t => <ItemHistorico key={t.id} thread={t} onAbrir={abrirThread} onApagar={apagarThread} />)

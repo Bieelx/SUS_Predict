@@ -243,16 +243,16 @@ def test_telegram_recusa_inativo_a_cada_mensagem(db, monkeypatch):
 
     chamadas = []
     monkeypatch.setattr(channel_router, "criar_susbot_agente", lambda *a, **k: chamadas.append(k) or None)
-    conexao = {"id": "cx", "usuario": "u-tg", "ibge6": "351300", "conversa_atual_id": None}
+    conexao = {"id": "cx", "usuario": "u-tg", "provedor": "telegram", "ibge6": "351300", "conversa_atual_id": None}
 
     db.upsert_acesso("u-tg", "gestor", ["351300"], ativo=False)
-    resposta, resposta_tg = channel_router._processar_pergunta_telegram(conexao, "quais alertas?")
+    resposta, resposta_tg = channel_router._processar_pergunta_canal(conexao, "quais alertas?")
     assert "desativado" in resposta_tg
     assert chamadas == []
 
     with pytest.raises(AcessoNegado):
         carregar_acesso("sem-linha-tg")
-    _r, sem_linha = channel_router._processar_pergunta_telegram({**conexao, "usuario": "sem-linha-tg"}, "oi")
+    _r, sem_linha = channel_router._processar_pergunta_canal({**conexao, "usuario": "sem-linha-tg"}, "oi")
     assert "não foi liberado" in sem_linha
     assert chamadas == []
 
@@ -367,8 +367,8 @@ def test_telegram_nao_provisiona(db):
     # Telegram nao tem e-mail do token; sem linha continua recusado (o pareamento
     # exige login web antes, onde o provisionamento ja aconteceu).
     from api.core import channel_router
-    conexao = {"id": "cx", "usuario": "novo-tg", "ibge6": "351300", "conversa_atual_id": None}
-    _r, tg = channel_router._processar_pergunta_telegram(conexao, "oi")
+    conexao = {"id": "cx", "usuario": "novo-tg", "provedor": "telegram", "ibge6": "351300", "conversa_atual_id": None}
+    _r, tg = channel_router._processar_pergunta_canal(conexao, "oi")
     assert "não foi liberado" in tg
     assert db.get_acesso("novo-tg") is None
 
