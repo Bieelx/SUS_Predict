@@ -14,10 +14,13 @@ cd "$REPO"
 [[ $(git branch --show-current) == main ]] || { echo 'Deploy requires main'; exit 1; }
 [[ -z $(git status --porcelain) ]] || { echo 'Deploy blocked: checkout has local changes'; exit 1; }
 git fetch --quiet origin main
-old=$(git rev-parse HEAD)
+head=$(git rev-parse HEAD)
 new=$(git rev-parse origin/main)
+# Compare with the last published commit, not HEAD: a manual `git pull` must still build and restart.
+old=$(cat "$STATE/last-success" 2>/dev/null || echo "$head")
+git merge-base --is-ancestor "$old" "$head" 2>/dev/null || old=$head
 [[ "$old" != "$new" ]] || { echo "Already deployed: $old"; exit 0; }
-git merge-base --is-ancestor "$old" "$new" || { echo 'Deploy blocked: main diverged'; exit 1; }
+git merge-base --is-ancestor "$head" "$new" || { echo 'Deploy blocked: main diverged'; exit 1; }
 [[ ! -e "$STATE/paused" ]] || { echo 'Deploy paused after a failed activation; inspect logs and remove state/paused to retry'; exit 1; }
 work=$(mktemp -d "$STATE/build.XXXXXXXX")
 activated=0
@@ -81,7 +84,7 @@ mkdir "$work/web"
 cp -a "$WEB/." "$work/web/"
 web_saved=1
 # Check again: a manual edit during the build must not be overwritten.
-[[ $(git rev-parse HEAD) == "$old" && -z $(git status --porcelain) ]] || { echo 'Checkout changed during build'; exit 1; }
+[[ $(git rev-parse HEAD) == "$head" && -z $(git status --porcelain) ]] || { echo 'Checkout changed during build'; exit 1; }
 printf '%s -> %s\n' "$old" "$new" > "$STATE/last-attempt"
 activated=1
 sudo -n systemctl stop "$SERVICE"

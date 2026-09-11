@@ -711,3 +711,20 @@ def test_quem_sou_eu_sem_nome_mostra_perfil_e_como_ensinar(db):
 
     assert "**gestor**" in resposta and "meu nome é" in resposta
     assert not llm.planejar_chamadas
+
+
+def test_apresentacao_pessoal_nao_vira_fora_do_escopo(db):
+    from api.core.susbot_agent import criar_susbot_agente
+
+    llm = LLMMock()
+    agente = criar_susbot_agente(
+        "351300", usuario="user-gabriel", memoria_usuario={"fatos": {"nome": "Gabriel"}}, llm=llm,
+    )
+
+    def resposta(texto):
+        return next(e["data"]["resposta"] for e in agente.stream_eventos(texto) if e["event"] == "fim")
+
+    assert resposta("Clara, meu nome é gabriel!").startswith("Prazer, Gabriel!")
+    assert resposta("Sou de cotia").startswith("Entendi, Gabriel.")
+    assert "foge do que" not in resposta("Trabalho na farmácia municipal")
+    assert not llm.planejar_chamadas

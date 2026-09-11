@@ -92,6 +92,16 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(self.deploy().returncode, 0)
         self.assertEqual(log, (self.root / "service.log").read_text())
 
+    def test_manual_pull_still_builds_and_restarts(self):
+        (self.state).mkdir()
+        (self.state / "last-success").write_text(self.old + "\n")
+        self.update()
+        self.git(self.repo, "pull", "--ff-only")
+        result = self.deploy()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.web / "index.html").read_text().strip(), "new")
+        self.assertIn("start", (self.root / "service.log").read_text())
+
     def test_dirty_checkout_is_preserved(self):
         self.update()
         (self.repo / "frontend/package.json").write_text("manual")

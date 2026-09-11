@@ -59,6 +59,13 @@ def _ibge6(valor: str) -> str:
     return str(valor or "").strip()[:6]
 
 
+# Frases de apresentação do próprio usuário (texto já normalizado, sem acento).
+_RE_APRESENTACAO = (
+    r"\b(?:meu nome e|me chamo|pode me chamar de|sou (?:de|da|do|o|a)\b|moro (?:em|na|no)|"
+    r"trabalho (?:na|no|com|em|como)|cuido (?:da|do|de)|prefiro respostas?)"
+)
+
+
 def _normalizar_intencao(texto: str) -> str:
     return normalizar_texto(texto)
 
@@ -826,6 +833,19 @@ class ClaraAgent:
                     resposta_curta += "…"
                 resumo += f' Eu respondi: “{resposta_curta}”'
             return resumo
+
+        # Apresentação pessoal ("meu nome é…", "sou de Cotia") não é consulta: sem isso o
+        # planejador marcava fora_do_escopo. O router já gravou nome/resumo antes do agente.
+        if "?" not in pergunta and re.search(_RE_APRESENTACAO, texto):
+            nome = str(fatos.get("nome") or "")
+            if re.search(r"\b(?:meu nome e|me chamo|pode me chamar de)\b", texto):
+                abertura = f"Prazer, {nome}!" if nome else "Prazer!"
+            else:
+                abertura = f"Entendi, {nome}." if nome else "Entendi."
+            return (
+                f"{abertura} Posso te ajudar com estoque de insumos, alertas abertos, casos, "
+                "internações ou óbitos do município. Por onde quer começar?"
+            )
 
         return None
 
