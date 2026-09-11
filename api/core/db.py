@@ -239,6 +239,8 @@ def _conn():
 def init_db() -> None:
     with _conn() as con:
         con.executescript(_SCHEMA)
+        from api.core.conversation_hub import SCHEMA as HUB_SCHEMA
+        con.executescript(HUB_SCHEMA)
     log.info(f"SQLite store ready: {_SQLITE_PATH}")
 
 

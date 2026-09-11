@@ -13,6 +13,8 @@ Regras que não são negociáveis (ver testes em test_admin_usuarios.py):
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -38,6 +40,10 @@ class PerfilBody(BaseModel):
     perfil: str
 
 
+class MunicipiosBody(BaseModel):
+    municipios: list[str]
+
+
 class AtivoBody(BaseModel):
     ativo: bool
 
@@ -53,6 +59,7 @@ def _linha(usuario: str, auth: dict | None, acesso: dict | None) -> dict:
         "atribuido_por": (acesso or {}).get("atribuido_por"),
         "atualizado_em": (acesso or {}).get("atualizado_em"),
         "sem_acesso": acesso is None,
+        "municipios": (acesso or {}).get("municipios") or [],
     }
 
 
@@ -125,3 +132,16 @@ def definir_ativo(usuario: str, body: AtivoBody, admin: dict = Depends(require_a
 @router.get("/usuarios/{usuario}/log")
 def log_usuario(usuario: str, admin: dict = Depends(require_admin)) -> list[dict]:
     return db.list_acesso_log(usuario)
+
+
+@router.put("/usuarios/{usuario}/municipios")
+def atribuir_municipios(usuario: str, body: MunicipiosBody, admin: dict = Depends(require_admin)) -> dict:
+    municipios = sorted(set(body.municipios))
+    if len(municipios) > 645 or any(not re.fullmatch(r"\d{6}", m) for m in municipios):
+        raise HTTPException(422, "Informe códigos municipais IBGE de seis dígitos, sem curingas.")
+    usuario, antes, admin_email = _alvo(usuario, admin)
+    if antes is None:
+        raise HTTPException(404, "Atribua um perfil antes de autorizar municípios.")
+    depois = db.upsert_acesso(usuario, antes["perfil"], municipios, ativo=antes["ativo"], atribuido_por=admin_email)
+    db.insert_acesso_log(usuario, "atribuir_municipios", antes, depois, por=admin_email)
+    return _linha(usuario, None, depois)

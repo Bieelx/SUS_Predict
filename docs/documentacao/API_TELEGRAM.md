@@ -154,7 +154,7 @@ curl --request POST \
   --data "{
     \"url\": \"https://api.exemplo.com/api/susbot/telegram/webhook\",
     \"secret_token\": \"${TELEGRAM_WEBHOOK_SECRET}\",
-    \"allowed_updates\": [\"message\"]
+    \"allowed_updates\": [\"message\", \"callback_query\"]
   }"
 ```
 

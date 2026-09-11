@@ -50,6 +50,7 @@ except Exception:  # pragma: no cover - fallback para o ambiente de testes atual
 
 
 _REFERENCIAS = {
+    "consultar_aquisicoes": {"rota": "/alertas", "label": "ver em Alertas →"},
     "consultar_estoque": {"rota": "/insumos", "label": "ver em Insumos →"},
     "consultar_alertas": {"rota": "/alertas", "label": "ver em Alertas →"},
     "consultar_epidemiologia": {"rota": "/epidemiologia", "label": "ver em Epidemiologia →"},
@@ -108,6 +109,17 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
         motivo = str(resultado.get("motivo") or "Não encontrei esse dado para este município.")
         acao = str(resultado.get("acao_sugerida") or "").strip()
         return f"{motivo}\n\n**Próximo passo:** {acao}" if acao else motivo
+
+    if ferramenta == "consultar_aquisicoes":
+        linhas = [f"**Risco de aquisição · {resultado.get('periodo', '')}**"]
+        for item in resultado.get("dados", [])[:20]:
+            linhas.append(f"- **{item.get('insumo_padronizado') or 'Insumo'}** ({item.get('unidade_fornecimento') or 'unidade não informada'}): {item.get('faixa_risco_aquisicao') or 'risco não informado'}. {item.get('mensagem_analitica') or ''}")
+        if not resultado.get("dados"):
+            linhas.append("A fonte não retornou alertas para este recorte. Isso não confirma estoque disponível.")
+        competencia = resultado.get("competencia") or {}
+        linhas.append(f"Competência: {competencia.get('competencia_referencia') or 'não informada'}. Fonte: compras públicas curadas, a mesma da Central de Alertas.")
+        linhas.append("Esses sinais representam risco de aquisição; não medem estoque físico, consumo ou dias de cobertura.")
+        return "\n\n".join(linhas)
 
     if ferramenta == "sobre_o_projeto":
         return str(resultado.get("texto") or "")
@@ -255,6 +267,18 @@ def _rotulo_periodo(resultado: dict[str, Any]) -> str | None:
 def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> dict[str, Any] | None:
     if not resultado or not resultado.get("encontrado"):
         return None
+
+    if ferramenta == "consultar_aquisicoes":
+        linhas = [{"insumo": d.get("insumo_padronizado"), "unidade": d.get("unidade_fornecimento"),
+                   "risco": d.get("faixa_risco_aquisicao"), "pontos": d.get("pontos_risco_aquisicao")}
+                  for d in resultado.get("dados", [])]
+        if not linhas:
+            return None
+        return {"tipo": "tabela", "titulo": "Risco de aquisição", "linhas": linhas,
+                "colunas": _colunas_uteis(linhas, ("insumo", "unidade", "risco", "pontos")),
+                "evidencia": {"fonte": "Compras públicas curadas", "competencia": resultado.get("competencia"),
+                              "meta": resultado.get("meta"), "periodo": resultado.get("periodo"),
+                              "limitacao": "Não representa estoque físico nem dias de cobertura."}}
 
     if ferramenta == "consultar_estoque":
         linhas = [
@@ -701,6 +725,7 @@ class ClaraAgent:
     permitidas: frozenset[str] | None = None
     # Perfil do usuario (docs/09): so muda o texto da recusa (visitante tem mensagem propria).
     perfil: str | None = None
+    contexto_conversa: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         self.ibge6 = _ibge6(self.ibge6)
@@ -709,7 +734,7 @@ class ClaraAgent:
         else:
             self.permitidas = frozenset(self.permitidas)
         if not self.tools:
-            self.tools = criar_susbot_tools(self.ibge6, self.permitidas)
+            self.tools = criar_susbot_tools(self.ibge6, self.permitidas, self.contexto_conversa)
         self._graph = self._montar_grafo() if LANGGRAPH_OK else None
 
     def _obter_llm(self) -> Any:
@@ -736,6 +761,7 @@ class ClaraAgent:
             "tela_origem": self.tela_origem,
             "usuario_autenticado": bool(self.usuario),
             "historico_recente": self.historico[-8:],
+            "contexto_conversa": self.contexto_conversa or {},
         }
 
     def _memoria_para_prompt(self) -> dict[str, Any]:
@@ -1058,6 +1084,9 @@ class ClaraAgent:
 
         if plano.get("acao") == "ferramenta" and ferramenta == "gerar_etp":
             argumentos = plano.get("argumentos") or {}
+            if not argumentos.get("item") and (self.contexto_conversa or {}).get("item"):
+                argumentos["item"] = self.contexto_conversa["item"]
+                plano["argumentos"] = argumentos
             item = argumentos.get("item") if isinstance(argumentos, dict) else None
             if not isinstance(item, str) or not item.strip():
                 yield from self._emitir_resultado(
@@ -1152,6 +1181,7 @@ def criar_susbot_agente(
     tools: dict[str, Callable] | None = None,
     permitidas=None,
     perfil: str | None = None,
+    contexto_conversa: dict[str, Any] | None = None,
 ) -> ClaraAgent:
     """Factory do agente da Clara. `permitidas` = acesso.ferramentas (docs/09)."""
 
@@ -1165,4 +1195,5 @@ def criar_susbot_agente(
         tools=tools or {},
         permitidas=permitidas,
         perfil=perfil,
+        contexto_conversa=contexto_conversa,
     )

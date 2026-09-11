@@ -93,7 +93,7 @@ def test_ferramenta_vazia_nao_inventa_dados(db):  # noqa: F811
     llm = LLMPlanoFixo({"acao": "chamar_ferramenta", "ferramenta": "consultar_alertas"})
     tools = {"consultar_alertas": lambda **_: {"encontrado": False, "motivo": "Sem alertas ativos."}}
     agente = criar_susbot_agente("3550308", llm=llm, tools=tools)
-    fim = next(e for e in agente.stream_eventos("quais alertas?") if e["event"] == "fim")
+    fim = next(e for e in agente.stream_eventos("quais alertas locais?") if e["event"] == "fim")
     assert fim["data"]["resposta"].startswith("Sem alertas ativos.")
     assert "inventado" not in fim["data"]["resposta"]
     assert not llm.stream_chamadas
@@ -174,7 +174,7 @@ def test_saudacao_pura_resolve_em_sobre_o_projeto_sem_llm(db, pergunta):  # noqa
 
 @pytest.mark.parametrize("pergunta, ferramenta", [
     ("bom dia, quanto de dipirona tem em estoque?", "consultar_estoque"),
-    ("Oi! Quais alertas estão abertos?", "consultar_alertas"),
+    ("Oi! Quais alertas estão abertos?", "consultar_aquisicoes"),
     ("boa tarde, internações de 2023 a 2024", "consultar_epidemiologia"),
 ])
 def test_saudacao_seguida_de_pergunta_vai_para_a_ferramenta_certa(pergunta, ferramenta):

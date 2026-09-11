@@ -17,8 +17,8 @@ from pydantic import BaseModel
 
 from api.core.auth import require_user
 from api.core.identidade import usuario_referencia
-from api.core import db
-from api.core.permissoes import provisionar_acesso_http
+from api.core import db, conversation_hub as hub
+from api.core.permissoes import provisionar_acesso_http, ferramentas_no_municipio
 from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
     apagar_memorias,
@@ -39,17 +39,19 @@ router = APIRouter(prefix="/api/susbot", tags=["susbot"])
 
 
 class ConfirmarFerramentaRequest(BaseModel):
-    ferramenta: str
+    acao_id: str
+    ferramenta: str | None = None
     argumentos: dict[str, Any] = {}
 
 
 class PerguntaClaraRequest(BaseModel):
-    pergunta: str
+    pergunta: str = ""
     conversa_id: str | None = None
     ibge6: str | None = None
     ibge: str | None = None
     tela_origem: str | None = None
     confirmar: ConfirmarFerramentaRequest | None = None
+    contexto: dict[str, Any] | None = None
 
 
 @router.get("/metricas-uso")
@@ -135,6 +137,8 @@ def perguntar(
         raise HTTPException(400, "pergunta ausente")
 
     ibge6 = _ibge6(req)
+    if req.confirmar and not req.conversa_id:
+        raise HTTPException(422, "A confirmação precisa da conversa de origem.")
 
     pergunta_registro = pergunta or f"[confirmado] {req.confirmar.ferramenta}" if req.confirmar else pergunta
 
@@ -145,6 +149,14 @@ def perguntar(
     else:
         conversa = db.criar_conversa(usuario=usuario, titulo=_titulo_da_pergunta(pergunta_registro))
         conversa_criada = True
+
+    contexto = hub.fixar_contexto(conversa["id"], usuario, ibge6, req.contexto or {"tela": req.tela_origem})
+    ibge6 = contexto["ibge6"]
+    permitidas = ferramentas_no_municipio(acesso, ibge6)
+    if req.confirmar:
+        acao = hub.obter_acao(req.confirmar.acao_id, conversa["id"], usuario)
+        if acao["dados"]["ferramenta"] not in permitidas:
+            raise HTTPException(403, "Seu perfil ou município não permite esta ação.")
 
     comando_memoria = executar_comando_memoria(usuario, pergunta) if pergunta else None
     if pergunta and comando_memoria is None:
@@ -159,13 +171,15 @@ def perguntar(
         usuario=usuario,
         historico=historico,
         memoria_usuario=contexto_para_agente(usuario),
-        permitidas=acesso.ferramentas,
+        permitidas=permitidas,
+        contexto_conversa=contexto,
         perfil=acesso.perfil,
     )
 
     def _stream() -> Any:
         texto_final = ""
         referencia_rota = None
+        proposta = ""
 
         try:
             yield _sse(
@@ -174,6 +188,7 @@ def perguntar(
                     "mensagem": "Conversa pronta",
                     "conversa_id": conversa["id"],
                     "conversa_criada": conversa_criada,
+                    "contexto": contexto,
                 },
             )
 
@@ -186,10 +201,14 @@ def perguntar(
                     },
                 ]
             elif req.confirmar:
-                eventos = agente.stream_eventos_confirmado(req.confirmar.ferramenta, req.confirmar.argumentos)
+                eventos = hub.executar_acao(req.confirmar.acao_id, conversa["id"], usuario, agente)
             else:
                 eventos = agente.stream_eventos(pergunta)
             for evento in eventos:
+                if evento["event"] == "confirmacao_pendente":
+                    proposta = evento["data"].get("resumo") or "Ação aguardando confirmação."
+                    acao = hub.criar_acao(conversa["id"], usuario, evento["data"])
+                    evento = {**evento, "data": {**evento["data"], "acao_id": acao["id"]}}
                 yield _sse(evento["event"], evento["data"])
                 if evento["event"] == "fim":
                     texto_final = str(evento["data"].get("resposta") or "")
@@ -207,18 +226,20 @@ def perguntar(
                 yield _sse("memoria", {"estado": "atualizada" if mudou else "sem_mudanca"})
 
             try:
+                if req.confirmar:
+                    return  # resultado da ação já está durável; replay não duplica histórico
                 db.adicionar_mensagem(
                     conversa_id=conversa["id"],
                     tela_origem=req.tela_origem,
                     pergunta=pergunta_registro,
-                    resposta=texto_final,
+                    resposta=texto_final or proposta,
                     referencia_rota=referencia_rota,
                 )
             except Exception as exc:  # pragma: no cover - não deve falhar nos testes
                 log.warning("Falha ao persistir mensagem da Clara: %s", exc)
 
-        except HTTPException:
-            raise
+        except HTTPException as exc:
+            yield _sse("erro", {"mensagem": str(exc.detail)})
         except Exception as exc:  # pragma: no cover - defesa contra falha do LLM/tool
             log.warning("Falha no stream da Clara: %s", exc)
             yield _sse("erro", {"mensagem": "Falha ao gerar resposta da Clara. Tente novamente."})
@@ -311,3 +332,24 @@ def listar_mensagens(
         conversa_id=conversa_id,
         titulo=conversa.get("titulo"),
     )
+
+
+@router.get("/conversas/{conversa_id}/hub")
+def estado_hub(conversa_id: str, user: dict = Depends(require_user)):
+    usuario = usuario_referencia(user)
+    hub.verificar_dono(conversa_id, usuario)
+    acesso = provisionar_acesso_http(user)
+    contexto = hub.obter_contexto(conversa_id)
+    permitidas = ferramentas_no_municipio(acesso, (contexto or {}).get("ibge6", ""))
+    acoes = hub.listar_acoes(conversa_id, usuario)
+    for acao in acoes:
+        acao["permitida"] = acao["dados"]["ferramenta"] in permitidas
+    return {"contexto": contexto, "acoes": acoes}
+
+
+@router.delete("/conversas/{conversa_id}/acoes/{acao_id}", status_code=204)
+def cancelar_acao(conversa_id: str, acao_id: str, user: dict = Depends(require_user)):
+    usuario = usuario_referencia(user)
+    hub.obter_acao(acao_id, conversa_id, usuario)
+    if not hub.transicionar(acao_id, "pendente", "cancelada"):
+        raise HTTPException(409, "Ação já processada ou cancelada.")

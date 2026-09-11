@@ -780,7 +780,7 @@ export default function App() {
     }
   }, []);
 
-  const abrirClara = prompt => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt }));
+  const abrirClara = (prompt, contexto) => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt, contexto }));
 
   async function iniciarDemo() {
     setDemoCarregando(true);

@@ -7,8 +7,8 @@ Nada que passe pela conversa (usuário, LLM, histórico, memória) altera isso.
 `carregar_acesso` roda no backend antes de qualquer LLM. Sem linha, ou linha
 com ativo=0, é acesso negado — não existe perfil padrão implícito.
 
-Fase 2 (escopo de município) ainda não está implementada: `municipios` é
-carregado mas nenhuma validação de ibge6 acontece aqui.
+Consultas públicas curadas não são restritas por município. Estoque físico,
+alertas locais e escrita exigem município explicitamente atribuído.
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ def ferramentas_do_perfil(perfil: str) -> frozenset[str]:
     if base is None:
         # Perfil desconhecido na tabela (typo no seed): só o texto universal.
         return frozenset({FERRAMENTA_UNIVERSAL})
-    return base | {FERRAMENTA_UNIVERSAL}
+    return base | {FERRAMENTA_UNIVERSAL} | ({"consultar_aquisicoes"} if base else set())
 
 
 def carregar_acesso(usuario: str) -> Acesso:
@@ -203,3 +203,16 @@ def require_acesso(ferramenta: str | None = None):
         return acesso
 
     return dependency
+
+
+FERRAMENTAS_MUNICIPAIS = frozenset({"consultar_estoque", "consultar_alertas", "gerar_etp"})
+
+def verificar_municipio(acesso: Acesso, ibge6: str) -> None:
+    # Lista vazia não concede acesso privado. Admin também precisa de atribuição.
+    if str(ibge6) not in acesso.municipios:
+        raise HTTPException(403, "Este município não está autorizado para dados locais ou ações. Peça a atribuição ao administrador.")
+
+def ferramentas_no_municipio(acesso: Acesso, ibge6: str) -> frozenset[str]:
+    if str(ibge6) in acesso.municipios:
+        return acesso.ferramentas
+    return frozenset(acesso.ferramentas - FERRAMENTAS_MUNICIPAIS)

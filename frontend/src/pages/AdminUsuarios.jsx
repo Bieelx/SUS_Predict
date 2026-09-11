@@ -42,8 +42,10 @@ function Confirmacao({ texto, onConfirmar, onCancelar, ocupado }) {
   );
 }
 
-function Linha({ u, euId, onPerfil, onAtivo }) {
+function Linha({ u, euId, onPerfil, onAtivo, onMunicipios }) {
   const [perfil, setPerfil] = useState(u.perfil || 'gestor');
+  const [municipios, setMunicipios] = useState((u.municipios || []).join(', '));
+  useEffect(() => setMunicipios((u.municipios || []).join(', ')), [u.municipios]);
   const souEu = u.usuario === euId;
   const semAcesso = u.sem_acesso;
   return (
@@ -51,6 +53,16 @@ function Linha({ u, euId, onPerfil, onAtivo }) {
       <td style={{ padding: '10px 8px', minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1814', wordBreak: 'break-all' }}>{u.email || <span style={{ color: 'var(--ink-300)' }}>(sem e-mail no Auth)</span>}{souEu && <span style={{ fontSize: 11, color: 'var(--ink-400)', marginLeft: 6 }}>você</span>}</div>
         <div style={{ fontSize: 11, color: 'var(--ink-300)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>{u.usuario}</div>
+        <details style={{ marginTop: 8, fontSize: 12 }}>
+          <summary>Municípios autorizados ({u.municipios?.length || 0})</summary>
+          <p>Estoque local e ações exigem município autorizado. A lista vazia permite apenas as fontes públicas do perfil.</p>
+          {!souEu && !semAcesso && <form onSubmit={e => { e.preventDefault(); onMunicipios(u, municipios.split(/[,;\s]+/).filter(Boolean)); }}>
+            <label>Códigos IBGE (6 dígitos, separados por vírgula)
+              <input aria-label={`Municípios de ${u.email || u.usuario}`} value={municipios} onChange={e => setMunicipios(e.target.value)} style={{ ...btn, display: 'block', width: '100%', minHeight: 44, margin: '6px 0' }} />
+            </label>
+            <button type="submit" style={{ ...btn, minHeight: 44 }}>Salvar municípios</button>
+          </form>}
+        </details>
       </td>
       <td style={{ padding: '10px 8px' }}>
         {semAcesso
@@ -126,6 +138,10 @@ export default function AdminUsuarios({ euId }) {
       : u.sem_acesso ? `Liberar ${nome(u)} como "${perfil}"?` : `Alterar o perfil de ${nome(u)} de "${u.perfil}" para "${perfil}"?`,
     `/api/admin/usuarios/${encodeURIComponent(u.usuario)}/perfil`, { perfil },
   );
+  const onMunicipios = (u, municipios) => aplicar(
+    `Autorizar ${nome(u)} para dados locais e ações nos municípios ${municipios.join(', ') || '(nenhum)'}?`,
+    `/api/admin/usuarios/${encodeURIComponent(u.usuario)}/municipios`, { municipios },
+  );
   const onAtivo = (u, ativo) => aplicar(
     `${ativo ? 'Ativar' : 'Desativar'} o acesso de ${nome(u)}?`,
     `/api/admin/usuarios/${encodeURIComponent(u.usuario)}/ativo`, { ativo },
@@ -160,7 +176,7 @@ export default function AdminUsuarios({ euId }) {
               </tr>
             </thead>
             <tbody>
-              {filtrados.map(u => <Linha key={u.usuario} u={u} euId={euId} onPerfil={onPerfil} onAtivo={onAtivo} />)}
+              {filtrados.map(u => <Linha key={u.usuario} u={u} euId={euId} onPerfil={onPerfil} onAtivo={onAtivo} onMunicipios={onMunicipios} />)}
               {filtrados.length === 0 && <tr><td colSpan={5} style={{ padding: 14, fontSize: 13, color: 'var(--ink-400)' }}>Nenhum usuário encontrado.</td></tr>}
             </tbody>
           </table>

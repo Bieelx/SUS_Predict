@@ -98,7 +98,7 @@ def call(body):
     except urllib.error.HTTPError as exc:
         try: return json.loads(exc.read().decode())
         except json.JSONDecodeError: raise exc
-body = {"url": f"{public_url}/api/susbot/telegram/webhook", "secret_token": secret, "allowed_updates": ["message"]}
+body = {"url": f"{public_url}/api/susbot/telegram/webhook", "secret_token": secret, "allowed_updates": ["message", "callback_query"]}
 try:
     result = call(body)
     if not result.get("ok") and "Failed to resolve host" in result.get("description", ""):

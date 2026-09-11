@@ -21,6 +21,7 @@ ACOES_PLANEJADOR = ("responder", "chamar_ferramenta", "fora_do_escopo")
 # Ferramentas que o planejador pode escolher. `executar_sql_fallback` existe no
 # dispatch mas nao entra aqui de proposito: nao e exposta ao modelo.
 FERRAMENTAS_PLANEJAVEIS = (
+    "consultar_aquisicoes",
     "consultar_estoque",
     "consultar_alertas",
     "consultar_epidemiologia",
@@ -33,6 +34,7 @@ FERRAMENTAS_PLANEJAVEIS = (
 # descrever uma ferramenta proibida faz o modelo propor e levar rebaixamento.
 DESCRICOES_FERRAMENTAS = {
     "consultar_estoque": "- consultar_estoque: item (string opcional), somente_risco (boolean opcional). Palavras genericas (insumos, medicamentos, estoque) NAO sao item. somente_risco=true para falta, ruptura, critico, baixo, acabando.",
+    "consultar_aquisicoes": "- consultar_aquisicoes: item (string opcional). Mesmas fontes das telas Alertas e Insumos; risco de aquisição, nunca estoque físico.",
     "consultar_alertas": "- consultar_alertas: status (string opcional), tipo (string opcional).",
     "consultar_epidemiologia": '- consultar_epidemiologia: sistema (SIM|SIH|SINASC|SIA|SINAN), ano_ini, ano_fim (inteiros opcionais), doenca_cod, escopo_solicitado (strings opcionais). Internacao, hospital, leito, UTI => SIH (UTI: escopo_solicitado="uti"). Obito => SIM. Nascimento => SINASC. Ambulatorial => SIA. Casos, notificacoes, dengue => SINAN.',
     "gerar_etp": "- gerar_etp: item (string obrigatoria), alerta_id (opcional). So quando o usuario pedir explicitamente um ETP; exige confirmacao humana.",

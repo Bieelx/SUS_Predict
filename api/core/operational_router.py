@@ -380,6 +380,10 @@ def ruptura(
     periodo: str = Query("12 Meses"),
     _acesso: Acesso = Depends(require_acesso("consultar_estoque")),
 ) -> dict[str, Any]:
+    return consultar_risco_aquisicao(ibge, periodo)
+
+
+def consultar_risco_aquisicao(ibge: str, periodo: str = "12 Meses") -> dict[str, Any]:
     codigo = _ibge6(ibge)
     janela = _periodo(periodo)
     municipio = _municipio(codigo)

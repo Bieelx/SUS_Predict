@@ -360,6 +360,7 @@ export async function conversarComSusbot({
   ibge6,
   ibge,
   confirmar,
+  contexto,
   baseUrl = '',
   fetchImpl = globalThis.fetch,
   timeoutMs = SUSBOT_TIMEOUT_MS,
@@ -415,6 +416,7 @@ export async function conversarComSusbot({
         tela_origem: telaNormalizada,
         tela_atual: telaNormalizada,
         confirmar: confirmar || undefined,
+        contexto: contexto || undefined,
       }),
       signal: controller.signal,
     });
@@ -442,3 +444,11 @@ export function criarClienteSusbot(opcoes = {}) {
 }
 
 export default criarClienteSusbot;
+
+export function consultarHubSusbot({ conversaId, ...opcoes } = {}) {
+  return requisicaoJson(`/api/susbot/conversas/${encodeURIComponent(conversaId)}/hub`, opcoes);
+}
+
+export function cancelarAcaoSusbot({ conversaId, acaoId, ...opcoes } = {}) {
+  return requisicaoJson(`/api/susbot/conversas/${encodeURIComponent(conversaId)}/acoes/${encodeURIComponent(acaoId)}`, { ...opcoes, method: 'DELETE' });
+}

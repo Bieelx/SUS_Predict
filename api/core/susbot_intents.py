@@ -103,6 +103,15 @@ def rotear_intencao(pergunta: str) -> IntentRoute | None:
                 "referencia_rota": None,
             },
         )
+    if re.search(r"\b(?:gerar|gere|criar|crie|preparar|prepare)\b", texto) and "etp" in texto:
+        match = re.search(r"\betp\s+(?:para(?: a compra de)?|de|do|da)\s+(.+?)[.!?]*$", pergunta, re.I)
+        argumentos = {"item": match.group(1).strip()} if match else {}
+        return IntentRoute("gerar_etp", 0.99, {"acao": "ferramenta", "ferramenta": "gerar_etp", "argumentos": argumentos, "resposta": ""}, "rascunho com confirmação")
+
+    # Aquisição tem precedência: "não trate como estoque" não deve consultar estoque.
+    if "aquisicao" in texto or "compras" in texto:
+        return IntentRoute("consultar_aquisicoes", 0.99, {"acao": "ferramenta", "ferramenta": "consultar_aquisicoes", "argumentos": {}, "resposta": "", "referencia_rota": "/alertas"}, "fonte de aquisições")
+
     if texto.startswith(("o que e ", "o que sao ", "explique ", "como funciona ")):
         return None
 
@@ -126,6 +135,8 @@ def rotear_intencao(pergunta: str) -> IntentRoute | None:
             },
         )
 
+    if _contem_termo(texto, {"alerta", "risco", "ocorrencia"}) and not re.search(r"\bloc(?:al|ais)\b", texto):
+        return IntentRoute("consultar_aquisicoes", 0.95, {"acao": "ferramenta", "ferramenta": "consultar_aquisicoes", "argumentos": {}, "resposta": "", "referencia_rota": "/alertas"}, "alertas da plataforma")
     if _contem_termo(texto, {"alerta", "risco", "ocorrencia"}):
         return IntentRoute(
             intencao="consultar_alertas",

@@ -39,7 +39,7 @@ def canais(monkeypatch):
     import api.core.channel_router as router_module
     importlib.reload(router_module)
     mensagens_enviadas = []
-    monkeypatch.setattr(router_module, "_telegram_send", lambda chat_id, texto: mensagens_enviadas.append((chat_id, texto)) or True)
+    monkeypatch.setattr(router_module, "_telegram_send", lambda chat_id, texto, **kwargs: mensagens_enviadas.append((chat_id, texto)) or True)
     monkeypatch.setattr(router_module, "criar_susbot_agente", lambda *args, **kwargs: FakeAgent())
 
     yield router_module, db_module, mensagens_enviadas
@@ -221,7 +221,7 @@ def test_clear_inicia_nova_conversa(canais):
     assert len(db_module.listar_conversas("user-abc")) == 2
 
 
-def test_inatividade_do_telegram_inicia_nova_conversa(canais, monkeypatch):
+def test_inatividade_do_telegram_oferece_conversas_sem_perder_historico(canais, monkeypatch):
     router_module, db_module, _mensagens = canais
     monkeypatch.setenv("TELEGRAM_SESSION_TIMEOUT_MINUTES", "30")
     _parear(canais)
@@ -239,8 +239,9 @@ def test_inatividade_do_telegram_inicia_nova_conversa(canais, monkeypatch):
     router_module.processar_update_telegram(_update(61, "Pergunta depois da pausa"))
 
     conexao_atualizada = db_module.get_conexao_canal_por_externo("telegram", "778899")
-    assert conexao_atualizada["conversa_atual_id"] != primeira_conversa_id
-    assert db_module.contar_conversas("user-abc", canal="telegram") == 2
+    assert conexao_atualizada["conversa_atual_id"] == primeira_conversa_id
+    assert db_module.contar_conversas("user-abc", canal="telegram") == 1
+    assert "conversas recentes" in _mensagens[-1][1]
     assert db_module.contar_mensagens(primeira_conversa_id) == 1
 
 

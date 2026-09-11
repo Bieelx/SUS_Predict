@@ -221,7 +221,7 @@ def _resposta_vazia(motivo: str, **extra) -> dict:
     return payload
 
 
-def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
+def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, Callable]:
     """Cria as tools da Clara com o município fixado por closure.
 
     `permitidas` (docs/09, barreira 3): quando informado, o dict só contém as
@@ -290,6 +290,27 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
             "total_itens": len(dados),
             "dados": dados,
         }
+
+    def consultar_aquisicoes(item: str | None = None, **_kwargs) -> dict:
+        from api.core.operational_router import consultar_risco_aquisicao
+        from fastapi import HTTPException
+        ctx = contexto or {}
+        try:
+            fonte = consultar_risco_aquisicao(ibge, ctx.get("periodo", "12 Meses"))
+        except (RuntimeError, HTTPException):
+            return _resposta_vazia("A fonte de aquisições está indisponível. Não é possível concluir que não há risco.", ibge6=ibge)
+        itens = fonte.get("alertas") or []
+        # Contexto selecionado tem precedência sobre argumentos gerados pelo modelo.
+        alvo = str(ctx.get("item") or item or "").strip().casefold()
+        unidade = ctx.get("unidade")
+        if alvo:
+            itens = [r for r in itens if (str(r.get("insumo_padronizado") or "").casefold() == alvo if ctx.get("item") else alvo in str(r.get("insumo_padronizado") or "").casefold())]
+        if unidade:
+            itens = [r for r in itens if r.get("unidade_fornecimento") == unidade]
+        return {"encontrado": True, "ibge6": ibge, "dados": itens,
+                "meta": fonte.get("meta"), "competencia": fonte.get("competencia"),
+                "periodo": fonte.get("periodo"), "metodologia": fonte.get("metodologia"),
+                "resumo": fonte.get("resumo"), "item": alvo}
 
     def consultar_alertas(status: str | None = None, tipo: str | None = None, **_kwargs) -> dict:
         filtros = {"ibge6": ibge}
@@ -441,7 +462,7 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
                 f"Fonte Supabase indisponível neste ambiente; sem ela a Clara não consulta a base {sistema_norm}.",
                 **comum,
             )
-        janela = _janela_curada(ano_ini, ano_fim)
+        janela = (contexto or {}).get("periodo", "12 Meses") if not ano_ini and not ano_fim else _janela_curada(ano_ini, ano_fim)
         try:
             if sistema_norm == "SINAN":
                 return _epidemiologia_sinan(janela, ano_ini, ano_fim, escopo_solicitado, comum)
@@ -495,6 +516,8 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
             "o processo. Este cálculo de cobertura não incorpora protocolo caso→insumo, "
             "pedidos em trânsito, lead time ou margem de segurança."
         )
+        if alerta_id and not any(a["id"] == alerta_id for a in db.get_alertas(ibge)):
+            return _resposta_vazia("O alerta não pertence ao município desta conversa.", ibge6=ibge)
         registro = db.criar_etp(ibge, item, justificativa, alerta_id=alerta_id, origem="susbot")
         return {
             "encontrado": True,
@@ -537,6 +560,7 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
         return {"encontrado": True, "texto": TEXTO_SOBRE_O_PROJETO}
 
     todas = {
+        "consultar_aquisicoes": consultar_aquisicoes,
         "consultar_estoque": consultar_estoque,
         "consultar_alertas": consultar_alertas,
         "consultar_epidemiologia": consultar_epidemiologia,

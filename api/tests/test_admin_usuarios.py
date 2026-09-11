@@ -69,6 +69,7 @@ def test_nao_admin_recebe_403_em_todos_os_endpoints(ambiente):
         ("PUT", f"/api/admin/usuarios/{alvo}/perfil", {"perfil": "gestor"}),
         ("PUT", f"/api/admin/usuarios/{alvo}/ativo", {"ativo": False}),
         ("GET", f"/api/admin/usuarios/{alvo}/log", None),
+        ("PUT", f"/api/admin/usuarios/{alvo}/municipios", {"municipios": ["351300"]}),
     ]
     for quem in (GESTOR, "visitante@x.y"):  # gestor e quem nem tem linha (vira visitante)
         for metodo, url, body in chamadas:
@@ -295,3 +296,19 @@ def test_existe_usuario_auth_sem_supabase_avisa_no_log(monkeypatch, caplog):
     with caplog.at_level("WARNING", logger="sus_predict.auth"):
         assert auth_core.existe_usuario_auth("dev-abc") is True
     assert any("PULADA" in r.message and "dev-abc" in r.message for r in caplog.records)
+
+
+def test_admin_atribui_municipios_com_validacao_e_auditoria(ambiente):
+    db, _, client = ambiente
+    _seed(db)
+    alvo = _uid(GESTOR)
+    url = f"/api/admin/usuarios/{alvo}/municipios"
+    headers = _token(ADMIN)
+    response = client.put(url, json={"municipios": ["355030", "351300", "355030"]}, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["municipios"] == ["351300", "355030"]
+    assert db.list_acesso_log(alvo)[0]["acao"] == "atribuir_municipios"
+    for invalidos in [["*"], ["3513009"], ["abc"]]:
+        assert client.put(url, json={"municipios": invalidos}, headers=headers).status_code == 422
+    assert client.put(url, json={"municipios": []}, headers=headers).status_code == 200
+    assert db.get_acesso(alvo)["municipios"] == []

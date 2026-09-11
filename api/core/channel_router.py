@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel
 
-from api.core import db
+from api.core import db, conversation_hub as hub
 from api.core.audio_transcription import (
     AudioInvalido,
     ResultadoTranscricao,
@@ -28,7 +28,7 @@ from api.core.audio_transcription import (
 )
 from api.core.auth import require_user
 from api.core.identidade import usuario_referencia
-from api.core.permissoes import AcessoNegado, carregar_acesso
+from api.core.permissoes import AcessoNegado, carregar_acesso, ferramentas_no_municipio
 from api.core.channel_media import MidiaCanalIndisponivel, baixar_audio_telegram
 from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
@@ -175,7 +175,7 @@ def _markdown_para_html_telegram(texto: str) -> str:
     return seguro
 
 
-def _telegram_send(chat_id: str, texto: str) -> bool:
+def _telegram_send(chat_id: str, texto: str, reply_markup: dict | None = None) -> bool:
     token = _telegram_bot_token()
     if not token:
         log.info("TELEGRAM_BOT_TOKEN ausente; mensagem para chat %s nao enviada", chat_id)
@@ -183,6 +183,7 @@ def _telegram_send(chat_id: str, texto: str) -> bool:
 
     for parte in _dividir_texto_telegram(texto):
         body = json.dumps({
+            **({"reply_markup": reply_markup} if reply_markup else {}),
             "chat_id": chat_id,
             "text": _markdown_para_html_telegram(parte),
             "parse_mode": "HTML",
@@ -404,6 +405,8 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
         db.atualizar_conversa_canal(conexao["id"], conversa["id"])
         return comando_memoria, comando_memoria
 
+    contexto = hub.fixar_contexto(conversa["id"], usuario, ibge6, {"tela": "telegram"})
+    ibge6 = contexto["ibge6"]
     aprender_da_mensagem(usuario, texto, origem="telegram")
     historico = _historico_da_conversa(usuario, conversa["id"])
     agente = criar_susbot_agente(
@@ -412,11 +415,13 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
         usuario=usuario,
         historico=historico,
         memoria_usuario=contexto_para_agente(usuario),
-        permitidas=acesso.ferramentas,
+        permitidas=ferramentas_no_municipio(acesso, ibge6),
+        contexto_conversa=contexto,
         perfil=acesso.perfil,
     )
     resposta = ""
     confirmacao_pendente = False
+    proposta = ""
     referencia = None
     dados_fim: dict[str, Any] | None = None
     for evento in agente.stream_eventos(texto):
@@ -424,6 +429,8 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
             resposta += str(evento["data"].get("texto") or "")
         elif evento["event"] == "confirmacao_pendente":
             confirmacao_pendente = True
+            hub.criar_acao(conversa["id"], usuario, evento["data"])
+            proposta = evento["data"].get("resumo") or "Ação aguardando revisão no SusPredict."
         elif evento["event"] == "fim":
             dados_fim = evento["data"]
             resposta = str(evento["data"].get("resposta") or resposta)
@@ -433,7 +440,7 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
         atualizar_resumo(usuario, texto, agente._obter_llm())
     except Exception as exc:  # pragma: no cover - LLM sem configuração
         log.warning("Falha ao atualizar resumo da memória (telegram): %s", exc)
-    resposta_base = resposta.strip() or "Nao consegui concluir esta consulta agora. Tente novamente em instantes."
+    resposta_base = resposta.strip() or proposta or "Nao consegui concluir esta consulta agora. Tente novamente em instantes."
     resposta = resposta_base
     if confirmacao_pendente:
         resposta += "\n\nEsta acao precisa ser confirmada no SusPredict. Nenhuma alteracao foi executada pelo Telegram."
@@ -445,9 +452,64 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
     return resposta, resposta_telegram
 
 
+def _quadro_conversas(conexao: dict) -> None:
+    conversas = db.listar_conversas(conexao["usuario"], page_size=6)
+    botoes = [[{"text": c["titulo"][:55] or "Conversa sem título",
+                "callback_data": f"clara:abrir:{c['id']}"}] for c in conversas]
+    botoes.append([{"text": "Nova conversa", "callback_data": "clara:nova"}])
+    _telegram_send(conexao["external_chat_id"],
+                   "**Suas conversas recentes**\nEscolha um assunto para ver o resumo e continuar, ou comece uma nova conversa.",
+                   reply_markup={"inline_keyboard": botoes})
+
+
+def _responder_callback(callback_id: str) -> None:
+    token = _telegram_bot_token()
+    if not token:
+        return
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+        data=json.dumps({"callback_query_id": callback_id}).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=10):
+            pass
+    except (urllib.error.URLError, TimeoutError):
+        log.warning("Não foi possível encerrar o indicador do botão Telegram")
+
+
+def _processar_callback(callback: dict) -> None:
+    _responder_callback(str(callback.get("id") or ""))
+    remetente = str((callback.get("from") or {}).get("id") or "")
+    chat = (callback.get("message") or {}).get("chat") or {}
+    conexao = db.get_conexao_canal_por_externo("telegram", remetente)
+    if not conexao or chat.get("type") != "private" or str(chat.get("id")) != conexao["external_chat_id"]:
+        return
+    try:
+        carregar_acesso(conexao["usuario"])
+        comando = str(callback.get("data") or "")
+        if comando == "clara:nova":
+            db.atualizar_conversa_canal(conexao["id"], None)
+            _telegram_send(conexao["external_chat_id"], "Nova conversa pronta. Qual assunto você quer começar?")
+            return
+        if not comando.startswith("clara:abrir:"):
+            return
+        conversa_id = comando.removeprefix("clara:abrir:")
+        conversa = hub.verificar_dono(conversa_id, conexao["usuario"])
+        if not hub.obter_contexto(conversa_id):
+            _telegram_send(conexao["external_chat_id"], "Esta conversa antiga ainda não tem município e período registrados. Abra-a no SusPredict para definir o contexto antes de continuar aqui.")
+            return
+        db.atualizar_conversa_canal(conexao["id"], conversa_id)
+        _telegram_send(conexao["external_chat_id"], hub.resumo_conversa(conversa))
+    except (HTTPException, AcessoNegado):
+        _telegram_send(conexao["external_chat_id"], "Esta conversa não está disponível para seu acesso. Use /conversas para atualizar a lista.")
+
+
 def processar_update_telegram(update: dict) -> None:
     update_id = str(update.get("update_id") or "").strip()
     if update_id and not db.registrar_evento_canal("telegram", update_id):
+        return
+    if update.get("callback_query"):
+        _processar_callback(update["callback_query"])
         return
     mensagem = update.get("message") or {}
     chat = mensagem.get("chat") or {}
@@ -462,7 +524,7 @@ def processar_update_telegram(update: dict) -> None:
         _telegram_send(chat_id, "Por seguranca, conecte e use a Clara apenas em uma conversa privada.")
         return
 
-    if texto.startswith("/start"):
+    if texto.startswith("/start "):
         partes = texto.split(maxsplit=1)
         if len(partes) != 2:
             _telegram_send(chat_id, "Abra SusPredict, entre em Clara > Canais e gere um novo link de conexao.")
@@ -483,6 +545,14 @@ def processar_update_telegram(update: dict) -> None:
     conexao = db.get_conexao_canal_por_externo("telegram", external_user_id)
     if not conexao:
         _telegram_send(chat_id, "Este Telegram ainda nao esta conectado. Gere um link em Clara > Canais no SusPredict.")
+        return
+    try:
+        carregar_acesso(conexao["usuario"])
+    except AcessoNegado:
+        _telegram_send(chat_id, "Seu acesso está desativado. Fale com o administrador.")
+        return
+    if texto.lower() in {"/start", "/conversas", "/continuar", "/menu"} or (_telegram_sessao_expirada(conexao) and not texto.startswith("/nova")):
+        _quadro_conversas(conexao)
         return
     if texto.lower() in {"/nova", "/new", "/clear"}:
         db.atualizar_conversa_canal(conexao["id"], None)

@@ -4,6 +4,8 @@ import QRCode from 'react-qr-code';
 import { API_BASE, MIcon } from '../shared/ui.jsx';
 import {
   apagarConversaSusbot,
+  consultarHubSusbot,
+  cancelarAcaoSusbot,
   apagarMemoriaSusbot,
   cancelarPareamentoCanalSusbot,
   confirmarPareamentoCanalSusbot,
@@ -36,7 +38,7 @@ function uid(prefixo = 'm') {
 
 const SUGESTOES = [
   'Qual é o alerta mais urgente hoje?',
-  'Quais insumos rompem estoque nos próximos 30 dias?',
+  'Quais insumos apresentam risco de aquisição?',
   'Como está a tendência de dengue no município?',
 ];
 
@@ -170,6 +172,25 @@ function montarThreadPersistida(conversa, mensagens = [], pageFallback = 'visao-
       .reverse()
       .flatMap(row => mensagemBancoParaMensagens(row, pageFallback)),
   );
+}
+
+function aplicarHub(thread, hub) {
+  const acoes = (hub?.acoes || []).map(acao => ({
+    id: `acao-${acao.id}`, autor: 'bot', texto: '', ts: parseIsoDate(acao.criado_em),
+    confirmacao: {
+      ...acao.dados, acao_id: acao.id,
+      resolvido: acao.status !== 'pendente' || !acao.permitida,
+      cancelado: ['cancelada', 'expirada'].includes(acao.status),
+      status: acao.status,
+      erro: !acao.permitida ? 'Seu acesso atual não permite esta ação.'
+        : ['executando', 'verificar_resultado', 'falhou'].includes(acao.status)
+          ? 'Verifique o resultado antes de iniciar outra ação. Esta solicitação não será executada novamente.' : null,
+    },
+  }));
+  const resultados = (hub?.acoes || []).flatMap(acao => (acao.resultado || [])
+    .filter(e => e.event === 'fim')
+    .map(e => ({ id: `resultado-${acao.id}`, autor: 'bot', texto: e.data.resposta || '', artefato: e.data.artefato, ts: parseIsoDate(acao.criado_em) })));
+  return { ...thread, contexto: hub?.contexto || null, mensagens: [...thread.mensagens, ...acoes, ...resultados] };
 }
 
 // ─── Markdown mínimo: **negrito** e listas "- item" ────────────────────────────
@@ -503,7 +524,7 @@ function ConfirmacaoAcao({ msg, onConfirmar, onCancelar }) {
         </div>
       ) : (
         <p role="status" style={{ margin: '6px 0 0', fontSize: 11, color: confirmacao.cancelado ? 'var(--ink-500)' : 'var(--good)' }}>
-          {confirmacao.cancelado ? 'Ação cancelada. Nenhuma alteração foi realizada.' : 'Ação confirmada pelo usuário.'}
+          {confirmacao.cancelado ? 'Ação cancelada ou expirada. Nenhuma alteração foi realizada.' : confirmacao.status && confirmacao.status !== 'concluida' ? 'Ação indisponível para confirmação.' : 'Ação confirmada pelo usuário.'}
         </p>
       )}
       {confirmacao.erro && <p role="alert" style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--bad)' }}>{confirmacao.erro}</p>}
@@ -533,10 +554,10 @@ function Bolha({ msg, onNavigate, onConfirmar, onCancelar, onAbrirMemoria }) {
         {isErro ? <MIcon m="error" size={14} /> : <ClaraMark size={20} ativa={isStreaming} />}
         <span>{isErro ? 'Não foi possível responder' : 'Clara'}</span>
       </p>
-      <div className="susbot-bot__texto">
+      {(msg.texto || isStreaming) && <div className="susbot-bot__texto">
         {isErro ? <p style={{ margin: 0 }}>{msg.texto}</p> : renderMd(msg.texto)}
         {isStreaming && <Cursor />}
-      </div>
+      </div>}
 
       {isStreaming && msg.status && (
         <p className="susbot-meta susbot-status">{msg.status}</p>
@@ -1059,10 +1080,15 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
     if (open && viewMode === 'chat') inputRef.current?.focus();
   }, [open, viewMode, current.id]);
 
+  const [contextoEntrada, setContextoEntrada] = useState(null);
   useEffect(() => {
     if (!openRequest?.id) return;
     setViewMode('chat');
     setOpen(true);
+    if (openRequest.contexto) {
+      setCurrent(criarThreadVazia());
+      setContextoEntrada(openRequest.contexto);
+    }
     if (openRequest.prompt) setInput(openRequest.prompt);
   }, [openRequest?.id]);
 
@@ -1176,7 +1202,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
   // Telegram chega por webhook no servidor, sem push para o browser: enquanto o
   // histórico ou uma conversa do Telegram está na tela, relê a cada 3s.
   // ponytail: polling curto; trocar por SSE se o número de usuários simultâneos crescer.
-  const conversaTelegramAberta = viewMode === 'chat' && current.canal === 'telegram' && current.conversaId;
+  const conversaTelegramAberta = viewMode === 'chat' && current.conversaId;
   useEffect(() => {
     if (!open || demoReplay || !(viewMode === 'history' || conversaTelegramAberta)) return;
     const timer = window.setInterval(async () => {
@@ -1189,10 +1215,12 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         const data = await listarMensagensSusbot({
           conversaId: current.conversaId, baseUrl: API_BASE, headers: getAuthHeaders(), page: 1, pageSize: 100,
         });
+        const hub = await consultarHubSusbot({ conversaId: current.conversaId, baseUrl: API_BASE, headers: getAuthHeaders() });
+        if (enviandoRef.current) return;
         const itens = Array.isArray(data?.itens) ? data.itens : [];
-        setCurrent(c => (c.conversaId === current.conversaId && itens.length * 2 !== c.mensagens.length
-          ? { ...c, mensagens: itens.slice().reverse().flatMap(row => mensagemBancoParaMensagens(row, page)) }
-          : c));
+        setCurrent(c => c.conversaId === current.conversaId
+          ? aplicarHub({ ...c, mensagens: itens.slice().reverse().flatMap(row => mensagemBancoParaMensagens(row, page)) }, hub)
+          : c);
       } catch {
         // Próxima volta tenta de novo.
       }
@@ -1228,8 +1256,10 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
 
       if (conversaLoadSeq.current !== seq) return;
 
+      const hub = await consultarHubSusbot({ conversaId: conversa.id, baseUrl: API_BASE, headers: getAuthHeaders() });
+      if (conversaLoadSeq.current !== seq) return;
       const mensagensBanco = Array.isArray(data?.itens) ? data.itens : [];
-      setCurrent(montarThreadPersistida(conversa, mensagensBanco, page));
+      setCurrent(aplicarHub(montarThreadPersistida(conversa, mensagensBanco, page), hub));
     } catch (error) {
       if (conversaLoadSeq.current !== seq) return;
       setErroConversa(error?.message || 'Não foi possível carregar esta conversa.');
@@ -1284,7 +1314,8 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         tela_atual: page,
         tela_origem: page,
         conversaId: conversaIdAtual || undefined,
-        ibge6: ibge6Atual,
+        ibge6: current.contexto?.ibge6 || ibge6Atual,
+        contexto: current.contexto || { tela: page, periodo: "12 Meses", ...(contextoEntrada || {}) },
         baseUrl: API_BASE,
         headers: getAuthHeaders(),
         onStatus: status => {
@@ -1292,7 +1323,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
           if (mensagem) setEtapa(mensagem);
           const conversaId = typeof status === 'object' ? status?.conversa_id : null;
           if (conversaId) {
-            setCurrent(c => ({ ...c, conversaId }));
+            setCurrent(c => ({ ...c, conversaId, contexto: status?.contexto || c.contexto }));
           }
           atualizarMensagemAtual(idResposta, msg => ({
             ...msg,
@@ -1319,7 +1350,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         onConfirmacaoPendente: dados => {
           atualizarMensagemAtual(idResposta, msg => ({
             ...msg,
-            confirmacao: { ferramenta: dados?.ferramenta, argumentos: dados?.argumentos, resumo: dados?.resumo, resolvido: false },
+            confirmacao: { acao_id: dados?.acao_id, ferramenta: dados?.ferramenta, argumentos: dados?.argumentos, resumo: dados?.resumo, resolvido: false },
           }));
         },
         onMemoria: estado => {
@@ -1376,12 +1407,13 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
 
     try {
       const resp = await conversarComSusbot({
-        confirmar: { ferramenta, argumentos },
+        confirmar: { acao_id: current.mensagens.find(m => m.id === idMensagemConfirmacao)?.confirmacao?.acao_id },
         telaAtual: page,
         tela_atual: page,
         tela_origem: page,
         conversaId: current.conversaId || undefined,
-        ibge6: ibge6Atual,
+        ibge6: current.contexto?.ibge6 || ibge6Atual,
+        contexto: current.contexto || { tela: page, periodo: "12 Meses", ...(contextoEntrada || {}) },
         baseUrl: API_BASE,
         headers: getAuthHeaders(),
         onStatus: status => {
@@ -1416,7 +1448,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         link: criarLinkReferencia(resp.referenciaRota, resp.referenciaLabel) || msg.link || null,
       }));
       atualizarMensagemAtual(idMensagemConfirmacao, msg => (
-        msg.confirmacao ? { ...msg, confirmacao: { ...msg.confirmacao, processando: false, resolvido: true } } : msg
+        msg.confirmacao ? { ...msg, confirmacao: { ...msg.confirmacao, processando: false, resolvido: true, status: "concluida" } } : msg
       ));
       void recarregarHistoricoSilencioso();
     } catch (error) {
@@ -1437,7 +1469,15 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
     }
   }
 
-  function cancelarConfirmacao(idMensagemConfirmacao) {
+  async function cancelarConfirmacao(idMensagemConfirmacao) {
+    const acaoId = current.mensagens.find(m => m.id === idMensagemConfirmacao)?.confirmacao?.acao_id;
+    if (!acaoId) return;
+    try {
+      await cancelarAcaoSusbot({ conversaId: current.conversaId, acaoId, baseUrl: API_BASE, headers: getAuthHeaders() });
+    } catch (error) {
+      atualizarMensagemAtual(idMensagemConfirmacao, msg => ({ ...msg, confirmacao: { ...msg.confirmacao, erro: error?.detail || 'Não foi possível cancelar esta ação.' } }));
+      return;
+    }
     atualizarMensagemAtual(idMensagemConfirmacao, msg => (
       msg.confirmacao ? { ...msg, confirmacao: { ...msg.confirmacao, resolvido: true, cancelado: true } } : msg
     ));
@@ -1445,6 +1485,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
 
   function novaConversa() {
     if (enviando) return;
+    setContextoEntrada(null);
     setCurrent(criarThreadVazia());
     setErroConversa('');
     setViewMode('chat');
@@ -1847,6 +1888,11 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         </div>
 
         {demoReplay && <p style={{ padding: '10px 20px', fontSize: 12, color: 'var(--ink-500)' }} role="status">Clara · leitura guiada da demo ({demoReplay.cutoff}). Respostas locais do cenário; conversa temporária, sem IA conectada.</p>}
+        {viewMode === 'chat' && current.contexto && <p role="status" style={{ margin: 0, padding: '8px 16px', fontSize: 12, color: 'var(--ink-700)' }}>
+          Conversa: município {current.contexto.ibge6} · {current.contexto.periodo}
+          {current.contexto.item ? ` · ${current.contexto.item}` : ''}.
+          {current.contexto.ibge6 !== ibge6Atual && ' O painel está em outro município. Inicie uma nova conversa para usar a seleção atual.'}
+        </p>}
         {/* Corpo — histórico ou conversa */}
         {viewMode === 'memory' ? (
           <MemoriaClara />
