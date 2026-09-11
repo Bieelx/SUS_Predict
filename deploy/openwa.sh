@@ -97,7 +97,29 @@ EOF
     info "Subindo container (o primeiro build demora vários minutos)"
     compose up -d --build || return 1
     ok "OpenWA no ar em $OPENWA_BASE_URL (Swagger em $OPENWA_BASE_URL/api/docs)"
-    cmd_chave
+    cmd_chave || return 1
+    religar_sessao
+}
+
+religar_sessao() {
+    # Rebuild derruba a sessão e o OpenWA não a sobe sozinho ("left ready by a node that never
+    # came back"). O login fica no volume, então um start basta — sem QR.
+    [ -n "$OPENWA_API_KEY" ] || return 0   # primeira instalação: ainda não há sessão
+    local tentativa id=""
+    for tentativa in $(seq 1 30); do
+        id="$(sessao_id)"
+        [ -n "$id" ] && break
+        sleep 2
+    done
+    [ -n "$id" ] || { warn "Sessão '$OPENWA_SESSION_NAME' não encontrada — rode 'bash deploy/openwa.sh sessao'"; return 0; }
+    api POST "/api/sessions/$id/start" >/dev/null
+    local status=""
+    for tentativa in $(seq 1 20); do
+        sleep 3
+        status="$(api GET "/api/sessions/$id" | campo status)"
+        [ "$status" = "ready" ] && { ok "Sessão '$OPENWA_SESSION_NAME' religada (ready)"; return 0; }
+    done
+    warn "Sessão em '$status' após o start — se pedir QR, rode 'bash deploy/openwa.sh qr'"
 }
 
 cmd_chave() {
@@ -206,10 +228,26 @@ cmd_webhook() {
     [ -n "$id" ] || { err "Sessão não existe — rode 'bash deploy/openwa.sh sessao'"; return 1; }
     local corpo; corpo="$(python3 -c 'import json,sys
 print(json.dumps({"url":sys.argv[1],"events":["message.received","message.reaction","session.status"],"secret":sys.argv[2],"retryCount":3}))' "$url" "$OPENWA_WEBHOOK_SECRET")"
-    local resposta; resposta="$(api POST "/api/sessions/$id/webhooks" "$corpo")"
-    local webhook_id; webhook_id="$(echo "$resposta" | campo id)"
-    [ -n "$webhook_id" ] || { err "Falhou: $resposta"; return 1; }
-    ok "Webhook $webhook_id registrado para $url"
+    # Mesma URL já registrada = atualiza; POST de novo duplicaria cada entrega.
+    local existente; existente="$(api GET "/api/sessions/$id/webhooks" | python3 -c '
+import json,sys
+try: itens=json.load(sys.stdin)
+except Exception: sys.exit(0)
+if isinstance(itens,dict): itens=itens.get("data") or []
+ids=[w.get("id") for w in itens if isinstance(w,dict) and w.get("url")==sys.argv[1]]
+print(" ".join(i for i in ids if i))' "$url")"
+    local webhook_id="${existente%% *}" resposta extra
+    if [ -n "$webhook_id" ]; then
+        resposta="$(api PUT "/api/sessions/$id/webhooks/$webhook_id" "$corpo")"
+        for extra in ${existente#"$webhook_id"}; do
+            api DELETE "/api/sessions/$id/webhooks/$extra" >/dev/null && warn "Webhook duplicado $extra removido"
+        done
+    else
+        resposta="$(api POST "/api/sessions/$id/webhooks" "$corpo")"
+        webhook_id="$(echo "$resposta" | campo id)"
+    fi
+    [ -n "$webhook_id" ] && [ "$(echo "$resposta" | campo id)" = "$webhook_id" ] || { err "Falhou: $resposta"; return 1; }
+    ok "Webhook $webhook_id ativo para $url"
     info "Disparando entrega de teste"
     api POST "/api/sessions/$id/webhooks/$webhook_id/test" >/dev/null && ok "Teste enviado — confira o log da API da Clara"
 }
