@@ -406,3 +406,15 @@ timer e aguarde o serviço de atualização terminar.
 
 Referências: [fast-forward no Git](https://git-scm.com/docs/git-pull) e
 [timers systemd](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html).
+
+
+## 13. Recuperação do Telegram e ETP sem item
+
+- Webhook corrigido para
+  `https://suspredict.northcentralus.cloudapp.azure.com/backend/api/susbot/telegram/webhook`.
+  O destino antigo era o domínio da máquina de IA. Telegram confirmou o novo webhook;
+  a fila passou de uma atualização pendente para zero, sem erro de entrega informado.
+- Clara: plano `gerar_etp` sem `item` provocava TypeError após confirmação.
+  Agora pede o medicamento/insumo antes de confirmar; a ferramenta também valida o item
+  para confirmações antigas. Não cria ETP com item ausente, vazio ou de tipo inválido.
+- 60 testes locais do agente, ferramentas e adaptador aprovados.

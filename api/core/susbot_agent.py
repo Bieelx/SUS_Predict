@@ -1016,6 +1016,17 @@ class ClaraAgent:
             }
             return
 
+        if plano.get("acao") == "ferramenta" and ferramenta == "gerar_etp":
+            argumentos = plano.get("argumentos") or {}
+            item = argumentos.get("item") if isinstance(argumentos, dict) else None
+            if not isinstance(item, str) or not item.strip():
+                yield from self._emitir_resultado(
+                    pergunta, plano,
+                    {"encontrado": False, "motivo": "Para preparar o ETP, informe qual medicamento ou insumo você deseja adquirir."},
+                    None, ferramenta_executada=ferramenta, execucao=execucao,
+                )
+                return
+
         if plano.get("acao") == "ferramenta" and ferramenta in FERRAMENTAS_ESCRITA:
             argumentos = plano.get("argumentos") or {}
             yield {

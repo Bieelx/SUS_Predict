@@ -687,3 +687,14 @@ def test_fallback_nao_mistura_resposta_parcial_com_outro_provider():
     assert next(stream) == "inicio"
     with pytest.raises(RuntimeError, match="conexao perdida"):
         next(stream)
+
+
+def test_etp_sem_item_nao_pede_confirmacao_nem_interrompe_stream(db, monkeypatch):
+    from api.core import susbot_agent
+    agente = susbot_agent.criar_susbot_agente("3550308", llm=LLMMock())
+    monkeypatch.setattr(susbot_agent, "rotear_intencao", lambda pergunta: None)
+    monkeypatch.setattr(agente, "_planejar_com_llm", lambda pergunta: {"acao": "ferramenta", "ferramenta": "gerar_etp", "argumentos": {}})
+    eventos = list(agente.stream_eventos("Prepare esse documento"))
+    assert not any(e["event"] in {"erro", "confirmacao_pendente"} for e in eventos)
+    fim = next(e["data"] for e in eventos if e["event"] == "fim")
+    assert "informe qual medicamento ou insumo" in fim["resposta"]

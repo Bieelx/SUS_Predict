@@ -454,7 +454,10 @@ def criar_susbot_tools(ibge6: str, permitidas=None) -> dict[str, Callable]:
                 periodo=janela, **comum,
             )
 
-    def gerar_etp(item: str, alerta_id: str | None = None, **_kwargs) -> dict:
+    def gerar_etp(item: str | None = None, alerta_id: str | None = None, **_kwargs) -> dict:
+        if not isinstance(item, str) or not item.strip():
+            return _resposta_vazia("Para preparar o ETP, informe qual medicamento ou insumo você deseja adquirir.", ibge6=ibge)
+        item = item.strip()
         todas, rows = _buscar_estoque_por_item(item)
         if not todas:
             return _resposta_vazia(

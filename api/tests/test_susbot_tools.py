@@ -299,3 +299,14 @@ def test_executar_sql_fallback_respeita_guard(db):
     bloqueado = tools["executar_sql_fallback"]("SELECT * FROM susbot_conversas")
     assert bloqueado["encontrado"] is False
     assert "allowlist" in bloqueado["motivo"].lower() or "não permitida" in bloqueado["motivo"].lower()
+
+
+@pytest.mark.parametrize("argumentos", [{}, {"item": None}, {"item": "  "}, {"item": 123}])
+def test_etp_sem_item_pede_esclarecimento_sem_escrever(db, monkeypatch, argumentos):
+    from api.core.susbot_tools import criar_susbot_tools
+    def nao_escrever(*args, **kwargs):
+        pytest.fail("Nao deve criar ETP sem item")
+    monkeypatch.setattr(db, "criar_etp", nao_escrever)
+    resultado = criar_susbot_tools("3550308")["gerar_etp"](**argumentos)
+    assert resultado["encontrado"] is False
+    assert "informe qual medicamento ou insumo" in resultado["motivo"]
