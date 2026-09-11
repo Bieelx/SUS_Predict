@@ -165,7 +165,7 @@ def test_memoria_pessoal_identifica_usuario_e_recusa_outro_perfil(db):
         usuario="user-gabriel",
         memoria_usuario={
             "fatos": {"nome": "Gabriel", "preferencia_resposta": "curta"},
-            "topicos_frequentes": ["estoque", "alertas"],
+            "resumo": "Gabriel acompanha estoque de insumos.",
         },
         llm=llm,
     )
@@ -509,7 +509,7 @@ def test_planejador_nao_recebe_memoria_e_resposta_recebe_bloco_delimitado(db):
         historico=[{"pergunta": "estoque de soro?", "resposta": "Seu estoque dura 12 dias."}],
         memoria_usuario={
             "fatos": {"nome": "Gabriel", "preferencia_resposta": "curta", "cargo": "gestor"},
-            "topicos_frequentes": ["estoque"],
+            "resumo": "Gabriel acompanha estoque.",
         },
         llm=llm,
     )
@@ -524,7 +524,7 @@ def test_planejador_nao_recebe_memoria_e_resposta_recebe_bloco_delimitado(db):
     assert llm.stream_chamadas
     _, contexto_resp, plano, resultado = llm.stream_chamadas[0]
     assert contexto_resp["memoria_usuario"] == {
-        "nome": "Gabriel", "preferencia_resposta": "curta", "assuntos_frequentes": ["estoque"],
+        "nome": "Gabriel", "preferencia_resposta": "curta", "resumo": "Gabriel acompanha estoque.",
     }
 
     texto = montar_mensagem_resposta("pergunta", contexto_resp, plano, resultado)

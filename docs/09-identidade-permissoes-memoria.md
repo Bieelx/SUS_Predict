@@ -287,6 +287,22 @@ custo zero) e reavaliar quando o grupo decidir migrar a leitura para o Supabase.
 
 ### 4. Escrita na memória
 
+> **Atualização 11/09/2026 — linha única + resumo por LLM.** O formato de uma linha por
+> fato (`nome`, `preferencia_resposta`, `topico:*`) foi trocado por **uma linha por
+> usuário** (`fact_ref` fixo `perfil`) com três campos cifrados: `nome` e
+> `preferencia_resposta` (mesmos extratores e validadores de código abaixo) e `resumo`,
+> texto de até 600 caracteres **reescrito inteiro** pelo LLM (`completar`) a cada mensagem
+> com marcador de 1ª pessoa. Os contadores de tópico saíram (o resumo cobre).
+> Isso relaxa a regra "nunca texto livre" só para `resumo`, com estas barreiras: o LLM
+> recebe resumo atual + mensagem delimitada como dado; a saída passa por
+> `_contem_dado_sensivel`, por um filtro de termos de papel/permissão (`admin`,
+> `permissão`, `acesso total`…) e pelo teto de tamanho; falha do LLM mantém o resumo
+> anterior; o resumo continua só no bloco MEMORIA DO USUARIO da resposta (planejador e
+> autorização nunca o leem). O front ganhou a tela "O que a Clara sabe" (lista + apagar
+> campo/tudo) e o evento SSE `memoria` (`salvando` → `atualizada`|`sem_mudanca`).
+> Migração: leitura já funde linhas antigas; `python -m api.core.susbot_memory` consolida
+> todas de uma vez. A tabela abaixo descreve o desenho anterior.
+
 Boa notícia: a estrutura de `susbot_memory.py` já cumpre "não é tool do LLM", "lista
 fechada", "validação em código", "isolada por usuário", "usuário vê e apaga". O que muda:
 

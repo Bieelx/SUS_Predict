@@ -497,6 +497,10 @@ class GeminiClaraLLM:
         resposta = self._client_planejamento.invoke(_prompt_planejamento(pergunta, contexto, ferramentas))
         return _normalizar_plano(_texto_chunk(resposta))
 
+    def completar(self, mensagens: list[tuple[str, str]], max_tokens: int = 256) -> str:
+        """Chamada simples de texto (usada pelo resumo da memória)."""
+        return _texto_chunk(self._client.invoke(mensagens))
+
     def stream_resposta(
         self,
         pergunta: str,
@@ -561,6 +565,9 @@ class GroqClaraLLM:
         texto = self._chamar([sistema, humano], json_mode=True, max_tokens=256)
         return _normalizar_plano(texto)
 
+    def completar(self, mensagens: list[tuple[str, str]], max_tokens: int = 256) -> str:
+        return self._chamar(mensagens, json_mode=False, max_tokens=max_tokens)
+
     def stream_resposta(
         self,
         pergunta: str,
@@ -596,6 +603,16 @@ class FallbackClaraLLM:
                 raise
             log.warning("LLM primário falhou no planejamento (%s) — caindo pro fallback", exc)
             return self._fallback.planejar(pergunta, contexto, ferramentas)
+
+    def completar(self, mensagens: list[tuple[str, str]], max_tokens: int = 256) -> str:
+        # Adapter local não implementa `completar`: o AttributeError cai no fallback cloud.
+        try:
+            return self._primario.completar(mensagens, max_tokens=max_tokens)
+        except Exception as exc:
+            if self._fallback is None:
+                raise
+            log.warning("LLM primário falhou no completar (%s) — caindo pro fallback", exc)
+            return self._fallback.completar(mensagens, max_tokens=max_tokens)
 
     def stream_resposta(
         self,
@@ -715,7 +732,7 @@ class ClaraAgent:
         }
 
     def _memoria_para_prompt(self) -> dict[str, Any]:
-        """Só chaves fixas e valores já validados; vai para o bloco MEMORIA DO USUARIO."""
+        """Só campos fixos, já validados em susbot_memory; vai para o bloco MEMORIA DO USUARIO."""
 
         fatos = self.memoria_usuario.get("fatos") or {}
         memoria: dict[str, Any] = {}
@@ -723,9 +740,8 @@ class ClaraAgent:
             memoria["nome"] = str(fatos["nome"])
         if fatos.get("preferencia_resposta"):
             memoria["preferencia_resposta"] = str(fatos["preferencia_resposta"])
-        topicos = [str(t) for t in (self.memoria_usuario.get("topicos_frequentes") or [])[:3]]
-        if topicos:
-            memoria["assuntos_frequentes"] = topicos
+        if self.memoria_usuario.get("resumo"):
+            memoria["resumo"] = str(self.memoria_usuario["resumo"])
         return memoria
 
     def _contexto_resposta(self) -> dict[str, Any]:
@@ -741,7 +757,7 @@ class ClaraAgent:
     def _resposta_contextual(self, pergunta: str) -> str | None:
         texto = _normalizar_intencao(pergunta)
         fatos = self.memoria_usuario.get("fatos") or {}
-        topicos = self.memoria_usuario.get("topicos_frequentes") or []
+        resumo_usuario = str(self.memoria_usuario.get("resumo") or "")
         nome_atual = _normalizar_intencao(str(fatos.get("nome") or ""))
 
         # Identidade da Clara: resposta fixa, sem LLM. Modelos pequenos copiavam o nome
@@ -788,8 +804,8 @@ class ClaraAgent:
             if fatos.get("preferencia_resposta"):
                 partes.append(f"você prefere respostas **{fatos['preferencia_resposta']}**")
             resposta = "; ".join(partes) + "."
-            if topicos:
-                resposta += " Seus assuntos mais frequentes são: " + ", ".join(topicos) + "."
+            if resumo_usuario:
+                resposta += f" O que anotei sobre você: {resumo_usuario}"
             if not fatos.get("nome"):
                 resposta += " Se quiser, diga “meu nome é …” que eu guardo."
             resposta += " Você pode pedir para eu esquecer uma informação a qualquer momento."

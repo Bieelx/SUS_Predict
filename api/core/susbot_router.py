@@ -24,9 +24,11 @@ from api.core.susbot_memory import (
     apagar_memorias,
     aprender_da_mensagem,
     aprender_do_usuario_autenticado,
+    atualizar_resumo,
     contexto_para_agente,
     executar_comando_memoria,
     resumo_transparente,
+    vale_atualizar_resumo,
 )
 from api.core.susbot_metrics import obter_metricas
 from api.core.susbot_access import verificar_acesso_susbot
@@ -192,6 +194,17 @@ def perguntar(
                 if evento["event"] == "fim":
                     texto_final = str(evento["data"].get("resposta") or "")
                     referencia_rota = evento["data"].get("referencia_rota")
+
+            # Resumo da memória depois da resposta: o texto já chegou ao usuário e o
+            # front mostra "guardando na memória" enquanto o LLM reescreve o resumo.
+            if agente is not None and pergunta and not req.confirmar and vale_atualizar_resumo(pergunta):
+                yield _sse("memoria", {"estado": "salvando"})
+                try:
+                    mudou = atualizar_resumo(usuario, pergunta, agente._obter_llm())
+                except Exception as exc:  # pragma: no cover - LLM sem configuração
+                    log.warning("Falha ao atualizar resumo da memória: %s", exc)
+                    mudou = False
+                yield _sse("memoria", {"estado": "atualizada" if mudou else "sem_mudanca"})
 
             try:
                 db.adicionar_mensagem(

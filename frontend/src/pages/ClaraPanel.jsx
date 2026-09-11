@@ -3,8 +3,10 @@ import { briefingDemo } from '../demo/adapter.js';
 import QRCode from 'react-qr-code';
 import { API_BASE, MIcon } from '../shared/ui.jsx';
 import {
+  apagarMemoriaSusbot,
   cancelarPareamentoCanalSusbot,
   confirmarPareamentoCanalSusbot,
+  consultarMemoriaSusbot,
   consultarPareamentoCanalSusbot,
   conversarComSusbot,
   criarPareamentoCanalSusbot,
@@ -508,7 +510,7 @@ function ConfirmacaoAcao({ msg, onConfirmar, onCancelar }) {
   );
 }
 
-function Bolha({ msg, onNavigate, onConfirmar, onCancelar }) {
+function Bolha({ msg, onNavigate, onConfirmar, onCancelar, onAbrirMemoria }) {
   const isUser = msg.autor === 'user';
   const isErro = msg.autor === 'error';
   const isStreaming = msg.autor === 'bot' && msg.streaming;
@@ -540,6 +542,7 @@ function Bolha({ msg, onNavigate, onConfirmar, onCancelar }) {
       )}
 
       {!isErro && <ArtefatoView artefato={msg.artefato} />}
+      {!isErro && <AvisoMemoria estado={msg.memoria} onAbrir={onAbrirMemoria} />}
       {!isErro && <ConfirmacaoAcao msg={msg} onConfirmar={onConfirmar} onCancelar={onCancelar} />}
 
       {isErro && (
@@ -859,11 +862,144 @@ function ContinuidadeCanais({ ibge6 }) {
   );
 }
 
+// ─── O que a Clara sabe sobre mim ─────────────────────────────────────────────
+//
+// Uma única ficha por usuário (nome, preferência, resumo reescrito pela Clara).
+// Só leitura e exclusão: o conteúdo nasce da conversa, não de formulário.
+
+const ROTULO_PREFERENCIA = {
+  curta: 'Respostas curtas',
+  detalhada: 'Respostas detalhadas',
+  com_numeros: 'Respostas com números',
+};
+
+function MemoriaClara() {
+  const [memoria, setMemoria] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  async function carregar() {
+    setCarregando(true);
+    setErro('');
+    try {
+      setMemoria(await consultarMemoriaSusbot({ baseUrl: API_BASE, headers: getAuthHeaders() }));
+    } catch {
+      setErro('Não foi possível carregar a memória da Clara agora.');
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  useEffect(() => { void carregar(); }, []);
+
+  async function apagar(chave) {
+    if (!chave && !window.confirm('Apagar tudo o que a Clara sabe sobre você? Isso não pode ser desfeito.')) return;
+    setProcessando(true);
+    setErro('');
+    try {
+      await apagarMemoriaSusbot({ chave, baseUrl: API_BASE, headers: getAuthHeaders() });
+      await carregar();
+    } catch {
+      setErro('Não foi possível apagar agora. Tente novamente.');
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  const itens = [
+    ...(memoria?.fatos || []).map(f => ({
+      chave: f.chave,
+      rotulo: f.rotulo,
+      valor: f.chave === 'preferencia_resposta' ? (ROTULO_PREFERENCIA[f.valor] || f.valor) : f.valor,
+      icone: f.chave === 'nome' ? 'badge' : 'tune',
+    })),
+    ...(memoria?.resumo ? [{ chave: 'resumo', rotulo: 'Resumo sobre você', valor: memoria.resumo, icone: 'notes' }] : []),
+  ];
+  const atualizado = memoria?.atualizado_em ? parseIsoDate(memoria.atualizado_em) : null;
+
+  return (
+    <div className="susbot-panel-body susbot-canais" aria-busy={carregando || processando}>
+      <p className="susbot-canais__intro">
+        A Clara guarda uma ficha só sobre você e a reescreve conforme vocês conversam. Ela usa isso para ajustar o tom das respostas, nunca como fonte de dados ou permissão.
+      </p>
+
+      {erro && <p role="alert" className="susbot-canais__erro"><MIcon m="error" size={16} />{erro}</p>}
+
+      {carregando ? (
+        <EstadoPainel icone="hourglass_empty" titulo="Carregando memória" texto="Buscando o que a Clara lembra sobre você." />
+      ) : !erro && itens.length === 0 ? (
+        <EstadoPainel
+          icone="psychology"
+          titulo="Nada guardado ainda"
+          texto="Conte sobre seu trabalho ou diga “prefiro respostas curtas” e a Clara passa a lembrar."
+        />
+      ) : (
+        itens.map(item => (
+          <section key={item.chave} className="susbot-canal">
+            <div className="susbot-canal__topo" style={{ alignItems: 'flex-start' }}>
+              <span className="susbot-canal__logo susbot-canal__logo--web"><MIcon m={item.icone} size={20} /></span>
+              <div className="susbot-canal__nome" style={{ flex: 1, minWidth: 0 }}>
+                <strong>{item.rotulo}</strong>
+                <span style={{ whiteSpace: 'normal', lineHeight: 1.5 }}>{item.valor}</span>
+              </div>
+              <button
+                type="button"
+                disabled={processando}
+                onClick={() => void apagar(item.chave)}
+                title={`Esquecer ${item.rotulo.toLowerCase()}`}
+                aria-label={`Esquecer ${item.rotulo.toLowerCase()}`}
+                className="susbot-icon-btn"
+              >
+                <MIcon m="delete" size={18} />
+              </button>
+            </div>
+          </section>
+        ))
+      )}
+
+      {!carregando && itens.length > 0 && (
+        <button type="button" disabled={processando} onClick={() => void apagar()} className="susbot-btn susbot-btn--danger">
+          <MIcon m="delete_sweep" size={17} />
+          Apagar tudo
+        </button>
+      )}
+
+      <p className="susbot-canais__rodape">
+        <MIcon m="lock" size={15} />
+        <span>
+          Cifrado e visível só para você.{atualizado ? ` Atualizado em ${atualizado.toLocaleDateString('pt-BR')}.` : ''} Senhas, dados clínicos e informações sensíveis nunca são guardados.
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function AvisoMemoria({ estado, onAbrir }) {
+  if (estado === 'salvando') {
+    return (
+      <p className="susbot-memoria susbot-memoria--salvando" role="status">
+        <MIcon m="psychology" size={15} />
+        <span>Guardando na memória…</span>
+      </p>
+    );
+  }
+  if (estado === 'atualizada') {
+    return (
+      <button type="button" className="susbot-memoria susbot-memoria--ok" onClick={onAbrir} title="Ver o que a Clara sabe sobre você">
+        <MIcon m="check_circle" size={15} />
+        <span>Memória atualizada</span>
+      </button>
+    );
+  }
+  return null;
+}
+
 // ─── Componente principal ───────────────────────────────────────────────────
 
 export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChange, openRequest = null, demoReplay = null }) {
   const [open, setOpen] = useState(false);
-  const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history' | 'channels'
+  const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history' | 'channels' | 'memory'
   const [threads, setThreads] = useState([]);
   const [canalHistorico, setCanalHistorico] = useState('app');
   const [current, setCurrent] = useState(() => criarThreadVazia());
@@ -1134,6 +1270,14 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
           atualizarMensagemAtual(idResposta, msg => ({
             ...msg,
             confirmacao: { ferramenta: dados?.ferramenta, argumentos: dados?.argumentos, resumo: dados?.resumo, resolvido: false },
+          }));
+        },
+        onMemoria: estado => {
+          // Texto já chegou: para o cursor e mostra só o aviso de memória.
+          atualizarMensagemAtual(idResposta, msg => ({
+            ...msg,
+            streaming: false,
+            memoria: estado === 'sem_mudanca' ? undefined : estado,
           }));
         },
       });
@@ -1414,6 +1558,24 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         .susbot-btn--danger { background: var(--elev); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 28%, transparent); }
         .susbot-btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 6%, var(--elev)); }
 
+        /* Aviso de memória sob a resposta */
+        @keyframes susbot-memoria-pulso { 0%, 100% { opacity: .55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.12); } }
+        .susbot-memoria {
+          margin: 10px 0 0; padding: 4px 10px 4px 8px; border-radius: 999px;
+          display: inline-flex; align-items: center; gap: 6px;
+          font-size: 11px; font-weight: 700; border: 1px solid transparent; font-family: inherit;
+          animation: susbot-rise .3s cubic-bezier(0.2,0.7,0.2,1) both;
+        }
+        .susbot-memoria--salvando { color: var(--ink-500); background: var(--subtle); border-color: var(--ink-100); }
+        .susbot-memoria--salvando > :first-child { animation: susbot-memoria-pulso 1.1s ease-in-out infinite; }
+        .susbot-memoria--ok {
+          color: var(--primary); background: var(--primary-soft); border-color: var(--primary-soft-border); cursor: pointer;
+        }
+        .susbot-memoria--ok:hover { transform: translateY(-1px); }
+        @media (prefers-reduced-motion: reduce) {
+          .susbot-memoria, .susbot-memoria--salvando > :first-child { animation: none; }
+        }
+
         /* Tela de canais */
         .susbot-canais { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 10px; animation: susbot-rise .35s cubic-bezier(0.2,0.7,0.2,1) both; }
         .susbot-canais__intro { margin: 0 0 6px; font-size: 13px; line-height: 1.55; color: var(--ink-500); }
@@ -1582,7 +1744,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                 <MIcon m="arrow_back" size={19} />
               </button>
               <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--ink-900)', fontFamily: 'var(--ff-tight)' }}>
-                {viewMode === 'history' ? 'Conversas' : 'Canais da Clara'}
+                {viewMode === 'history' ? 'Conversas' : viewMode === 'memory' ? 'O que a Clara sabe' : 'Canais da Clara'}
               </p>
             </div>
           ) : (
@@ -1607,6 +1769,15 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                 </button>
                 <button
                   type="button"
+                  onClick={() => setViewMode('memory')}
+                  aria-label="O que a Clara sabe sobre você"
+                  title="O que a Clara sabe sobre você"
+                  className="susbot-icon-btn"
+                >
+                  <MIcon m="psychology" size={19} />
+                </button>
+                <button
+                  type="button"
                   onClick={() => setViewMode('channels')}
                   aria-label="Canais conectados (Telegram, WhatsApp)"
                   title="Canais"
@@ -1627,7 +1798,9 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
 
         {demoReplay && <p style={{ padding: '10px 20px', fontSize: 12, color: 'var(--ink-500)' }} role="status">Clara · leitura guiada da demo ({demoReplay.cutoff}). Respostas locais do cenário; conversa temporária, sem IA conectada.</p>}
         {/* Corpo — histórico ou conversa */}
-        {viewMode === 'channels' ? (
+        {viewMode === 'memory' ? (
+          <MemoriaClara />
+        ) : viewMode === 'channels' ? (
           <ContinuidadeCanais ibge6={ibge6Atual} />
         ) : viewMode === 'history' ? (
           <div className="susbot-panel-body" style={{ flex: 1, padding: '4px 16px' }}>
@@ -1748,7 +1921,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
 
               {current.mensagens.map(m => (
                 <div key={m.id} className="susbot-msg">
-                  <Bolha msg={m} onNavigate={onNavigate} onConfirmar={confirmarAcao} onCancelar={cancelarConfirmacao} />
+                  <Bolha msg={m} onNavigate={onNavigate} onConfirmar={confirmarAcao} onCancelar={cancelarConfirmacao} onAbrirMemoria={() => setViewMode('memory')} />
                 </div>
               ))}
               <div ref={fimRef} />

@@ -114,6 +114,17 @@ export function revogarCanalSusbot({ provedor, ...opcoes } = {}) {
   });
 }
 
+export function consultarMemoriaSusbot(opcoes = {}) {
+  return requisicaoJson(SUSBOT_ENDPOINTS.memoria, opcoes);
+}
+
+export function apagarMemoriaSusbot({ chave, ...opcoes } = {}) {
+  return requisicaoJson(chave ? SUSBOT_ENDPOINTS.memoriaCampo(chave) : SUSBOT_ENDPOINTS.memoria, {
+    ...opcoes,
+    method: 'DELETE',
+  });
+}
+
 export async function listarConversasSusbot({
   baseUrl = '',
   fetchImpl = globalThis.fetch,
@@ -272,6 +283,11 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
       return;
     }
 
+    if (evento.event === SUSBOT_SSE_EVENTS.memoria) {
+      handlers.onMemoria?.(evento.data?.estado);
+      return;
+    }
+
     if (evento.event === SUSBOT_SSE_EVENTS.fim) {
       if (evento.data && typeof evento.data === 'object') {
         respostaFinal = normalizarTexto(evento.data.resposta) || respostaFinal;
@@ -350,6 +366,7 @@ export async function conversarComSusbot({
   onReferencia,
   onArtefato,
   onConfirmacaoPendente,
+  onMemoria,
   onFim,
   onEvento,
 } = {}) {
@@ -403,6 +420,7 @@ export async function conversarComSusbot({
       onReferencia,
       onArtefato,
       onConfirmacaoPendente,
+      onMemoria,
       onFim,
       onEvento,
     });

@@ -34,6 +34,7 @@ from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
     aprender_da_mensagem,
     aprender_do_usuario_autenticado,
+    atualizar_resumo,
     contexto_para_agente,
     executar_comando_memoria,
 )
@@ -428,6 +429,10 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
             resposta = str(evento["data"].get("resposta") or resposta)
             referencia = evento["data"].get("referencia_rota")
 
+    try:
+        atualizar_resumo(usuario, texto, agente._obter_llm())
+    except Exception as exc:  # pragma: no cover - LLM sem configuração
+        log.warning("Falha ao atualizar resumo da memória (telegram): %s", exc)
     resposta_base = resposta.strip() or "Nao consegui concluir esta consulta agora. Tente novamente em instantes."
     resposta = resposta_base
     if confirmacao_pendente:

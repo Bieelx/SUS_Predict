@@ -240,3 +240,31 @@ def test_web_aprende_nome_do_perfil_autenticado(router):
     asyncio.run(_ler_streaming_response(router_module.perguntar(req, user=user)))
 
     assert router_module.contexto_para_agente("user-abc")["fatos"]["nome"] == "Gabriel Araujo"
+
+
+def test_web_emite_evento_de_memoria_e_grava_resumo(router, monkeypatch):
+    router_module, db_module = router
+
+    class LLMResumo:
+        def completar(self, mensagens, max_tokens=256):
+            return "Acompanha o estoque de insumos da farmácia municipal."
+
+    class AgenteComLLM(FakeAgent):
+        def _obter_llm(self):
+            return LLMResumo()
+
+    monkeypatch.setattr(router_module, "criar_susbot_agente", lambda *args, **kwargs: AgenteComLLM())
+    user = {"id": "user-abc", "email": "user@example.com"}
+
+    pessoal = router_module.PerguntaClaraRequest(
+        pergunta="Eu cuido do estoque da farmácia municipal", ibge6="355030", tela_origem="insumos",
+    )
+    corpo = asyncio.run(_ler_streaming_response(router_module.perguntar(pessoal, user=user)))
+    assert corpo.index('"estado": "salvando"') < corpo.index('"estado": "atualizada"')
+    assert corpo.index("event: fim") < corpo.index("event: memoria")
+    assert router_module.contexto_para_agente("user-abc")["resumo"].startswith("Acompanha o estoque")
+    assert len(db_module.listar_todas_memorias_usuario()) == 1
+
+    operacional = router_module.PerguntaClaraRequest(pergunta="Qual o estoque de soro?", ibge6="355030")
+    corpo = asyncio.run(_ler_streaming_response(router_module.perguntar(operacional, user=user)))
+    assert "event: memoria" not in corpo

@@ -7,6 +7,8 @@ export const SUSBOT_ENDPOINTS = {
   pareamento: pareamentoId => `/api/susbot/canais/pareamentos/${pareamentoId}`,
   confirmarPareamento: pareamentoId => `/api/susbot/canais/pareamentos/${pareamentoId}/confirmar`,
   canal: provedor => `/api/susbot/canais/${provedor}`,
+  memoria: '/api/susbot/memoria',
+  memoriaCampo: chave => `/api/susbot/memoria/${chave}`,
 };
 
 export const SUSBOT_SSE_EVENTS = {
@@ -15,6 +17,7 @@ export const SUSBOT_SSE_EVENTS = {
   referencia: 'referencia',
   artefato: 'artefato',
   confirmacao_pendente: 'confirmacao_pendente',
+  memoria: 'memoria',
   fim: 'fim',
   erro: 'erro',
 };
