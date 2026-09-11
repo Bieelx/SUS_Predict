@@ -9,6 +9,7 @@
 #   bash deploy/openwa.sh chave       # mostra a API key gerada no primeiro boot
 #   bash deploy/openwa.sh sessao      # cria (ou reaproveita) a sessão e mostra o status
 #   bash deploy/openwa.sh qr          # baixa o QR em PNG para parear o número
+#   bash deploy/openwa.sh codigo 5511999999999  # alternativa ao QR: código de 8 letras
 #   bash deploy/openwa.sh enviar 5511999999999 "teste"
 #   bash deploy/openwa.sh webhook http://127.0.0.1:8000/api/susbot/whatsapp/webhook
 #   bash deploy/openwa.sh smoke 5511999999999
@@ -95,11 +96,16 @@ EOF
 }
 
 cmd_chave() {
-    local chave
-    chave="$(compose exec -T "$OPENWA_SERVICE" cat /app/data/.api-key 2>/dev/null | tr -d '\r\n')"
+    local chave="" tentativa
+    # Logo após o `up` o container ainda está bootando e o arquivo não existe.
+    for tentativa in $(seq 1 15); do
+        chave="$(compose exec -T "$OPENWA_SERVICE" cat /app/data/.api-key 2>/dev/null | tr -d '\r\n')"
+        [ -n "$chave" ] && break
+        sleep 2
+    done
     if [ -z "$chave" ]; then
         warn "Não consegui ler /app/data/.api-key no serviço '$OPENWA_SERVICE'."
-        info "Procure a chave nos logs do primeiro boot: bash deploy/openwa.sh logs | grep -i 'api key'"
+        info "Procure a chave nos logs do primeiro boot: docker logs openwa-api 2>&1 | grep -i -A1 'api key'"
         return 1
     fi
     ok "API key: ${BOLD}$chave${NC}"
@@ -133,8 +139,10 @@ cmd_sessao() {
         api POST /api/sessions "{\"name\":\"$OPENWA_SESSION_NAME\"}" >/dev/null || return 1
         id="$(sessao_id)"
         [ -n "$id" ] || { err "Sessão não apareceu na listagem após o POST"; return 1; }
-        api POST "/api/sessions/$id/start" >/dev/null
     fi
+    # Depois de restart do container a sessão existe mas fica parada; "already started" é inofensivo.
+    api POST "/api/sessions/$id/start" >/dev/null
+    sleep 5
     ok "Sessão '$OPENWA_SESSION_NAME' = $id"
     info "Status: $(api GET "/api/sessions/$id" | campo status)"
     info "Cole no .env do projeto: OPENWA_SESSION_ID=$id"
@@ -154,8 +162,20 @@ if not url.startswith("data:image"):
 open(sys.argv[1],"wb").write(base64.b64decode(url.split(",",1)[1]))
 ' "$destino" || { warn "Sem QR disponível (sessão já pareada, ou ainda inicializando)"; return 1; }
     ok "QR salvo em $destino"
-    info "Do Mac: scp bieelx@SERVIDOR:$destino . && open qr-$OPENWA_SESSION_NAME.png"
+    info "Do Mac: scp $(whoami)@${OPENWA_SSH_HOST:-suspredict.northcentralus.cloudapp.azure.com}:$destino ~/Downloads/ && open ~/Downloads/qr-$OPENWA_SESSION_NAME.png"
     info "Escaneie em WhatsApp > Aparelhos conectados. O QR expira em ~1 min; rode de novo se passar."
+}
+
+cmd_codigo() {
+    local numero="${1:-}"
+    [ -n "$numero" ] || { err "Uso: bash deploy/openwa.sh codigo 5511999999999  (número do chip do bot)"; return 1; }
+    local id; id="$(sessao_id)"
+    [ -n "$id" ] || { err "Sessão não existe — rode 'bash deploy/openwa.sh sessao'"; return 1; }
+    local resposta; resposta="$(api POST "/api/sessions/$id/pairing-code" "{\"phoneNumber\":\"${numero//[^0-9]/}\"}")"
+    local codigo; codigo="$(echo "$resposta" | campo pairingCode)"
+    [ -n "$codigo" ] || { err "Falhou: $resposta"; info "409 = sessão ainda não está em qr_ready; espere uns segundos e repita."; return 1; }
+    ok "Código: ${BOLD}$codigo${NC}"
+    info "No celular do chip: Aparelhos conectados > Conectar aparelho > Conectar com número de telefone"
 }
 
 cmd_enviar() {
@@ -208,6 +228,7 @@ case "${1:-}" in
     chave)   cmd_chave ;;
     sessao)  cmd_sessao ;;
     qr)      cmd_qr ;;
+    codigo)  shift; cmd_codigo "$@" ;;
     enviar)  shift; cmd_enviar "$@" ;;
     webhook) shift; cmd_webhook "$@" ;;
     smoke)   shift; cmd_smoke "$@" ;;
