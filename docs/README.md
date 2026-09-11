@@ -16,6 +16,7 @@ Documentação técnica e de produto do SusPredict, plataforma SaaS de inteligê
 | [07 — Briefing de Implementação do Chatbot](./07-briefing-implementacao-chatbot.md) | Insumo para a próxima sessão de brainstorming — gaps de schema, dependências, contrato de endpoint e testes antes de codar a Clara |
 | [09 — Identidade, permissões e memória](./09-identidade-permissoes-memoria.md) | Levantamento de auth (web/Telegram), Supabase e RLS; proposta de perfis de acesso, três barreiras de permissão no agente, memória blindada e faseamento — **Fases 0, 1 e 4 (admin de usuários + log) implementadas; 2 e 3 pendentes** |
 | [10 — Autenticação e 2FA](./10-autenticacao-2fa.md) | Cadastro sem enumeração, login em duas etapas com código por e-mail, recorte da sessão do GoTrue, limites de tentativa e superfície fechada — **implementado 06/09/2026** |
+| [11 — Deploy em produção (Azure)](./11-deploy-azure.md) | Por que saímos do servidor de casa, opções de hospedagem descartadas, VM Azure for Students + Caddy, `.env` de produção, rotina de atualização e pendências (Telegram, Supabase, Ollama) — **no ar desde 10/09/2026** |
 
 ## Foco do MVP — fluxo prioritário
 

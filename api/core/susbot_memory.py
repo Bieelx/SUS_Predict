@@ -61,6 +61,12 @@ def _memory_key() -> bytes:
     if configured:
         Fernet(configured)  # valida antes de usar
         return configured
+    if db._clara_remoto():
+        # Memória online: gerar chave nova aqui deixaria o que já está no Supabase ilegível.
+        raise RuntimeError(
+            "SUSBOT_MEMORY_KEY ausente. Com a memória no Supabase a chave Fernet vem do "
+            "ambiente do servidor (copie o conteúdo de api/.secrets/susbot_memory.key para o .env)."
+        )
 
     path = _key_file()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -379,15 +385,12 @@ def executar_comando_memoria(usuario: str, texto: str) -> str | None:
 
 def limpar_chaves_removidas() -> dict[str, int]:
     """Rotina de limpeza da Fase 0 (docs/09): apaga registros de chaves que saíram
-    da lista permitida, no SQLite e, por espelho, no Supabase.
+    da lista permitida, no armazenamento da Clara (Supabase ou SQLite).
 
     Percorre todas as linhas, decifra cada payload e deleta as que pertencem a
     `_CHAVES_REMOVIDAS`. Linhas que não decifram (chave Fernet de outro servidor)
     são contadas em `ilegiveis` e mantidas.
     """
-
-    def _remover(chave: str) -> bool:
-        return chave in _CHAVES_REMOVIDAS
 
     removidos = 0
     ilegiveis = 0
@@ -396,35 +399,9 @@ def limpar_chaves_removidas() -> dict[str, int]:
         if payload is None:
             ilegiveis += 1
             continue
-        if _remover(str(payload.get("chave") or "")):
+        if str(payload.get("chave") or "") in _CHAVES_REMOVIDAS:
             removidos += db.deletar_memoria_usuario(row["owner_ref"], row["fact_ref"])
-
-    # Supabase pode ter linhas espelhadas de outro servidor (que não estão neste
-    # SQLite). Varre direto, mesma chave Fernet; o que não decifra fica.
-    removidos_supabase = 0
-    ilegiveis_supabase = 0
-    linhas_supabase: list[dict[str, Any]] = []
-    supabase_erro = None
-    if db.supabase_configured():
-        try:
-            linhas_supabase = db.sb_select("susbot_memorias")
-        except Exception as exc:  # tabela ausente, rede, credencial
-            supabase_erro = str(exc)[:200]
-    for row in linhas_supabase:
-        payload = _decrypt(row.get("payload_encrypted") or "")
-        if payload is None:
-            ilegiveis_supabase += 1
-            continue
-        if _remover(str(payload.get("chave") or "")):
-            db._sync_delete("susbot_memorias", {"owner_ref": row["owner_ref"], "fact_ref": row["fact_ref"]})
-            removidos_supabase += 1
-    return {
-        "removidos": removidos,
-        "ilegiveis": ilegiveis,
-        "removidos_supabase": removidos_supabase,
-        "ilegiveis_supabase": ilegiveis_supabase,
-        "supabase_erro": supabase_erro,
-    }
+    return {"removidos": removidos, "ilegiveis": ilegiveis}
 
 
 if __name__ == "__main__":  # pragma: no cover - uso operacional

@@ -4,6 +4,10 @@ Storage layer: SQLite (always) + Supabase (optional sync).
 SQLite activates automatically — zero config needed.
 Supabase syncs when SUPABASE_URL + a secret key (SUPABASE_SECRET_KEY, SUPABASE_SECRET or
 SUPABASE_SERVICE_ROLE_KEY) are set — see _supabase_read_key().
+
+Clara (conversas, mensagens, canais e memória pessoal) é exceção: com Supabase
+configurado ela lê e grava SÓ no Supabase, sem cópia local — ver _clara_remoto()
+e supabase/susbot_canais.sql. CLARA_STORAGE=sqlite força o SQLite (testes).
 """
 import json
 import logging
@@ -637,6 +641,52 @@ def get_etp(etp_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+# ── Clara no Supabase ─────────────────────────────────────────────────────────
+
+_PAREAMENTO_COLS = (
+    "id,usuario,provedor,ibge6,status,external_user_id,external_chat_id,"
+    "external_username,criado_em,expira_em,reivindicado_em,confirmado_em,cancelado_em"
+)
+_CONEXAO_COLS = (
+    "id,usuario,provedor,external_user_id,external_chat_id,external_username,ibge6,"
+    "conversa_atual_id,status,conectado_em,ultimo_uso_em,revogado_em"
+)
+_MEMORIA_COLS = "id,owner_ref,fact_ref,payload_encrypted,criado_em,atualizado_em"
+
+
+def _clara_remoto() -> bool:
+    """Supabase é o único armazenamento da Clara quando configurado."""
+    return supabase_configured() and os.getenv("CLARA_STORAGE", "").strip().lower() != "sqlite"
+
+
+def _e(valor) -> str:
+    return urllib.parse.quote(str(valor), safe="")
+
+
+def _rest(method: str, path: str, body=None, prefer: str | None = None):
+    """Chamada PostgREST com a chave secreta. Falha levanta — sem fallback local."""
+    url = f"{os.getenv('SUPABASE_URL', '').strip().rstrip('/')}/rest/v1/{path}"
+    headers = {**_sb_headers(_supabase_read_key()), "Accept": "application/json"}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    if prefer:
+        headers["Prefer"] = prefer
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw, hdrs = resp.read(), resp.headers
+    except urllib.error.HTTPError as e:
+        detalhe = e.read().decode("utf-8", errors="ignore")[:300]
+        raise RuntimeError(f"Supabase {method} {path.split('?')[0]} {e.code}: {detalhe}") from None
+    return (json.loads(raw) if raw else []), hdrs
+
+
+def _rest_count(path: str) -> int:
+    _, hdrs = _rest("GET", f"{path}{'&' if '?' in path else '?'}limit=1", prefer="count=exact")
+    return int((hdrs.get("Content-Range") or "*/0").rsplit("/", 1)[-1] or 0)
+
+
 def criar_conversa(usuario: str, titulo: str) -> dict:
     conversa = {
         "id": str(uuid.uuid4()),
@@ -644,16 +694,21 @@ def criar_conversa(usuario: str, titulo: str) -> dict:
         "titulo": titulo,
         "criada_em": datetime.now(timezone.utc).isoformat(),
     }
+    if _clara_remoto():
+        _rest("POST", "susbot_conversas", conversa)
+        return conversa
     with _conn() as con:
         con.execute("""
             INSERT INTO susbot_conversas (id, usuario, titulo, criada_em)
             VALUES (:id, :usuario, :titulo, :criada_em)
         """, conversa)
-    _sync_row("susbot_conversas", conversa)
     return conversa
 
 
 def get_conversa(conversa_id: str) -> dict | None:
+    if _clara_remoto():
+        rows, _ = _rest("GET", f"susbot_conversas?select=id,usuario,titulo,criada_em&id=eq.{_e(conversa_id)}")
+        return rows[0] if rows else None
     with _conn() as con:
         row = con.execute("""
             SELECT id, usuario, titulo, criada_em
@@ -676,6 +731,13 @@ def listar_conversas(
 ) -> list[dict]:
     page, page_size, offset = _clamp_page(page, page_size, 100)
     canal_normalizado = _normalizar_canal_conversa(canal)
+    if _clara_remoto():
+        filtro = f"&canal=eq.{canal_normalizado}" if canal_normalizado else ""
+        rows, _ = _rest("GET", (
+            f"susbot_conversas_resumo?usuario=eq.{_e(usuario)}{filtro}"
+            f"&order=atualizada_em.desc,id.desc&limit={page_size}&offset={offset}"
+        ))
+        return rows
     with _conn() as con:
         rows = con.execute("""
             WITH conversas_enriquecidas AS (
@@ -718,6 +780,9 @@ def listar_conversas(
 
 def contar_conversas(usuario: str, canal: str | None = None) -> int:
     canal_normalizado = _normalizar_canal_conversa(canal)
+    if _clara_remoto():
+        filtro = f"&canal=eq.{canal_normalizado}" if canal_normalizado else ""
+        return _rest_count(f"susbot_conversas_resumo?select=id&usuario=eq.{_e(usuario)}{filtro}")
     with _conn() as con:
         row = con.execute("""
             WITH conversas_enriquecidas AS (
@@ -762,6 +827,9 @@ def adicionar_mensagem(
         "referencia_rota": referencia_rota,
         "criado_em": datetime.now(timezone.utc).isoformat(),
     }
+    if _clara_remoto():
+        _rest("POST", "susbot_mensagens", mensagem)
+        return mensagem
     with _conn() as con:
         con.execute("""
             INSERT INTO susbot_mensagens
@@ -769,12 +837,17 @@ def adicionar_mensagem(
             VALUES
                 (:id, :conversa_id, :tela_origem, :pergunta, :resposta, :referencia_rota, :criado_em)
         """, mensagem)
-    _sync_row("susbot_mensagens", mensagem)
     return mensagem
 
 
 def listar_mensagens(conversa_id: str, page: int = 1, page_size: int = 30) -> list[dict]:
     page, page_size, offset = _clamp_page(page, page_size, 100)
+    if _clara_remoto():
+        rows, _ = _rest("GET", (
+            "susbot_mensagens?select=id,conversa_id,tela_origem,pergunta,resposta,referencia_rota,criado_em"
+            f"&conversa_id=eq.{_e(conversa_id)}&order=criado_em.desc,id.desc&limit={page_size}&offset={offset}"
+        ))
+        return rows
     with _conn() as con:
         rows = con.execute("""
             SELECT id, conversa_id, tela_origem, pergunta, resposta, referencia_rota, criado_em
@@ -787,6 +860,8 @@ def listar_mensagens(conversa_id: str, page: int = 1, page_size: int = 30) -> li
 
 
 def contar_mensagens(conversa_id: str) -> int:
+    if _clara_remoto():
+        return _rest_count(f"susbot_mensagens?select=id&conversa_id=eq.{_e(conversa_id)}")
     with _conn() as con:
         row = con.execute(
             "SELECT COUNT(*) AS total FROM susbot_mensagens WHERE conversa_id = ?",
@@ -815,6 +890,13 @@ def criar_pareamento_canal(
         "criado_em": agora,
         "expira_em": expira_em,
     }
+    if _clara_remoto():
+        _rest("PATCH", (
+            f"canal_pareamentos?usuario=eq.{_e(usuario)}&provedor=eq.{_e(provedor)}"
+            "&status=in.(emitido,reivindicado)"
+        ), {"status": "cancelado", "cancelado_em": agora})
+        _rest("POST", "canal_pareamentos", pareamento)
+        return pareamento
     with _conn() as con:
         con.execute("""
             UPDATE canal_pareamentos
@@ -827,11 +909,13 @@ def criar_pareamento_canal(
             VALUES
                 (:id, :usuario, :provedor, :token_hash, :ibge6, :status, :criado_em, :expira_em)
         """, pareamento)
-    _sync_row("canal_pareamentos", pareamento)
     return pareamento
 
 
 def get_pareamento_canal(pareamento_id: str) -> dict | None:
+    if _clara_remoto():
+        rows, _ = _rest("GET", f"canal_pareamentos?select={_PAREAMENTO_COLS}&id=eq.{_e(pareamento_id)}")
+        return rows[0] if rows else None
     with _conn() as con:
         row = con.execute("""
             SELECT id, usuario, provedor, ibge6, status, external_user_id,
@@ -850,6 +934,17 @@ def reivindicar_pareamento_canal(
     external_username: str | None = None,
 ) -> dict | None:
     agora = datetime.now(timezone.utc).isoformat()
+    if _clara_remoto():
+        # PATCH condicional é atômico: só um webhook concorrente reivindica.
+        rows, _ = _rest("PATCH", (
+            f"canal_pareamentos?select={_PAREAMENTO_COLS}&token_hash=eq.{_e(token_hash)}"
+            f"&provedor=eq.{_e(provedor)}&status=eq.emitido&expira_em=gt.{_e(agora)}"
+        ), {
+            "status": "reivindicado", "external_user_id": external_user_id,
+            "external_chat_id": external_chat_id, "external_username": external_username,
+            "reivindicado_em": agora,
+        }, prefer="return=representation")
+        return rows[0] if len(rows) == 1 else None
     with _conn() as con:
         row = con.execute("""
             SELECT id FROM canal_pareamentos
@@ -871,13 +966,18 @@ def reivindicar_pareamento_canal(
                    reivindicado_em, confirmado_em, cancelado_em
             FROM canal_pareamentos WHERE id = ?
         """, (row["id"],)).fetchone()
-    out = _row_dict(resultado)
-    if out:
-        _sync_row("canal_pareamentos", out)
-    return out
+    return _row_dict(resultado)
 
 
 def confirmar_pareamento_canal(pareamento_id: str, usuario: str) -> dict | None:
+    if _clara_remoto():
+        try:
+            rows, _ = _rest("POST", "rpc/clara_confirmar_pareamento", {"p_id": pareamento_id, "p_usuario": usuario})
+        except RuntimeError as exc:
+            if "conta_externa_em_uso" in str(exc):
+                raise ValueError("Esta conta externa ja esta conectada a outro usuario") from None
+            raise
+        return rows[0] if rows else None
     agora = datetime.now(timezone.utc).isoformat()
     with _conn() as con:
         pareamento = con.execute("""
@@ -924,30 +1024,32 @@ def confirmar_pareamento_canal(pareamento_id: str, usuario: str) -> dict | None:
         conexao = con.execute("""
             SELECT * FROM canal_conexoes WHERE usuario = ? AND provedor = ?
         """, (usuario, pareamento["provedor"])).fetchone()
-        pareamento_atualizado = con.execute(
-            "SELECT * FROM canal_pareamentos WHERE id = ?", (pareamento_id,)
-        ).fetchone()
-    out = _row_dict(conexao)
-    if out:
-        _sync_row("canal_conexoes", out)
-    if pareamento_atualizado:
-        _sync_row("canal_pareamentos", dict(pareamento_atualizado))
-    return out
+    return _row_dict(conexao)
 
 
 def cancelar_pareamento_canal(pareamento_id: str, usuario: str) -> bool:
     agora = datetime.now(timezone.utc).isoformat()
+    if _clara_remoto():
+        rows, _ = _rest("PATCH", (
+            f"canal_pareamentos?select=id&id=eq.{_e(pareamento_id)}&usuario=eq.{_e(usuario)}"
+            "&status=in.(emitido,reivindicado)"
+        ), {"status": "cancelado", "cancelado_em": agora}, prefer="return=representation")
+        return len(rows) == 1
     with _conn() as con:
         cursor = con.execute("""
             UPDATE canal_pareamentos SET status = 'cancelado', cancelado_em = ?
             WHERE id = ? AND usuario = ? AND status IN ('emitido', 'reivindicado')
         """, (agora, pareamento_id, usuario))
-    if cursor.rowcount == 1:
-        _sync_row("canal_pareamentos", {"id": pareamento_id, "status": "cancelado", "cancelado_em": agora})
     return cursor.rowcount == 1
 
 
 def listar_conexoes_canal(usuario: str) -> list[dict]:
+    if _clara_remoto():
+        rows, _ = _rest("GET", (
+            f"canal_conexoes?select={_CONEXAO_COLS}&usuario=eq.{_e(usuario)}"
+            "&status=eq.ativo&order=conectado_em.desc"
+        ))
+        return rows
     with _conn() as con:
         rows = con.execute("""
             SELECT id, usuario, provedor, external_user_id, external_chat_id,
@@ -961,6 +1063,12 @@ def listar_conexoes_canal(usuario: str) -> list[dict]:
 
 
 def get_conexao_canal_por_externo(provedor: str, external_user_id: str) -> dict | None:
+    if _clara_remoto():
+        rows, _ = _rest("GET", (
+            f"canal_conexoes?select={_CONEXAO_COLS}&provedor=eq.{_e(provedor)}"
+            f"&external_user_id=eq.{_e(external_user_id)}&status=eq.ativo"
+        ))
+        return rows[0] if rows else None
     with _conn() as con:
         row = con.execute("""
             SELECT * FROM canal_conexoes
@@ -971,40 +1079,46 @@ def get_conexao_canal_por_externo(provedor: str, external_user_id: str) -> dict 
 
 def revogar_conexao_canal(usuario: str, provedor: str) -> bool:
     agora = datetime.now(timezone.utc).isoformat()
+    if _clara_remoto():
+        rows, _ = _rest("PATCH", (
+            f"canal_conexoes?select=id&usuario=eq.{_e(usuario)}&provedor=eq.{_e(provedor)}&status=eq.ativo"
+        ), {"status": "revogado", "revogado_em": agora, "conversa_atual_id": None},
+            prefer="return=representation")
+        return len(rows) == 1
     with _conn() as con:
         cursor = con.execute("""
             UPDATE canal_conexoes
             SET status = 'revogado', revogado_em = ?, conversa_atual_id = NULL
             WHERE usuario = ? AND provedor = ? AND status = 'ativo'
         """, (agora, usuario, provedor))
-        row = con.execute(
-            "SELECT id FROM canal_conexoes WHERE usuario = ? AND provedor = ?", (usuario, provedor)
-        ).fetchone()
-    if cursor.rowcount == 1 and row:
-        _sync_row("canal_conexoes", {
-            "id": row["id"], "status": "revogado", "revogado_em": agora, "conversa_atual_id": None,
-        })
     return cursor.rowcount == 1
 
 
 def atualizar_conversa_canal(conexao_id: str, conversa_id: str | None) -> None:
     agora = datetime.now(timezone.utc).isoformat()
+    if _clara_remoto():
+        _rest("PATCH", f"canal_conexoes?id=eq.{_e(conexao_id)}&status=eq.ativo",
+              {"conversa_atual_id": conversa_id, "ultimo_uso_em": agora})
+        return
     with _conn() as con:
         con.execute("""
             UPDATE canal_conexoes
             SET conversa_atual_id = ?, ultimo_uso_em = ? WHERE id = ? AND status = 'ativo'
         """, (conversa_id, agora, conexao_id))
-    _sync_row("canal_conexoes", {
-        "id": conexao_id, "conversa_atual_id": conversa_id, "ultimo_uso_em": agora,
-    })
 
 
 def registrar_evento_canal(provedor: str, external_id: str) -> bool:
+    agora = datetime.now(timezone.utc).isoformat()
+    if _clara_remoto():
+        rows, _ = _rest("POST", "canal_eventos",
+                        {"provedor": provedor, "external_id": str(external_id), "processado_em": agora},
+                        prefer="resolution=ignore-duplicates,return=representation")
+        return len(rows) == 1
     with _conn() as con:
         cursor = con.execute("""
             INSERT OR IGNORE INTO canal_eventos (provedor, external_id, processado_em)
             VALUES (?, ?, ?)
-        """, (provedor, external_id, datetime.now(timezone.utc).isoformat()))
+        """, (provedor, external_id, agora))
     return cursor.rowcount == 1
 
 
@@ -1012,6 +1126,13 @@ def registrar_evento_canal(provedor: str, external_id: str) -> bool:
 
 def upsert_memoria_usuario(owner_ref: str, fact_ref: str, payload_encrypted: str) -> dict:
     agora = datetime.now(timezone.utc).isoformat()
+    if _clara_remoto():
+        # id/criado_em ficam fora do corpo: nascem no insert e o merge não os sobrescreve.
+        rows, _ = _rest("POST", f"susbot_memorias?on_conflict=owner_ref,fact_ref&select={_MEMORIA_COLS}", {
+            "owner_ref": owner_ref, "fact_ref": fact_ref,
+            "payload_encrypted": payload_encrypted, "atualizado_em": agora,
+        }, prefer="resolution=merge-duplicates,return=representation")
+        return rows[0]
     memoria_id = str(uuid.uuid4())
     with _conn() as con:
         con.execute("""
@@ -1026,11 +1147,16 @@ def upsert_memoria_usuario(owner_ref: str, fact_ref: str, payload_encrypted: str
             SELECT id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em
             FROM susbot_memorias WHERE owner_ref = ? AND fact_ref = ?
         """, (owner_ref, fact_ref)).fetchone()
-    _sync_row("susbot_memorias", dict(row))
     return dict(row)
 
 
 def listar_memorias_usuario(owner_ref: str) -> list[dict]:
+    if _clara_remoto():
+        rows, _ = _rest("GET", (
+            f"susbot_memorias?select={_MEMORIA_COLS}&owner_ref=eq.{_e(owner_ref)}"
+            "&order=atualizado_em.desc,id.desc"
+        ))
+        return rows
     with _conn() as con:
         rows = con.execute("""
             SELECT id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em
@@ -1043,6 +1169,8 @@ def listar_memorias_usuario(owner_ref: str) -> list[dict]:
 
 def listar_todas_memorias_usuario() -> list[dict]:
     """Todas as linhas (todos os donos). Uso exclusivo de rotinas de manutenção."""
+    if _clara_remoto():
+        return sb_select("susbot_memorias")
     with _conn() as con:
         rows = con.execute(
             "SELECT id, owner_ref, fact_ref, payload_encrypted, criado_em, atualizado_em FROM susbot_memorias"
@@ -1051,6 +1179,11 @@ def listar_todas_memorias_usuario() -> list[dict]:
 
 
 def deletar_memoria_usuario(owner_ref: str, fact_ref: str | None = None) -> int:
+    if _clara_remoto():
+        filtro = f"&fact_ref=eq.{_e(fact_ref)}" if fact_ref else ""
+        rows, _ = _rest("DELETE", f"susbot_memorias?select=id&owner_ref=eq.{_e(owner_ref)}{filtro}",
+                        prefer="return=representation")
+        return len(rows)
     with _conn() as con:
         if fact_ref:
             cursor = con.execute(
@@ -1059,8 +1192,6 @@ def deletar_memoria_usuario(owner_ref: str, fact_ref: str | None = None) -> int:
             )
         else:
             cursor = con.execute("DELETE FROM susbot_memorias WHERE owner_ref = ?", (owner_ref,))
-    eq = {"owner_ref": owner_ref, **({"fact_ref": fact_ref} if fact_ref else {})}
-    _sync_delete("susbot_memorias", eq)
     return int(cursor.rowcount)
 
 
