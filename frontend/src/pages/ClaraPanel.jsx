@@ -1085,6 +1085,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
   }, [open, viewMode, current.id]);
 
   const [contextoEntrada, setContextoEntrada] = useState(null);
+  const [dadosTelaEntrada, setDadosTelaEntrada] = useState(null);
   useEffect(() => {
     if (!openRequest?.id) return;
     setViewMode('chat');
@@ -1093,6 +1094,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
       setCurrent(criarThreadVazia());
       setContextoEntrada(openRequest.contexto);
     }
+    setDadosTelaEntrada(openRequest.dadosTela || null);
     if (openRequest.prompt) setInput(openRequest.prompt);
   }, [openRequest?.id]);
 
@@ -1290,6 +1292,9 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
     if (!pergunta || enviando) return;
     conversaLoadSeq.current += 1;
     setInput('');
+    // Só a pergunta que nasceu do botão leva os dados do card; as seguintes consultam normalmente.
+    const dadosTela = dadosTelaEntrada;
+    setDadosTelaEntrada(null);
 
     if (demoReplay) {
       setCurrent(c => ({ ...c, mensagens: [...c.mensagens,
@@ -1327,6 +1332,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         conversaId: conversaIdAtual || undefined,
         ibge6: current.contexto?.ibge6 || ibge6Atual,
         contexto: current.contexto || { tela: page, periodo: "12 Meses", ...(contextoEntrada || {}) },
+        dados_tela: dadosTela || undefined,
         baseUrl: API_BASE,
         headers: getAuthHeaders(),
         onStatus: status => {

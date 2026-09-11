@@ -726,6 +726,8 @@ class ClaraAgent:
     # Perfil do usuario (docs/09): so muda o texto da recusa (visitante tem mensagem propria).
     perfil: str | None = None
     contexto_conversa: dict[str, Any] | None = None
+    # Valores que o painel mostrava quando o usuário clicou "Interpretar com Clara".
+    dados_tela: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         self.ibge6 = _ibge6(self.ibge6)
@@ -785,6 +787,8 @@ class ClaraAgent:
         memoria = self._memoria_para_prompt()
         if memoria:
             contexto["memoria_usuario"] = memoria
+        if self.dados_tela:
+            contexto["dados_tela"] = self.dados_tela
         return contexto
 
     def _resposta_contextual(self, pergunta: str) -> str | None:
@@ -990,7 +994,7 @@ class ClaraAgent:
     def stream_eventos(self, pergunta: str) -> Iterable[dict[str, Any]]:
         yield {"event": "status", "data": {"mensagem": "Planejando resposta"}}
 
-        rota_local = rotear_intencao(pergunta)
+        rota_local = None if self.dados_tela else rotear_intencao(pergunta)
         plano_obrigatorio = rota_local.plano if rota_local else None
         # Perguntas operacionais sobre saúde/estoque precisam chegar à ferramenta
         # antes das heurísticas de perfil. Expressões como "fale sobre a situação"
@@ -1020,7 +1024,19 @@ class ClaraAgent:
                 }
                 return
 
-        if plano_obrigatorio is None:
+        if plano_obrigatorio is None and self.dados_tela:
+            # Os números já vieram da tela: consultar ferramenta de novo só traria outro
+            # recorte para misturar. Vai direto para a interpretação.
+            plano = {"acao": "resposta", "ferramenta": None, "argumentos": {}, "resposta": "", "referencia_rota": None}
+            execucao = {
+                "modo": "dados_tela",
+                "intencao": "interpretar_tela",
+                "confianca": 1.0,
+                "llm_planejamento": False,
+                "llm_resposta": False,
+                "sem_llm": False,
+            }
+        elif plano_obrigatorio is None:
             plano = self._planejar_com_llm(pergunta)
             execucao = {
                 "modo": "generativo",
@@ -1182,6 +1198,7 @@ def criar_susbot_agente(
     permitidas=None,
     perfil: str | None = None,
     contexto_conversa: dict[str, Any] | None = None,
+    dados_tela: dict[str, Any] | None = None,
 ) -> ClaraAgent:
     """Factory do agente da Clara. `permitidas` = acesso.ferramentas (docs/09)."""
 
@@ -1196,4 +1213,5 @@ def criar_susbot_agente(
         permitidas=permitidas,
         perfil=perfil,
         contexto_conversa=contexto_conversa,
+        dados_tela=dados_tela,
     )

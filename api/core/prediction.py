@@ -8,6 +8,7 @@ on outbreak-dominated epidemiological series.
 import logging
 import math
 from datetime import date
+from statistics import median
 
 log = logging.getLogger("sus_predict.prediction")
 
@@ -218,7 +219,7 @@ def _next_month(value: date, offset: int = 1) -> date:
 
 
 def _continuous_monthly_series(serie: list[dict]) -> list[dict]:
-    """Sort months and fill absent notification months with zero cases."""
+    """Sort months and impute absent rows without calling them observed zero."""
     by_month: dict[date, float] = {}
     for item in serie:
         month = _parse_month(item["mes"])
@@ -230,7 +231,21 @@ def _continuous_monthly_series(serie: list[dict]) -> list[dict]:
     current = min(by_month)
     end = max(by_month)
     while current <= end:
-        result.append({"mes": current.isoformat(), "total": by_month.get(current, 0.0)})
+        if current in by_month:
+            total = by_month[current]
+            imputed = False
+        else:
+            same_month = [total for month, total in by_month.items() if month.month == current.month]
+            previous = by_month.get(_next_month(current, -1))
+            following = by_month.get(_next_month(current, 1))
+            if same_month:
+                total = float(median(same_month))
+            elif previous is not None and following is not None:
+                total = (previous + following) / 2
+            else:
+                total = previous if previous is not None else (following or 0.0)
+            imputed = True
+        result.append({"mes": current.isoformat(), "total": total, "imputado": imputed})
         current = _next_month(current)
     return result
 
@@ -255,6 +270,7 @@ def gerar_predicao_mensal(
     values = [math.log1p(item["total"]) for item in continuous]
     last_month = _parse_month(continuous[-1]["mes"])
     interval_level = 80
+    meses_imputados = [item["mes"] for item in continuous if item.get("imputado")]
 
     if len(values) < 24:
         indexed = [
@@ -277,9 +293,27 @@ def gerar_predicao_mensal(
             "nivel_intervalo": interval_level,
             "pontos_treino": len(continuous),
             "sazonalidade_meses": None,
+            "meses_imputados": meses_imputados,
         }
 
     season_length = 12
+    valores_por_mes = {
+        month: [item["total"] for item in continuous if _parse_month(item["mes"]).month == month]
+        for month in range(1, 13)
+    }
+
+    def percentil_25(valores: list[float]) -> float:
+        ordenados = sorted(valores)
+        if not ordenados:
+            return 0.0
+        posicao = (len(ordenados) - 1) * 0.25
+        inferior = math.floor(posicao)
+        superior = math.ceil(posicao)
+        if inferior == superior:
+            return ordenados[inferior]
+        peso = posicao - inferior
+        return ordenados[inferior] * (1 - peso) + ordenados[superior] * peso
+
     first_level = sum(values[:season_length]) / season_length
     second_level = sum(values[season_length:season_length * 2]) / season_length
     initial_trend = (second_level - first_level) / season_length
@@ -325,6 +359,7 @@ def gerar_predicao_mensal(
     use_seasonal_naive = seasonal_rmse <= best["score"]
 
     forecast = []
+    pisos_aplicados = 0
     for step in range(1, meses_previsao + 1):
         if use_seasonal_naive:
             estimate_log = values[-season_length + ((step - 1) % season_length)]
@@ -334,11 +369,22 @@ def gerar_predicao_mensal(
             estimate_log = best["level"] + step * best["trend"] + best["season"][seasonal_index]
             model_score = best["score"]
         margin = 1.28 * model_score * (1 + 0.10 * step)
+        forecast_month = _next_month(last_month, step)
+        estimate = max(0, int(round(math.expm1(estimate_log))))
+        historico_mes = valores_por_mes[forecast_month.month]
+        # Se nunca houve zero explícito naquele mês, impede que a tendência
+        # extrapolada caia abaixo do quartil inferior do próprio histórico sazonal.
+        # O intervalo ainda pode chegar a zero, preservando a incerteza estatística.
+        if historico_mes and not any(value == 0 for value in historico_mes):
+            piso_sazonal = max(1, int(round(percentil_25(historico_mes))))
+            if estimate < piso_sazonal:
+                estimate = piso_sazonal
+                pisos_aplicados += 1
         forecast.append({
-            "mes": _next_month(last_month, step).isoformat(),
-            "casos_previstos": max(0, int(round(math.expm1(estimate_log)))),
+            "mes": forecast_month.isoformat(),
+            "casos_previstos": estimate,
             "limite_inferior": max(0, int(round(math.expm1(estimate_log - margin)))),
-            "limite_superior": max(0, int(round(math.expm1(estimate_log + margin)))),
+            "limite_superior": max(estimate, int(round(math.expm1(estimate_log + margin)))),
             "tipo": "previsto",
         })
 
@@ -355,4 +401,7 @@ def gerar_predicao_mensal(
         "rmse_holt_winters_log": round(best["score"], 4),
         "rmse_sazonal_ingenuo_log": round(seasonal_rmse, 4),
         "criterio_selecao": "menor RMSE histórico de um passo",
+        "meses_imputados": meses_imputados,
+        "pisos_sazonais_aplicados": pisos_aplicados,
+        "politica_piso_sazonal": "P25 do mesmo mês quando o histórico não possui zero observado",
     }

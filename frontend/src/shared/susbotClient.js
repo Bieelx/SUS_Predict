@@ -361,6 +361,7 @@ export async function conversarComSusbot({
   ibge,
   confirmar,
   contexto,
+  dados_tela,
   baseUrl = '',
   fetchImpl = globalThis.fetch,
   timeoutMs = SUSBOT_TIMEOUT_MS,
@@ -417,6 +418,7 @@ export async function conversarComSusbot({
         tela_atual: telaNormalizada,
         confirmar: confirmar || undefined,
         contexto: contexto || undefined,
+        dados_tela: dados_tela || undefined,
       }),
       signal: controller.signal,
     });

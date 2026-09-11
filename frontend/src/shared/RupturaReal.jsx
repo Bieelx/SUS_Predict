@@ -73,15 +73,21 @@ export function VisaoGeralReal({ municipio, onNavigate, onOpenClara, estadual = 
           <span><strong>Base observada até {mesLongo(previsao.ultimo_mes_observado)}.</strong> {previsao.aviso}</span>
         </div>
         <div style={predictionFacts}>
-          <div style={predictionFact}><span style={predictionFactLabel}>Próximo mês do modelo</span><strong style={predictionFactValue}>{inteiro(primeiroPrevisto.casos_previstos)} casos</strong><small style={predictionFactDetail}>{mesLongo(primeiroPrevisto.mes)} · faixa {inteiro(primeiroPrevisto.limite_inferior)} a {inteiro(primeiroPrevisto.limite_superior)}</small></div>
+          <div style={predictionFact}><span style={predictionFactLabel}>Próximo mês estimado</span><strong style={predictionFactValue}>{inteiro(primeiroPrevisto.casos_previstos)} casos</strong><small style={predictionFactDetail}>{mesLongo(primeiroPrevisto.mes)} · faixa {inteiro(primeiroPrevisto.limite_inferior)} a {inteiro(primeiroPrevisto.limite_superior)}</small></div>
           <div style={predictionFact}><span style={predictionFactLabel}>Pico no horizonte</span><strong style={predictionFactValue}>{inteiro(picoPrevisto.casos_previstos)} casos</strong><small style={predictionFactDetail}>{mesLongo(picoPrevisto.mes)}</small></div>
-          <div style={predictionFact}><span style={predictionFactLabel}>Modelo selecionado</span><strong style={predictionModel}>{previsao.modelo}</strong><small style={predictionFactDetail}>{previsao.diagnostico?.criterio_selecao || `${inteiro(previsao.diagnostico?.pontos_treino)} meses de treino`}</small></div>
+          <div style={predictionFact}><span style={predictionFactLabel}>Base da estimativa</span><strong style={predictionModel}>{inteiro(previsao.diagnostico?.pontos_treino)} meses analisados</strong><small style={predictionFactDetail}>Histórico consolidado até a competência oficial</small></div>
         </div>
         <div style={predictionActions}>
           <button type="button" style={botao} onClick={() => onNavigate?.('epidemiologia')}><MIcon m="monitoring" size={17} /> Ver análise e intervalo completo</button>
           {onOpenClara && <button type="button" style={secondaryButton} onClick={() => onOpenClara(
-            `Interprete a previsão de dengue de ${horizonteMeses} meses para ${dados.municipio.nome}, com base observada até ${previsao.ultimo_mes_observado}. O pico estimado é ${picoPrevisto.casos_previstos} casos em ${picoPrevisto.mes}, com modelo ${previsao.modelo}. Explique incerteza e defasagem antes de sugerir qualquer investigação.`,
+            'O que essa previsão de dengue significa na prática?',
             { tela: 'visao-geral', periodo: '12 Meses' },
+            {
+              sistema: 'SINAN — dengue (A90)', municipio: dados.municipio.nome, horizonte_meses: horizonteMeses,
+              ultimo_mes_observado: previsao.ultimo_mes_observado, modelo: previsao.modelo,
+              criterio_selecao: previsao.diagnostico?.criterio_selecao, meses_treino: previsao.diagnostico?.pontos_treino,
+              intervalo_confianca_pct: previsao.intervalo_confianca_pct, aviso: previsao.aviso, serie_prevista: previsao.serie,
+            },
           )}><MIcon m="smart_toy" size={17} /> Interpretar com Clara</button>}
         </div>
       </> : <Vazio texto={previsao?.motivo || 'A série histórica municipal ainda não sustenta uma previsão.'} />}

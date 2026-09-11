@@ -65,11 +65,19 @@ def _meta(tabelas: list[str], referencias: list[Any]) -> dict[str, Any]:
     }
 
 
-def _prever_meses(linhas: list[dict], horizonte_meses: int = 3) -> dict[str, Any]:
+def _prever_meses(
+    linhas: list[dict],
+    horizonte_meses: int = 3,
+    competencia_corte: str | None = None,
+) -> dict[str, Any]:
+    corte = str(competencia_corte)[:10] if competencia_corte else None
+    linhas_treino = [
+        item for item in linhas
+        if item.get("mes_ano") and (not corte or str(item["mes_ano"])[:10] <= corte)
+    ]
     serie = [
         {"mes": item.get("mes_ano"), "total": item.get("casos_atual")}
-        for item in linhas
-        if item.get("mes_ano")
+        for item in linhas_treino
     ]
     try:
         previsao, modelo, diagnostico = gerar_predicao_mensal(serie, meses_previsao=horizonte_meses)
@@ -80,7 +88,7 @@ def _prever_meses(linhas: list[dict], horizonte_meses: int = 3) -> dict[str, Any
             "horizonte_meses": horizonte_meses,
         }
 
-    ultimo_observado = max(str(item["mes_ano"])[:10] for item in linhas if item.get("mes_ano"))
+    ultimo_observado = max(str(item["mes_ano"])[:10] for item in linhas_treino)
     fim_horizonte = previsao[-1]["mes"]
     mes_atual = date.today().replace(day=1).isoformat()
     defasada = ultimo_observado < mes_atual
@@ -98,6 +106,8 @@ def _prever_meses(linhas: list[dict], horizonte_meses: int = 3) -> dict[str, Any
         "modelo": modelo,
         "intervalo_confianca_pct": diagnostico.get("nivel_intervalo"),
         "diagnostico": diagnostico,
+        "competencia_corte": corte,
+        "meses_descartados_apos_corte": len(linhas) - len(linhas_treino),
         "serie": previsao,
     }
 
@@ -150,12 +160,14 @@ def epidemiologia(
         {"cod_ibge_municipio": codigo, "periodo": "5 Anos"},
         order="mes_ano.asc",
     )
-    previsao = _prever_meses(historico_previsao, horizonte)
+    competencia = _select("visao_geral_competencia_referencia", limit=1)
+    competencia_corte = competencia[0].get("competencia_referencia") if competencia else None
+    previsao = _prever_meses(historico_previsao, horizonte, competencia_corte)
     desfecho = _select("sinan_dengue_municipios_desfecho_clinico_anual", {"cod_ibge_municipio": codigo}, order="ano_referencia.asc")
 
     referencias = [
         item.get("data_referencia")
-        for grupo in (casos, incidencia, taxa_hosp, taxa_obito, faixa, genero, sazonalidade, historico_previsao, desfecho)
+        for grupo in (casos, incidencia, taxa_hosp, taxa_obito, faixa, genero, sazonalidade, historico_previsao, desfecho, competencia)
         for item in grupo
     ]
     tabelas = [
@@ -167,6 +179,7 @@ def epidemiologia(
         "sinan_dengue_municipios_distribuicao_genero",
         "sinan_dengue_municipios_sazonalidade",
         "sinan_dengue_municipios_desfecho_clinico_anual",
+        "visao_geral_competencia_referencia",
     ]
     return {
         "meta": _meta(tabelas, referencias),
@@ -238,7 +251,11 @@ def visao_geral(
         order="mes_ano.asc",
     )
     previsao = (
-        _prever_meses(historico_previsao, horizonte)
+        _prever_meses(
+            historico_previsao,
+            horizonte,
+            competencia[0].get("competencia_referencia") if competencia else None,
+        )
         if historico_previsao else
         {"disponivel": False, "motivo": "Previsão municipal indisponível para este recorte.", "horizonte_meses": horizonte}
     )

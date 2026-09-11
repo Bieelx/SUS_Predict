@@ -52,6 +52,7 @@ class PerguntaClaraRequest(BaseModel):
     tela_origem: str | None = None
     confirmar: ConfirmarFerramentaRequest | None = None
     contexto: dict[str, Any] | None = None
+    dados_tela: dict[str, Any] | None = None
 
 
 @router.get("/metricas-uso")
@@ -174,6 +175,7 @@ def perguntar(
         permitidas=permitidas,
         contexto_conversa=contexto,
         perfil=acesso.perfil,
+        dados_tela=req.dados_tela,
     )
 
     def _stream() -> Any:

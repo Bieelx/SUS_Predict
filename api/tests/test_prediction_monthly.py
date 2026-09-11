@@ -35,6 +35,7 @@ def test_previsao_mensal_preenche_mes_sem_notificacao():
 
     assert len(forecast) == 3
     assert diagnostics["pontos_treino"] == 36
+    assert diagnostics["meses_imputados"] == ["2023-09-01"]
 
 
 def test_previsao_mensal_curta_usa_fallback():

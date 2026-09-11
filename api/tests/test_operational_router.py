@@ -35,7 +35,11 @@ def test_epidemiologia_consolida_tabelas_reais_sem_escrita(monkeypatch):
     assert resposta["municipio"]["ibge7"] == "3513009"
     assert resposta["casos"]["casos_atual"] == 1030
     assert resposta["incidencia"]["incidencia_atual"] == 355.79
-    assert all(chamada["table"].startswith("sinan_") or chamada["table"] == "ibge_sp" for chamada in chamadas)
+    assert all(
+        chamada["table"].startswith("sinan_")
+        or chamada["table"] in {"ibge_sp", "visao_geral_competencia_referencia"}
+        for chamada in chamadas
+    )
 
 
 def test_visao_geral_estadual_usa_tabelas_documentadas(monkeypatch):
@@ -185,6 +189,22 @@ def test_epidemiologia_permite_horizonte_de_doze_meses(monkeypatch):
     assert previsao["horizonte_meses"] == 12
     assert len(previsao["serie"]) == 12
     assert resposta["previsao_3_meses"] is previsao
+
+
+def test_previsao_descarta_mes_posterior_a_competencia_oficial():
+    linhas = [
+        {"mes_ano": f"{year}-{month:02d}-01", "casos_atual": 20 + month}
+        for year in range(2023, 2026)
+        for month in range(1, 13)
+    ]
+    linhas.append({"mes_ano": "2026-01-01", "casos_atual": 1})
+
+    previsao = operational._prever_meses(linhas, 12, "2025-12-01")
+
+    assert previsao["ultimo_mes_observado"] == "2025-12-01"
+    assert previsao["serie"][0]["mes"] == "2026-01-01"
+    assert previsao["meses_descartados_apos_corte"] == 1
+    assert all(item["casos_previstos"] > 0 for item in previsao["serie"])
 
 
 def test_ruptura_deduplica_por_insumo_e_unidade_usando_maior_risco(monkeypatch):

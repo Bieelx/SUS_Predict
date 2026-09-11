@@ -125,10 +125,14 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
             <div style={forecastFooter}>
               <p><strong>{previsao.modelo}</strong> · intervalo empírico de {previsao.intervalo_confianca_pct}% · treino com {inteiro(previsao.diagnostico?.pontos_treino)} meses. Estimativa estatística, não contagem observada.</p>
               {onOpenClara && <button style={botao} onClick={() => onOpenClara(
-                `Analise a previsão de dengue para os ${previsao.horizonte_meses} meses após o último dado observado em ${dados.municipio.nome}. ` +
-                `Modelo: ${previsao.modelo}. Valores: ${previsao.serie.map(item => `${mesLongo(item.mes)} ${item.casos_previstos} casos, intervalo ${item.limite_inferior} a ${item.limite_superior}`).join('; ')}. ` +
-                `${previsao.aviso} Diferencie claramente dados observados de estimativas e explique a incerteza.`,
-                { tela: "epidemiologia", periodo }
+                'O que essa previsão de dengue significa na prática?',
+                { tela: "epidemiologia", periodo },
+                {
+                  sistema: 'SINAN — dengue (A90)', municipio: dados.municipio.nome, horizonte_meses: previsao.horizonte_meses,
+                  ultimo_mes_observado: previsao.ultimo_mes_observado, modelo: previsao.modelo,
+                  meses_treino: previsao.diagnostico?.pontos_treino, intervalo_confianca_pct: previsao.intervalo_confianca_pct,
+                  aviso: previsao.aviso, serie_prevista: previsao.serie,
+                },
               )}><MIcon m="smart_toy" size={15} /> Analisar previsão com Clara</button>}
             </div>
           </> : <p style={forecastUnavailable}>Previsão indisponível: {previsao?.motivo || 'a série histórica não possui dados suficientes.'}</p>}

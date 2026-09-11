@@ -780,7 +780,8 @@ export default function App() {
     }
   }, []);
 
-  const abrirClara = (prompt, contexto) => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt, contexto }));
+  // dadosTela: valores que o card mostra; vão à Clara como dado, fora do texto da pergunta.
+  const abrirClara = (prompt, contexto, dadosTela) => setClaraOpenRequest(prev => ({ id: (prev?.id || 0) + 1, prompt, contexto, dadosTela }));
 
   async function iniciarDemo() {
     setDemoCarregando(true);

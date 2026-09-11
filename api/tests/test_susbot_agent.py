@@ -731,3 +731,26 @@ def test_apresentacao_pessoal_nao_vira_fora_do_escopo(db):
     assert resposta("Sou de cotia").startswith("Entendi, Gabriel.")
     assert "foge do que" not in resposta("Trabalho na farmácia municipal")
     assert not llm.planejar_chamadas
+
+
+def test_dados_da_tela_pulam_planejador_e_ferramenta(db):
+    # "Interpretar com Clara": os números vêm do card, fora do texto da pergunta.
+    from api.core.prompts import montar_mensagem_resposta
+    from api.core.susbot_agent import criar_susbot_agente
+
+    llm = LLMMock()
+    ferramentas_chamadas = []
+    dados = {"modelo": "Holt", "serie_prevista": [{"mes": "2026-02", "casos_previstos": 98}], "vazio": None}
+    agente = criar_susbot_agente(
+        "3550308", usuario="user-1", llm=llm, dados_tela=dados,
+        tools={"consultar_casos": lambda **kw: ferramentas_chamadas.append(kw) or {"encontrado": True}},
+    )
+
+    fim = _fim(list(agente.stream_eventos("Casos de dengue: o que essa previsão significa?")))
+
+    assert llm.planejar_chamadas == [] and ferramentas_chamadas == []
+    assert fim["plano"]["acao"] == "resposta" and fim["execucao"]["modo"] == "dados_tela"
+    pergunta, contexto, plano, resultado = llm.stream_chamadas[0]
+    mensagem = montar_mensagem_resposta(pergunta, contexto, plano, resultado)
+    assert '=== DADOS DA TELA (inicio)' in mensagem and '"casos_previstos": 98' in mensagem
+    assert '"vazio"' not in mensagem and '"dados_tela"' not in mensagem.split("=== DADOS DA TELA")[0]
