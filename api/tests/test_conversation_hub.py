@@ -184,6 +184,30 @@ def test_telegram_seleciona_web_resume_e_preserva_contexto(banco, monkeypatch):
     assert hub.obter_contexto(c["id"])["ibge6"] == "351300"
 
 
+def test_resumo_conversa_usa_llm_e_cai_no_extrativo(banco):
+    from api.core import conversation_hub as hub
+    c = conversa(banco)
+    banco.adicionar_mensagem(c["id"], "alertas", "Como está a dengue?", "Casos subindo 12%.", None)
+    banco.adicionar_mensagem(c["id"], "alertas", "E o estoque de soro?", "Cobre 9 dias.", None)
+
+    class LLM:
+        def __init__(self, saida): self.saida, self.recebido = saida, None
+        def completar(self, mensagens, max_tokens=256):
+            self.recebido = mensagens[1][1]
+            if isinstance(self.saida, Exception): raise self.saida
+            return self.saida
+
+    llm = LLM("Resumo: dengue em alta e estoque de soro.\nOnde paramos: soro cobre 9 dias.")
+    texto = hub.resumo_conversa(c, llm)
+    assert "**Onde paramos:** soro cobre 9 dias." in texto
+    assert llm.recebido.index("dengue") < llm.recebido.index("soro")  # ordem cronológica
+
+    for ruim in (LLM(RuntimeError("quota")), LLM("texto sem formato"), None):
+        texto = hub.resumo_conversa(c, ruim)
+        assert "**Resumo:** conversamos sobre Como está a dengue?" in texto
+        assert "**Onde paramos:** você perguntou “E o estoque de soro?”" in texto
+
+
 def test_web_confirma_acao_do_telegram_sem_aceitar_argumentos_adulterados(banco, monkeypatch):
     from api.core import susbot_router as web, conversation_hub as hub
     from api.core.auth import require_user

@@ -197,6 +197,7 @@ def visao_geral(
     ibge: str = Query(...),
     periodo: str = Query("Mes"),
     _acesso: Acesso = Depends(require_acesso("consultar_alertas")),
+    horizonte_meses: int = Query(3, ge=1, le=12),
 ) -> dict[str, Any]:
     periodos = {"Mes", "Trimestre", "Ano"}
     if periodo not in periodos:
@@ -210,6 +211,7 @@ def visao_geral(
         codigo = _ibge6(ibge)
         municipio = _municipio(codigo)
         codigo7 = str(municipio.get("cod_ibge_completo") or "")
+    horizonte = horizonte_meses if isinstance(horizonte_meses, int) else 3
 
     filtro_territorio = {"cod_ibge_completo": codigo7}
     if periodo == "Mes":
@@ -230,7 +232,17 @@ def visao_geral(
         mapa = [item for item in mapa if item.get("nome_mesorregiao") == municipio.get("nome_mesorregiao")]
     categorias = _select("visao_geral_ruptura_categoria", order="pct_distribuicao.desc")
     alertas = _select("visao_geral_alertas_recentes", None if visao_estadual else filtro_territorio, order="ordem.asc", limit=24)
-    grupos = (kpis, serie, risco, evolucao, competencia, mapa, categorias, alertas)
+    historico_previsao = [] if visao_estadual else _select(
+        "sinan_dengue_municipios_sazonalidade",
+        {"cod_ibge_municipio": codigo, "periodo": "5 Anos"},
+        order="mes_ano.asc",
+    )
+    previsao = (
+        _prever_meses(historico_previsao, horizonte)
+        if historico_previsao else
+        {"disponivel": False, "motivo": "Previsão municipal indisponível para este recorte.", "horizonte_meses": horizonte}
+    )
+    grupos = (kpis, serie, risco, evolucao, competencia, mapa, categorias, alertas, historico_previsao)
     referencias = [
         item.get("data_processamento") or item.get("competencia_referencia")
         for grupo in grupos for item in grupo
@@ -242,6 +254,8 @@ def visao_geral(
         "visao_geral_mapa_mesorregiao", "visao_geral_ruptura_categoria",
         "visao_geral_alertas_recentes",
     ]
+    if not visao_estadual:
+        tabelas.append("sinan_dengue_municipios_sazonalidade")
     return {
         "meta": _meta(tabelas, referencias),
         "municipio": {"ibge6": codigo, "ibge7": codigo7, "nome": municipio.get("nome_municipio"), "uf": "SP", "mesorregiao": municipio.get("nome_mesorregiao")},
@@ -254,6 +268,7 @@ def visao_geral(
         "mapa_mesorregiao": mapa,
         "ruptura_categorias": categorias,
         "alertas": alertas,
+        "previsao_mensal": previsao,
     }
 
 

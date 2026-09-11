@@ -108,7 +108,8 @@ def test_pareamento_tem_token_unico_confirmacao_bilateral_e_revogacao(canais):
     assert conexao["status"] == "ativo"
     assert conexao["provedor"] == "telegram"
     assert any(texto.startswith("Telegram conectado") for _, texto in mensagens)
-    assert "conversas recentes" in mensagens[-1][1]
+    # Sem conversas ainda: saudação convida a começar, sem oferecer "continuar".
+    assert "Sou a Clara" in mensagens[-1][1]
 
     itens = router_module.listar_canais(user=_user())["itens"]
     assert len(itens) == 1
@@ -245,7 +246,7 @@ def test_inatividade_do_telegram_oferece_conversas_sem_perder_historico(canais, 
     conexao_atualizada = db_module.get_conexao_canal_por_externo("telegram", "778899")
     assert conexao_atualizada["conversa_atual_id"] == primeira_conversa_id
     assert db_module.contar_conversas("user-abc", canal="telegram") == 1
-    assert "conversas recentes" in _mensagens[-1][1]
+    assert "Como quer seguir?" in _mensagens[-1][1]
     assert db_module.contar_mensagens(primeira_conversa_id) == 1
 
 
@@ -450,7 +451,7 @@ def test_whatsapp_pareia_por_link_wa_me_e_conversa_no_mesmo_historico(canais):
     assert conexao["provedor"] == "whatsapp"
     assert conexao["external_username"] == "Marcia"
     assert any(texto.startswith("WhatsApp conectado") for _, texto in mensagens)
-    assert "0. Nova conversa" in mensagens[-1][1]
+    assert mensagens[-1][1].endswith(", Marcia! Sou a Clara. Qual decisão você precisa tomar hoje?")
 
     router_module.processar_evento_whatsapp(_wa_evento("m-1", "Qual e o alerta mais urgente?"))
     conversa = db_module.listar_conversas("user-abc", canal="whatsapp")[0]
@@ -490,6 +491,29 @@ def test_whatsapp_quadro_vira_enquete_e_voto_seleciona_conversa(canais, monkeypa
     router_module.processar_evento_whatsapp(_wa_voto("r-nova", "0. Nova conversa"))
     assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] is None
     router_module.processar_evento_whatsapp(_wa_voto("r-intruso", opcoes[0], chat="5500000000000@c.us"))
+    assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] is None
+
+
+def test_saudacao_por_horario_de_brasilia_e_menu_inicial(canais, monkeypatch):
+    router_module, db_module, mensagens = canais
+    conexao = {"usuario": "user-abc", "provedor": "whatsapp", "external_username": "Márcia Souza"}
+    utc = lambda h: datetime(2026, 9, 11, h, 0, tzinfo=timezone.utc)  # Brasília = UTC-3
+    assert router_module._saudacao(conexao, utc(11)) == "Bom dia, Márcia!"
+    assert router_module._saudacao(conexao, utc(15)) == "Boa tarde, Márcia!"
+    assert router_module._saudacao(conexao, utc(23)) == "Boa noite, Márcia!"
+    assert router_module._saudacao({**conexao, "provedor": "telegram"}, utc(2)) == "Boa noite!"
+
+    enquetes = []
+    monkeypatch.setattr(router_module, "_whatsapp_poll", lambda chat, titulo, opcoes: enquetes.append((titulo, opcoes)) or True)
+    _parear_whatsapp(canais)
+    router_module.processar_evento_whatsapp(_wa_evento("s-1", "Estoque de dipirona"))
+    router_module.processar_evento_whatsapp(_wa_evento("s-2", "/start"))
+    assert enquetes[-1][1] == [router_module.MENU_NOVA, router_module.MENU_CONTINUAR]
+    assert enquetes[-1][0].endswith("Como quer seguir?")
+
+    router_module.processar_evento_whatsapp(_wa_voto("s-v1", router_module.MENU_CONTINUAR))
+    assert enquetes[-1][1][-1] == "0. Nova conversa"
+    router_module.processar_evento_whatsapp(_wa_voto("s-v2", router_module.MENU_NOVA))
     assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] is None
 
 

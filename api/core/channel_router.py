@@ -15,6 +15,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
@@ -32,11 +33,12 @@ from api.core.auth import require_user
 from api.core.identidade import usuario_referencia
 from api.core.permissoes import AcessoNegado, carregar_acesso, ferramentas_no_municipio
 from api.core.channel_media import MidiaCanalIndisponivel, baixar_audio_openwa, baixar_audio_telegram
-from api.core.susbot_agent import criar_susbot_agente, montar_historico_recente
+from api.core.susbot_agent import _montar_llm_com_fallback, criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
     aprender_da_mensagem,
     aprender_do_usuario_autenticado,
     atualizar_resumo,
+    carregar_perfil,
     contexto_para_agente,
     executar_comando_memoria,
 )
@@ -368,7 +370,7 @@ def confirmar_pareamento(pareamento_id: str, user: dict = Depends(require_user))
     aprender_do_usuario_autenticado(usuario, user, origem="perfil_autenticado")
     nome = NOMES_CANAL.get(conexao["provedor"], conexao["provedor"])
     _enviar(conexao["provedor"], conexao["external_chat_id"], f"{nome} conectado ao SusPredict. Suas novas conversas aparecerao tambem no historico web.")
-    _quadro_conversas(conexao)
+    _menu_inicial(conexao)
     return _resumo_conexao(conexao)
 
 
@@ -467,6 +469,39 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
 
 
 WHATSAPP_OPCAO_NOVA = "0. Nova conversa"
+MENU_NOVA = "🆕 Nova conversa"
+MENU_CONTINUAR = "💬 Continuar uma conversa"
+
+
+def _saudacao(conexao: dict, agora: datetime | None = None) -> str:
+    hora = (agora or datetime.now(timezone.utc)).astimezone(ZoneInfo("America/Sao_Paulo")).hour
+    periodo = "Bom dia" if 5 <= hora < 12 else "Boa tarde" if 12 <= hora < 18 else "Boa noite"
+    nome = str(carregar_perfil(conexao["usuario"]).get("nome") or "")
+    # No Telegram external_username é @handle; no WhatsApp é o nome do perfil, então serve de reserva.
+    if not nome and conexao["provedor"] == "whatsapp":
+        nome = str(conexao.get("external_username") or "")
+    primeiro = nome.split()[0] if nome.split() and not nome.strip().isdigit() else ""
+    return f"{periodo}, {primeiro}!" if primeiro else f"{periodo}!"
+
+
+def _menu_inicial(conexao: dict) -> None:
+    """Saudação + escolha entre começar do zero ou retomar uma conversa."""
+    chat_id = conexao["external_chat_id"]
+    provedor = conexao["provedor"]
+    saudacao = _saudacao(conexao)
+    if not db.listar_conversas(conexao["usuario"], page_size=1):
+        db.atualizar_conversa_canal(conexao["id"], None)
+        _enviar(provedor, chat_id, f"{saudacao} Sou a Clara. Qual decisão você precisa tomar hoje?")
+        return
+    pergunta = f"{saudacao} Como quer seguir?"
+    if provedor == "whatsapp":
+        if not _whatsapp_poll(chat_id, pergunta, [MENU_NOVA, MENU_CONTINUAR]):
+            _enviar(provedor, chat_id, f"{pergunta}\n\nEnvie /nova para começar um assunto ou /conversas para continuar um anterior.")
+        return
+    _telegram_send(chat_id, pergunta, reply_markup={"inline_keyboard": [
+        [{"text": MENU_NOVA, "callback_data": "clara:nova"}],
+        [{"text": MENU_CONTINUAR, "callback_data": "clara:conversas"}],
+    ]})
 
 
 def _conversas_do_quadro(usuario: str) -> list[tuple[dict, str]]:
@@ -509,6 +544,14 @@ def _responder_callback(callback_id: str) -> None:
         log.warning("Não foi possível encerrar o indicador do botão Telegram")
 
 
+def _llm_resumo():
+    try:
+        return _montar_llm_com_fallback()
+    except Exception as exc:  # sem chave configurada: resumo extrativo
+        log.info("Resumo de conversa sem LLM: %s", exc)
+        return None
+
+
 def _selecionar_conversa(conexao: dict, conversa_id: str | None) -> None:
     """Troca a conversa ativa do canal; `None` inicia uma nova."""
 
@@ -525,7 +568,8 @@ def _selecionar_conversa(conexao: dict, conversa_id: str | None) -> None:
             _enviar(provedor, chat_id, "Esta conversa antiga ainda não tem município e período registrados. Abra-a no SusPredict para definir o contexto antes de continuar aqui.")
             return
         db.atualizar_conversa_canal(conexao["id"], conversa_id)
-        _enviar(provedor, chat_id, hub.resumo_conversa(conversa))
+        _enviar(provedor, chat_id, "⏳ Um instante, estou relembrando essa conversa…")
+        _enviar(provedor, chat_id, hub.resumo_conversa(conversa, _llm_resumo()))
     except (HTTPException, AcessoNegado):
         _enviar(provedor, chat_id, "Esta conversa não está disponível para seu acesso. Use /conversas para atualizar a lista.")
 
@@ -540,6 +584,8 @@ def _processar_callback(callback: dict) -> None:
     comando = str(callback.get("data") or "")
     if comando == "clara:nova":
         _selecionar_conversa(conexao, None)
+    elif comando == "clara:conversas":
+        _quadro_conversas(conexao)
     elif comando.startswith("clara:abrir:"):
         _selecionar_conversa(conexao, comando.removeprefix("clara:abrir:"))
 
@@ -596,8 +642,11 @@ def _processar_mensagem_canal(
         if indice <= len(conversas):
             _selecionar_conversa(conexao, conversas[indice - 1]["id"])
             return
-    if comando in {"/start", "/conversas", "/continuar", "/menu"} or (_telegram_sessao_expirada(conexao) and not comando.startswith("/nova")):
+    if comando in {"/conversas", "/continuar"}:
         _quadro_conversas(conexao)
+        return
+    if comando in {"/start", "/menu"} or (_telegram_sessao_expirada(conexao) and not comando.startswith("/nova")):
+        _menu_inicial(conexao)
         return
     if comando in {"/nova", "/new", "/clear"}:
         db.atualizar_conversa_canal(conexao["id"], None)
@@ -746,16 +795,19 @@ def _processar_voto_whatsapp(voto: dict) -> None:
     """Voto na enquete do quadro chega como message.reaction (patch deploy/openwa-poll-vote.patch)."""
 
     opcao = str(voto.get("reaction") or "")
-    # Emoji comum ou voto desmarcado: não é seleção do quadro.
-    if not re.match(r"\d+\. ", opcao):
+    # Emoji comum ou voto desmarcado: não é opção de enquete da Clara.
+    if opcao not in {MENU_NOVA, MENU_CONTINUAR} and not re.match(r"\d+\. ", opcao):
         return
     # remote da enquete é o chat pareado; senderId cobre o caso de o WhatsApp devolver @lid só num dos dois.
     conexao = next((c for c in (db.get_conexao_canal_por_externo("whatsapp", str(voto.get(k) or ""))
                                 for k in ("chatId", "senderId")) if c), None)
     if not conexao:
         return
-    if opcao == WHATSAPP_OPCAO_NOVA:
+    if opcao in {WHATSAPP_OPCAO_NOVA, MENU_NOVA}:
         _selecionar_conversa(conexao, None)
+        return
+    if opcao == MENU_CONTINUAR:
+        _quadro_conversas(conexao)
         return
     # Rótulo é recalculado agora: enquete antiga cuja lista mudou não abre a conversa errada.
     itens = _conversas_do_quadro(conexao["usuario"])

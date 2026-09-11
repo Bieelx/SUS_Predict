@@ -56,3 +56,15 @@ def test_previsao_mensal_aceita_horizonte_de_um_a_doze_meses(horizonte):
 def test_previsao_mensal_rejeita_horizonte_fora_do_limite(horizonte):
     with pytest.raises(ValueError, match="entre 1 e 12"):
         gerar_predicao_mensal(_monthly_series(), horizonte)
+
+
+def test_previsao_mensal_compara_modelo_com_referencia_sazonal():
+    _, model, diagnostics = gerar_predicao_mensal(_monthly_series(), 6)
+
+    assert model in {
+        "Sazonal ingênuo (referência de 12m)",
+        "Holt-Winters aditivo (log1p, sazonalidade 12m)",
+    }
+    assert diagnostics["criterio_selecao"] == "menor RMSE histórico de um passo"
+    assert diagnostics["rmse_holt_winters_log"] >= 0
+    assert diagnostics["rmse_sazonal_ingenuo_log"] >= 0

@@ -313,11 +313,27 @@ def gerar_predicao_mensal(
                 if best is None or candidate["score"] < best["score"]:
                     best = candidate
 
+    # Referência ingênua sazonal: para séries epidemiológicas instáveis, um
+    # modelo mais complexo só é aceito quando reduz o erro histórico de um passo.
+    seasonal_errors = [
+        values[index] - values[index - season_length]
+        for index in range(season_length, len(values))
+    ]
+    seasonal_rmse = math.sqrt(
+        sum(error * error for error in seasonal_errors) / max(len(seasonal_errors), 1)
+    )
+    use_seasonal_naive = seasonal_rmse <= best["score"]
+
     forecast = []
     for step in range(1, meses_previsao + 1):
-        seasonal_index = (len(values) + step - 1) % season_length
-        estimate_log = best["level"] + step * best["trend"] + best["season"][seasonal_index]
-        margin = 1.28 * best["score"] * (1 + 0.10 * step)
+        if use_seasonal_naive:
+            estimate_log = values[-season_length + ((step - 1) % season_length)]
+            model_score = seasonal_rmse
+        else:
+            seasonal_index = (len(values) + step - 1) % season_length
+            estimate_log = best["level"] + step * best["trend"] + best["season"][seasonal_index]
+            model_score = best["score"]
+        margin = 1.28 * model_score * (1 + 0.10 * step)
         forecast.append({
             "mes": _next_month(last_month, step).isoformat(),
             "casos_previstos": max(0, int(round(math.expm1(estimate_log)))),
@@ -326,9 +342,17 @@ def gerar_predicao_mensal(
             "tipo": "previsto",
         })
 
-    return forecast, "Holt-Winters aditivo (log1p, sazonalidade 12m)", {
+    model_name = (
+        "Sazonal ingênuo (referência de 12m)"
+        if use_seasonal_naive else
+        "Holt-Winters aditivo (log1p, sazonalidade 12m)"
+    )
+    return forecast, model_name, {
         "nivel_intervalo": interval_level,
         "pontos_treino": len(continuous),
         "sazonalidade_meses": season_length,
-        "rmse_log": round(best["score"], 4),
+        "rmse_log": round(model_score, 4),
+        "rmse_holt_winters_log": round(best["score"], 4),
+        "rmse_sazonal_ingenuo_log": round(seasonal_rmse, 4),
+        "criterio_selecao": "menor RMSE histórico de um passo",
     }

@@ -12,15 +12,17 @@ import HistoricoAquisicoes, { dentroDaJanela } from './HistoricoAquisicoes.jsx';
 import { numero as n, inteiro, decimal, moeda, rotuloDado } from './formatters.js';
 const riscoCor = risco => String(risco).toUpperCase() === 'ALTO' ? 'var(--risk-alto)' : String(risco).toUpperCase() === 'MODERADO' ? 'var(--risk-medio)' : ['BAIXO', 'SEM_ALERTA'].includes(String(risco).toUpperCase()) ? 'var(--risk-baixo)' : 'var(--ink-500)';
 const variacao = (valor, unidade = '%', referencia = 'período anterior') => valor == null ? 'Comparativo indisponível' : `${n(valor) >= 0 ? '+' : ''}${decimal(valor)}${unidade} vs. ${referencia}`;
+const mesLongo = valor => new Date(valor).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 function useRuptura(periodo, ibge) {
   return useDadosOperacionais('ruptura', { ibge, periodo });
 }
 
-export function VisaoGeralReal({ municipio, onNavigate, estadual = false }) {
+export function VisaoGeralReal({ municipio, onNavigate, onOpenClara, estadual = false }) {
   const demo = useDemoHistorica();
   const [periodo, setPeriodo] = useState('Mes');
-  const estado = useDadosOperacionais('visao-geral', { ibge: estadual ? 'TODOS' : municipio.ibge6, periodo });
+  const [horizonteMeses, setHorizonteMeses] = useState(3);
+  const estado = useDadosOperacionais('visao-geral', { ibge: estadual ? 'TODOS' : municipio.ibge6, periodo, horizonte_meses: horizonteMeses });
   const dados = estado.dados;
   const filtros = <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
     <label><span className="eyebrow" style={{ display: 'block', marginBottom: 5 }}>Comparativo dos indicadores</span><select value={periodo} onChange={e => setPeriodo(e.target.value)} style={selectCompacto}><option value="Mes">Mês</option><option value="Trimestre">Trimestre</option><option value="Ano">Ano</option></select></label>
@@ -43,13 +45,48 @@ export function VisaoGeralReal({ municipio, onNavigate, estadual = false }) {
   const scoresRisco = risco ? [['Epidemiológico', risco.score_epidemiologico], ['Pressão hospitalar', risco.score_capacidade], ['Suprimento', risco.score_estoque_critico]].filter(([, value]) => value != null) : [];
   const mapa = dados.mapa_mesorregiao || [];
   const alertas = dados.itens_demo || dados.alertas || [];
+  const previsao = dados.previsao_mensal;
+  const primeiroPrevisto = previsao?.disponivel ? previsao.serie[0] : null;
+  const picoPrevisto = previsao?.disponivel ? previsao.serie.reduce((maior, item) => n(item.casos_previstos) > n(maior.casos_previstos) ? item : maior) : null;
   return <div className="rise">
     <header style={header}><div><h1 style={titulo}>Visão Geral <span className="page-territory" style={subtitulo}>— {dados.municipio.nome}, {dados.municipio.uf}</span></h1><p style={descricao}>Síntese executiva de dengue, pressão hospitalar e suprimento.</p></div>{filtros}</header>
     <FonteReal meta={dados.meta} janela={kpi} competencia={dados.competencia?.competencia_referencia} somenteCompetencia={periodo === 'Mes'} detalhe="Dengue (A90)" />
     {cards.length ? <div className="responsive-grid-4" style={grid4}>
       {cards.map(card => <Card key={card.key} className="p-5"><p className="eyebrow">{card.label}</p><strong style={{ display: 'block', color: card.color, font: '800 27px JetBrains Mono, monospace', margin: '8px 0 4px' }}>{card.value}</strong><p style={{ ...texto, margin: 0 }}>{card.detail}</p>{serie.some(item => item[card.key] != null) ? <ResponsiveContainer width="100%" height={48}><LineChart data={serie}><Line type="linear" dataKey={card.key} stroke={card.color} strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer> : null}<small style={microcopy}>{serie.some(item => item[card.key] != null) ? `Evolução mensal, ${serie.length} meses; independente do comparativo` : 'Série mensal indisponível para este recorte'}</small></Card>)}
     </div> : <Card className="p-5"><Vazio texto={`Sem indicadores para ${dados.municipio.nome} no comparativo ${periodo === 'Mes' ? 'mês' : periodo.toLowerCase()}.`} /></Card>}
-    <Card className="p-5" style={{ marginTop: 18 }}><SectionTitle>Evolução de casos</SectionTitle><p style={texto}>{demo ? 'Casos confirmados pelo CVE/SES-SP e projeção ilustrativa calculada até o corte escolhido. Sem uso de meses futuros observados.' : 'Histórico SINAN e tendência estimada. O gráfico não muda com o comparativo dos cards.'}</p>{evolucao.length ? <ResponsiveContainer width="100%" height={300}><ComposedChart data={evolucao}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="competencia" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip /><Legend verticalAlign="top" height={28} iconType="plainline" wrapperStyle={{ fontSize: 11.5 }} /><Area dataKey="casos_notificados" name={demo ? "Casos confirmados (CVE)" : "Casos notificados"} fill="var(--primary)" fillOpacity={0.08} stroke="var(--primary)" /><Line dataKey="casos_tendencia" name={demo ? "Projeção ilustrativa" : "Tendência estimada"} stroke="var(--ink-400)" strokeDasharray="6 4" dot={false} /></ComposedChart></ResponsiveContainer> : <Vazio texto="Série de evolução com tendência não disponível para este território." />}</Card>
+    {!demo && !estadual && <Card className="p-5" style={predictionBrief}>
+      <div style={predictionIntro}>
+        <div>
+          <p className="eyebrow">Leitura preditiva</p>
+          <SectionTitle>O que pode acontecer depois do último dado observado</SectionTitle>
+          <p style={texto}>Estimativa epidemiológica separada dos valores confirmados. Use como sinal para investigação, não como contagem futura garantida.</p>
+        </div>
+        <label style={predictionLabel}>Horizonte
+          <select value={horizonteMeses} onChange={event => setHorizonteMeses(Number(event.target.value))} disabled={estado.carregando} style={selectCompacto}>
+            {Array.from({ length: 12 }, (_, index) => index + 1).map(value => <option key={value} value={value}>{value} {value === 1 ? 'mês' : 'meses'}</option>)}
+          </select>
+        </label>
+      </div>
+      {previsao?.disponivel ? <>
+        <div role="note" style={predictionStatus}>
+          <MIcon m="history" size={18} />
+          <span><strong>Base observada até {mesLongo(previsao.ultimo_mes_observado)}.</strong> {previsao.aviso}</span>
+        </div>
+        <div style={predictionFacts}>
+          <div style={predictionFact}><span style={predictionFactLabel}>Próximo mês do modelo</span><strong style={predictionFactValue}>{inteiro(primeiroPrevisto.casos_previstos)} casos</strong><small style={predictionFactDetail}>{mesLongo(primeiroPrevisto.mes)} · faixa {inteiro(primeiroPrevisto.limite_inferior)} a {inteiro(primeiroPrevisto.limite_superior)}</small></div>
+          <div style={predictionFact}><span style={predictionFactLabel}>Pico no horizonte</span><strong style={predictionFactValue}>{inteiro(picoPrevisto.casos_previstos)} casos</strong><small style={predictionFactDetail}>{mesLongo(picoPrevisto.mes)}</small></div>
+          <div style={predictionFact}><span style={predictionFactLabel}>Modelo selecionado</span><strong style={predictionModel}>{previsao.modelo}</strong><small style={predictionFactDetail}>{previsao.diagnostico?.criterio_selecao || `${inteiro(previsao.diagnostico?.pontos_treino)} meses de treino`}</small></div>
+        </div>
+        <div style={predictionActions}>
+          <button type="button" style={botao} onClick={() => onNavigate?.('epidemiologia')}><MIcon m="monitoring" size={17} /> Ver análise e intervalo completo</button>
+          {onOpenClara && <button type="button" style={secondaryButton} onClick={() => onOpenClara(
+            `Interprete a previsão de dengue de ${horizonteMeses} meses para ${dados.municipio.nome}, com base observada até ${previsao.ultimo_mes_observado}. O pico estimado é ${picoPrevisto.casos_previstos} casos em ${picoPrevisto.mes}, com modelo ${previsao.modelo}. Explique incerteza e defasagem antes de sugerir qualquer investigação.`,
+            { tela: 'visao-geral', periodo: '12 Meses' },
+          )}><MIcon m="smart_toy" size={17} /> Interpretar com Clara</button>}
+        </div>
+      </> : <Vazio texto={previsao?.motivo || 'A série histórica municipal ainda não sustenta uma previsão.'} />}
+    </Card>}
+    <Card className="p-5" style={{ marginTop: 18 }}><SectionTitle>{demo ? 'Evolução do cenário' : 'Contexto histórico'}</SectionTitle><p style={texto}>{demo ? 'Casos confirmados pelo CVE/SES-SP e projeção ilustrativa calculada até o corte escolhido. Sem uso de meses futuros observados.' : 'Série observada e referência de tendência da base curada. A previsão operacional, com horizonte e incerteza, está no bloco acima.'}</p>{evolucao.length ? <ResponsiveContainer width="100%" height={300}><ComposedChart data={evolucao}><CartesianGrid stroke="var(--ink-100)" vertical={false} /><XAxis dataKey="competencia" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip /><Legend verticalAlign="top" height={28} iconType="plainline" wrapperStyle={{ fontSize: 11.5 }} /><Area dataKey="casos_notificados" name={demo ? "Casos confirmados (CVE)" : "Casos notificados"} fill="var(--primary)" fillOpacity={0.08} stroke="var(--primary)" /><Line dataKey="casos_tendencia" name={demo ? "Projeção ilustrativa" : "Referência de tendência"} stroke="var(--ink-400)" strokeDasharray="6 4" dot={false} /></ComposedChart></ResponsiveContainer> : <Vazio texto="Série de evolução com tendência não disponível para este território." />}</Card>
     <div style={gridFluido}>
       {scoresRisco.length ? <Card className="p-5"><SectionTitle>Decomposição do risco <span style={subtitulo}>· {decimal(risco.indice_risco_regional)} · {rotuloDado(risco.faixa_risco)}</span></SectionTitle><p style={texto}>Escala fixa de 0 a 100. Não representa probabilidade de surto.</p>{scoresRisco.map(([label, value]) => <div key={label} style={{ marginTop: 14 }}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5 }}><span>{label}</span><strong>{decimal(value)}</strong></div><div style={track}><span style={{ ...fill, width: `${Math.min(100, n(value))}%` }} /></div></div>)}</Card> : null}
       <Card className="p-5" style={cardColuna}><SectionTitle>Alertas de suprimento por categoria <span style={subtitulo}>· {demo ? 'fora do cenário' : 'estado de SP'}</span></SectionTitle>{categorias.length ? <div style={{ flex: 1, minHeight: 230, marginTop: 8 }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categorias} dataKey="pct_distribuicao" nameKey="categoria_insumo" innerRadius={54} outerRadius={82}>{categorias.map((item, index) => <Cell key={item.categoria_insumo} fill={['var(--primary)', 'var(--risk-medio)', 'var(--risk-alto)', 'var(--good)', 'var(--info)'][index % 5]} />)}</Pie><Legend verticalAlign="bottom" height={30} iconType="circle" wrapperStyle={{ fontSize: 11 }} /><Tooltip formatter={value => `${decimal(value)}%`} /></PieChart></ResponsiveContainer></div> : <Vazio texto="Distribuição por categoria indisponível." />}<button onClick={() => onNavigate?.('insumos')} style={botao}>Explorar insumos</button></Card>
@@ -109,3 +146,15 @@ const gridFluido = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, min
 const cardColuna = { display: 'flex', flexDirection: 'column' };
 const sublinha = { display: 'block', color: 'var(--ink-400)', fontSize: 11.5, marginTop: 4, lineHeight: 1.45 };
 const linhaRanking = { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--ink-100)', fontSize: 12 };
+const predictionBrief = { marginTop: 18, display: 'grid', gap: 14 };
+const predictionIntro = { display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' };
+const predictionLabel = { display: 'grid', gap: 5, color: 'var(--ink-500)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' };
+const predictionStatus = { display: 'flex', alignItems: 'flex-start', gap: 9, padding: '10px 12px', borderRadius: 9, background: 'color-mix(in srgb, var(--warn) 9%, transparent)', color: 'var(--ink-700)', fontSize: 12, lineHeight: 1.5 };
+const predictionFacts = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', borderTop: '1px solid var(--ink-100)', borderBottom: '1px solid var(--ink-100)' };
+const predictionFact = { display: 'grid', alignContent: 'start', gap: 5, padding: '15px 14px' };
+const predictionFactLabel = { color: 'var(--ink-400)', fontSize: 10.5, fontWeight: 650 };
+const predictionFactValue = { color: 'var(--ink-900)', font: '800 20px JetBrains Mono, monospace' };
+const predictionFactDetail = { color: 'var(--ink-400)', fontSize: 10.5, lineHeight: 1.45 };
+const predictionModel = { fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: 1.35 };
+const predictionActions = { display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' };
+const secondaryButton = { ...botao, color: 'var(--primary)', background: 'transparent', border: '1px solid var(--ink-200)' };
