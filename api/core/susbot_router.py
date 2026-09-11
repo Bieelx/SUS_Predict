@@ -278,6 +278,16 @@ def listar_conversas(
     )
 
 
+@router.delete("/conversas/{conversa_id}", status_code=204)
+def excluir_conversa(conversa_id: str, user: dict = Depends(require_user)):
+    usuario = usuario_referencia(user)
+    if not usuario:
+        raise HTTPException(401, "Usuario autenticado invalido")
+    _verificar_ownership(db.get_conversa(conversa_id), usuario)
+    db.deletar_conversa(conversa_id, usuario)
+    return None
+
+
 @router.get("/conversas/{conversa_id}/mensagens")
 def listar_mensagens(
     conversa_id: str,

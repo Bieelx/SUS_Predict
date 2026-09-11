@@ -718,6 +718,22 @@ def get_conversa(conversa_id: str) -> dict | None:
     return _row_dict(row)
 
 
+def deletar_conversa(conversa_id: str, usuario: str) -> bool:
+    """Apaga a conversa do dono; mensagens caem por ON DELETE CASCADE e o canal
+    que apontava para ela fica com conversa_atual_id NULL (ON DELETE SET NULL)."""
+    if _clara_remoto():
+        rows, _ = _rest("DELETE", f"susbot_conversas?select=id&id=eq.{_e(conversa_id)}&usuario=eq.{_e(usuario)}",
+                        prefer="return=representation")
+        return len(rows) == 1
+    with _conn() as con:
+        # SQLite só aplica FK com PRAGMA por conexão, e _conn() não liga: limpa na mão.
+        cursor = con.execute("DELETE FROM susbot_conversas WHERE id = ? AND usuario = ?", (conversa_id, usuario))
+        if cursor.rowcount == 1:
+            con.execute("DELETE FROM susbot_mensagens WHERE conversa_id = ?", (conversa_id,))
+            con.execute("UPDATE canal_conexoes SET conversa_atual_id = NULL WHERE conversa_atual_id = ?", (conversa_id,))
+    return cursor.rowcount == 1
+
+
 def _normalizar_canal_conversa(canal: str | None) -> str | None:
     valor = str(canal or "").strip().lower()
     return valor if valor in {"app", "telegram"} else None

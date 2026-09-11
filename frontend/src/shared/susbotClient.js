@@ -125,6 +125,11 @@ export function apagarMemoriaSusbot({ chave, ...opcoes } = {}) {
   });
 }
 
+export function apagarConversaSusbot({ conversaId, ...opcoes } = {}) {
+  if (!conversaId) throw new Error('conversaId ausente');
+  return requisicaoJson(SUSBOT_ENDPOINTS.conversa(conversaId), { ...opcoes, method: 'DELETE' });
+}
+
 export async function listarConversasSusbot({
   baseUrl = '',
   fetchImpl = globalThis.fetch,

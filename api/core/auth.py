@@ -119,6 +119,14 @@ def _dev_validar_token(token: str) -> dict:
     if int(payload.get("exp") or 0) < int(time.time()):
         raise HTTPException(401, "Token inválido ou expirado")
 
+    # O segredo dev tem valor padrão público: sem estas travas, um token forjado com
+    # "id" de um usuário real do Supabase abria a memória e as conversas dele.
+    if not _dev_auth_habilitado():
+        raise HTTPException(401, "Token inválido ou expirado")
+    identidade = _dev_usuario(payload.get("email", ""))["id"]
+    if payload.get("id") != identidade or payload.get("sub") != identidade:
+        raise HTTPException(401, "Token inválido ou expirado")
+
     return payload
 
 

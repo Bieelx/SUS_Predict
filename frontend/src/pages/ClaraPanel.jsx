@@ -3,6 +3,7 @@ import { briefingDemo } from '../demo/adapter.js';
 import QRCode from 'react-qr-code';
 import { API_BASE, MIcon } from '../shared/ui.jsx';
 import {
+  apagarConversaSusbot,
   apagarMemoriaSusbot,
   cancelarPareamentoCanalSusbot,
   confirmarPareamentoCanalSusbot,
@@ -574,24 +575,35 @@ function Bolha({ msg, onNavigate, onConfirmar, onCancelar, onAbrirMemoria }) {
   );
 }
 
-function ItemHistorico({ thread, onAbrir }) {
+function ItemHistorico({ thread, onAbrir, onApagar }) {
   const titulo = tituloDe(thread);
   return (
-    <div
-      onClick={() => onAbrir(thread.id)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(thread.id); } }}
-      style={{
-        padding: '12px 4px', borderBottom: '1px solid var(--ink-50)', cursor: 'pointer',
-        display: 'flex', flexDirection: 'column', gap: 3,
-      }}
-    >
-      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink-900)' }}>{titulo}</p>
-      <p style={{ margin: 0, fontFamily: 'var(--ff-mono, monospace)', fontSize: 11, color: 'var(--ink-400)' }}>
-        {formatRelativo(thread.atualizadaEm || thread.criadaEm)}
-        {thread.totalMensagens > 0 ? ` · ${thread.totalMensagens} ${thread.totalMensagens === 1 ? 'troca' : 'trocas'}` : ''}
-      </p>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--ink-50)' }}>
+      <div
+        onClick={() => onAbrir(thread.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(thread.id); } }}
+        style={{
+          flex: 1, minWidth: 0, padding: '12px 4px', cursor: 'pointer',
+          display: 'flex', flexDirection: 'column', gap: 3,
+        }}
+      >
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink-900)' }}>{titulo}</p>
+        <p style={{ margin: 0, fontFamily: 'var(--ff-mono, monospace)', fontSize: 11, color: 'var(--ink-400)' }}>
+          {formatRelativo(thread.atualizadaEm || thread.criadaEm)}
+          {thread.totalMensagens > 0 ? ` · ${thread.totalMensagens} ${thread.totalMensagens === 1 ? 'troca' : 'trocas'}` : ''}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => onApagar(thread.id)}
+        title="Apagar conversa"
+        aria-label={`Apagar conversa: ${titulo}`}
+        className="susbot-icon-btn"
+      >
+        <MIcon m="delete" size={18} />
+      </button>
     </div>
   );
 }
@@ -1158,6 +1170,44 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
       setThreads(itens.map(conversa => conversaParaThread(conversa)));
     } catch {
       // Não interrompe o fluxo principal do chat.
+    }
+  }
+
+  // Telegram chega por webhook no servidor, sem push para o browser: enquanto o
+  // histórico ou uma conversa do Telegram está na tela, relê a cada 3s.
+  // ponytail: polling curto; trocar por SSE se o número de usuários simultâneos crescer.
+  const conversaTelegramAberta = viewMode === 'chat' && current.canal === 'telegram' && current.conversaId;
+  useEffect(() => {
+    if (!open || demoReplay || !(viewMode === 'history' || conversaTelegramAberta)) return;
+    const timer = window.setInterval(async () => {
+      if (document.hidden || enviandoRef.current) return;
+      if (viewMode === 'history') {
+        void recarregarHistoricoSilencioso();
+        return;
+      }
+      try {
+        const data = await listarMensagensSusbot({
+          conversaId: current.conversaId, baseUrl: API_BASE, headers: getAuthHeaders(), page: 1, pageSize: 100,
+        });
+        const itens = Array.isArray(data?.itens) ? data.itens : [];
+        setCurrent(c => (c.conversaId === current.conversaId && itens.length * 2 !== c.mensagens.length
+          ? { ...c, mensagens: itens.slice().reverse().flatMap(row => mensagemBancoParaMensagens(row, page)) }
+          : c));
+      } catch {
+        // Próxima volta tenta de novo.
+      }
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [open, demoReplay, viewMode, conversaTelegramAberta, current.conversaId, page]);
+
+  async function apagarThread(threadId) {
+    if (!window.confirm('Apagar esta conversa? Isso não pode ser desfeito.')) return;
+    try {
+      await apagarConversaSusbot({ conversaId: threadId, baseUrl: API_BASE, headers: getAuthHeaders() });
+      setThreads(ts => ts.filter(t => t.id !== threadId));
+      if (current.conversaId === threadId) setCurrent(criarThreadVazia());
+    } catch (error) {
+      setErroHistorico(error?.detail || 'Não foi possível apagar a conversa. Tente novamente.');
     }
   }
 
@@ -1882,7 +1932,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
                   : 'Quando você fizer uma pergunta pelo app, a conversa aparece aqui.'}
               />
             ) : (
-              threadsDoCanal.map(t => <ItemHistorico key={t.id} thread={t} onAbrir={abrirThread} />)
+              threadsDoCanal.map(t => <ItemHistorico key={t.id} thread={t} onAbrir={abrirThread} onApagar={apagarThread} />)
             )}
           </div>
         ) : (

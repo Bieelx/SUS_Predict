@@ -61,3 +61,41 @@ def test_chave_publicavel_configura_supabase(monkeypatch):
     importlib.reload(auth_module)
 
     assert auth_module._supabase_configurado() is True
+
+
+def _forjar_token(auth_module, payload):
+    import base64, hashlib, hmac, json, time
+    payload = {"exp": int(time.time()) + 60, **payload}
+    corpo = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
+    assinatura = hmac.new(auth_module._dev_secret().encode(), corpo.encode(), hashlib.sha256).digest()
+    return f"dev.{corpo}.{base64.urlsafe_b64encode(assinatura).rstrip(b'=').decode()}"
+
+
+def test_token_dev_nao_assume_id_de_usuario_real(monkeypatch):
+    monkeypatch.delenv('SUPABASE_URL', raising=False)
+    monkeypatch.delenv('SUPABASE_PUBLISHABLE_KEY', raising=False)
+    monkeypatch.delenv('SUPABASE_ANON_KEY', raising=False)
+    monkeypatch.setenv('SUS_PREDICT_DEV_AUTH', 'true')
+    monkeypatch.delenv('SUSBOT_DEV_AUTH_SECRET', raising=False)
+
+    import api.core.auth as auth_module
+    importlib.reload(auth_module)
+
+    forjado = _forjar_token(auth_module, {"id": "uuid-real", "sub": "uuid-real", "email": "x@dev.local"})
+    with pytest.raises(HTTPException):
+        auth_module.require_user(f"Bearer {forjado}")
+
+
+def test_token_dev_rejeitado_com_flag_desligada(monkeypatch):
+    monkeypatch.delenv('SUPABASE_URL', raising=False)
+    monkeypatch.delenv('SUPABASE_PUBLISHABLE_KEY', raising=False)
+    monkeypatch.delenv('SUPABASE_ANON_KEY', raising=False)
+    monkeypatch.setenv('SUS_PREDICT_DEV_AUTH', 'true')
+
+    import api.core.auth as auth_module
+    importlib.reload(auth_module)
+    token = auth_module.dev_login('marcia.oliveira@dev.local')['access_token']
+
+    monkeypatch.delenv('SUS_PREDICT_DEV_AUTH')
+    with pytest.raises(HTTPException):
+        auth_module.require_user(f"Bearer {token}")

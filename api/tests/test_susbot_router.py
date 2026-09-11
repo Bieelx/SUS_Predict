@@ -268,3 +268,20 @@ def test_web_emite_evento_de_memoria_e_grava_resumo(router, monkeypatch):
     operacional = router_module.PerguntaClaraRequest(pergunta="Qual o estoque de soro?", ibge6="355030")
     corpo = asyncio.run(_ler_streaming_response(router_module.perguntar(operacional, user=user)))
     assert "event: memoria" not in corpo
+
+
+def test_usuario_apaga_so_a_propria_conversa(router):
+    router_module, db_module = router
+    dono = {"id": "user-abc"}
+    minha = db_module.criar_conversa(usuario="user-abc", titulo="Minha")
+    db_module.adicionar_mensagem(minha["id"], "web", "oi", "olá", None)
+    alheia = db_module.criar_conversa(usuario="outra-pessoa", titulo="Alheia")
+
+    with pytest.raises(HTTPException) as exc:
+        router_module.excluir_conversa(alheia["id"], user=dono)
+    assert exc.value.status_code == 403
+    assert db_module.get_conversa(alheia["id"])
+
+    router_module.excluir_conversa(minha["id"], user=dono)
+    assert db_module.get_conversa(minha["id"]) is None
+    assert db_module.contar_mensagens(minha["id"]) == 0
