@@ -11,7 +11,7 @@
 #   bash deploy/openwa.sh qr          # baixa o QR em PNG para parear o número
 #   bash deploy/openwa.sh codigo 5511999999999  # alternativa ao QR: código de 8 letras
 #   bash deploy/openwa.sh enviar 5511999999999 "teste"
-#   bash deploy/openwa.sh webhook http://127.0.0.1:8000/api/susbot/whatsapp/webhook
+#   bash deploy/openwa.sh webhook            # padrão: URL pública da Clara (via Caddy)
 #   bash deploy/openwa.sh smoke 5511999999999
 #   bash deploy/openwa.sh logs
 #
@@ -35,7 +35,7 @@ OPENWA_REPO="${OPENWA_REPO:-https://github.com/rmyndharis/OpenWA.git}"
 OPENWA_DIR="${OPENWA_DIR:-$HOME/openwa}"
 OPENWA_BASE_URL="${OPENWA_BASE_URL:-http://127.0.0.1:2785}"
 OPENWA_SESSION_NAME="${OPENWA_SESSION_NAME:-clara}"
-OPENWA_ENGINE="${OPENWA_ENGINE:-baileys}"
+OPENWA_ENGINE="${OPENWA_ENGINE:-whatsapp-web.js}"
 OPENWA_SERVICE="${OPENWA_SERVICE:-openwa-api}"
 OPENWA_API_KEY="${OPENWA_API_KEY:-}"
 OPENWA_WEBHOOK_SECRET="${OPENWA_WEBHOOK_SECRET:-}"
@@ -83,9 +83,6 @@ API_PORT=2785
 ENGINE_TYPE=$OPENWA_ENGINE
 DATABASE_TYPE=sqlite
 NODE_ENV=production
-# A Clara roda no mesmo host: a entrega do webhook vai para 127.0.0.1, que o
-# guard de SSRF do OpenWA bloqueia por padrão. Rede fechada, 2785 só em loopback.
-WEBHOOK_SSRF_PROTECT=false
 EOF
     fi
 
@@ -192,7 +189,9 @@ cmd_enviar() {
 }
 
 cmd_webhook() {
-    local url="${1:-http://127.0.0.1:8000/api/susbot/whatsapp/webhook}"
+    # 127.0.0.1 dentro do container é o próprio container, e o guard de SSRF bloqueia IP privado;
+    # a URL pública passa pelo Caddy e a autenticidade vem do HMAC (OPENWA_WEBHOOK_SECRET).
+    local url="${1:-${OPENWA_WEBHOOK_URL:-https://suspredict.northcentralus.cloudapp.azure.com/backend/api/susbot/whatsapp/webhook}}"
     [ -n "$OPENWA_WEBHOOK_SECRET" ] || { err "OPENWA_WEBHOOK_SECRET ausente no .env"; return 1; }
     [ "${#OPENWA_WEBHOOK_SECRET}" -ge 16 ] || { err "OPENWA_WEBHOOK_SECRET precisa de pelo menos 16 caracteres"; return 1; }
     local id; id="$(sessao_id)"

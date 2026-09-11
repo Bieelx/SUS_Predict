@@ -438,9 +438,10 @@ bash deploy/openwa.sh sessao    # → OPENWA_SESSION_ID no .env
 bash deploy/openwa.sh qr        # escanear no chip em Aparelhos conectados
 # .env: WHATSAPP_BOT_NUMBER=55DDNUMERO e OPENWA_WEBHOOK_SECRET (>= 16 caracteres)
 sudo systemctl restart suspredict
-bash deploy/openwa.sh webhook   # registra http://127.0.0.1:8000/api/susbot/whatsapp/webhook
+bash deploy/openwa.sh webhook   # registra a URL pública .../backend/api/susbot/whatsapp/webhook
 ```
 
-O webhook fica em loopback (não passa pelo Caddy) e é validado por HMAC
+O webhook usa a URL pública (passa pelo Caddy): `127.0.0.1` dentro do container é o próprio
+container e o guard de SSRF do OpenWA recusa IP privado. A autenticidade vem do HMAC
 (`X-OpenWA-Signature`). No Supabase, reaplicar a view `susbot_conversas_resumo` de
 `supabase/susbot_canais.sql` para o filtro de histórico reconhecer `whatsapp`.
