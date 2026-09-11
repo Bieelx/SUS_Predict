@@ -180,6 +180,7 @@ def perguntar(
         texto_final = ""
         referencia_rota = None
         proposta = ""
+        artefato = None
 
         try:
             yield _sse(
@@ -205,6 +206,8 @@ def perguntar(
             else:
                 eventos = agente.stream_eventos(pergunta)
             for evento in eventos:
+                if evento["event"] == "artefato":
+                    artefato = evento["data"]
                 if evento["event"] == "confirmacao_pendente":
                     proposta = evento["data"].get("resumo") or "Ação aguardando confirmação."
                     acao = hub.criar_acao(conversa["id"], usuario, evento["data"])
@@ -228,13 +231,15 @@ def perguntar(
             try:
                 if req.confirmar:
                     return  # resultado da ação já está durável; replay não duplica histórico
-                db.adicionar_mensagem(
+                mensagem = db.adicionar_mensagem(
                     conversa_id=conversa["id"],
                     tela_origem=req.tela_origem,
                     pergunta=pergunta_registro,
                     resposta=texto_final or proposta,
                     referencia_rota=referencia_rota,
                 )
+                if artefato:
+                    hub.salvar_evidencia(conversa["id"], mensagem["id"], artefato)
             except Exception as exc:  # pragma: no cover - não deve falhar nos testes
                 log.warning("Falha ao persistir mensagem da Clara: %s", exc)
 
@@ -344,7 +349,7 @@ def estado_hub(conversa_id: str, user: dict = Depends(require_user)):
     acoes = hub.listar_acoes(conversa_id, usuario)
     for acao in acoes:
         acao["permitida"] = acao["dados"]["ferramenta"] in permitidas
-    return {"contexto": contexto, "acoes": acoes}
+    return {"contexto": contexto, "acoes": acoes, "evidencias": hub.listar_evidencias(conversa_id, usuario)}
 
 
 @router.delete("/conversas/{conversa_id}/acoes/{acao_id}", status_code=204)

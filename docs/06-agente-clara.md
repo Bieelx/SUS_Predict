@@ -1,6 +1,9 @@
 # SusPredict — Arquitetura do Agente Clara
 
-**Status: PROPOSTO**
+**Status: especificação histórica, com decisões posteriores incorporadas parcialmente.**
+
+> Para a implementação atual de contexto, permissões municipais, retomada no
+> Telegram e confirmações persistentes, consulte [Hub conversacional](12-hub-conversacional.md).
 
 ## Escopo deste documento
 

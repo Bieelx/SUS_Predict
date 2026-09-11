@@ -359,6 +359,7 @@ def confirmar_pareamento(pareamento_id: str, user: dict = Depends(require_user))
         raise HTTPException(410, "Pareamento expirado ou indisponivel")
     aprender_do_usuario_autenticado(usuario, user, origem="perfil_autenticado")
     _telegram_send(conexao["external_chat_id"], "Telegram conectado ao SusPredict. Suas novas conversas aparecerao tambem no historico web.")
+    _quadro_conversas(conexao)
     return _resumo_conexao(conexao)
 
 
@@ -444,7 +445,9 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
     resposta = resposta_base
     if confirmacao_pendente:
         resposta += "\n\nEsta acao precisa ser confirmada no SusPredict. Nenhuma alteracao foi executada pelo Telegram."
-    db.adicionar_mensagem(conversa["id"], "telegram", texto, resposta, referencia)
+    mensagem = db.adicionar_mensagem(conversa["id"], "telegram", texto, resposta, referencia)
+    if (dados_fim or {}).get("artefato"):
+        hub.salvar_evidencia(conversa["id"], mensagem["id"], dados_fim["artefato"])
     db.atualizar_conversa_canal(conexao["id"], conversa["id"])
     resposta_telegram = _formatar_resposta_telegram(resposta_base, dados_fim)
     if confirmacao_pendente:
@@ -454,11 +457,11 @@ def _processar_pergunta_telegram(conexao: dict, texto: str) -> tuple[str, str]:
 
 def _quadro_conversas(conexao: dict) -> None:
     conversas = db.listar_conversas(conexao["usuario"], page_size=6)
-    botoes = [[{"text": c["titulo"][:55] or "Conversa sem título",
+    botoes = [[{"text": f"{_data_curta(c.get('atualizada_em')) or ''} · {c['titulo'][:42] or 'Conversa sem título'}",
                 "callback_data": f"clara:abrir:{c['id']}"}] for c in conversas]
     botoes.append([{"text": "Nova conversa", "callback_data": "clara:nova"}])
     _telegram_send(conexao["external_chat_id"],
-                   "**Suas conversas recentes**\nEscolha um assunto para ver o resumo e continuar, ou comece uma nova conversa.",
+                   "**Suas conversas recentes**\nEscolha um assunto para ver o resumo e continuar, ou comece uma nova conversa. Depois da seleção, envie sua pergunta.",
                    reply_markup={"inline_keyboard": botoes})
 
 

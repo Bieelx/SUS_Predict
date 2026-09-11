@@ -40,6 +40,20 @@ def test_contexto_nao_muda_com_painel_ou_canal(banco):
         hub.fixar_contexto(nova["id"], "gestor", "351300", {"modo": "demo"})
 
 
+def test_evidencia_persiste_com_mensagem_e_respeita_ownership(banco):
+    from api.core import conversation_hub as hub
+    c = conversa(banco)
+    msg = banco.adicionar_mensagem(c["id"], "alertas", "Explique", "Risco baixo", None)
+    artefato = {"tipo": "tabela", "linhas": [{"insumo": "Soro", "pontos": 0}], "evidencia": {"fonte": "Compras públicas"}}
+    hub.salvar_evidencia(c["id"], msg["id"], artefato)
+    assert hub.listar_evidencias(c["id"], "gestor") == {msg["id"]: artefato}
+    with pytest.raises(HTTPException):
+        hub.listar_evidencias(c["id"], "intruso")
+    banco.deletar_conversa(c["id"], "gestor")
+    with banco._conn() as con:
+        assert con.execute("SELECT COUNT(*) FROM clara_evidencias").fetchone()[0] == 0
+
+
 class AgenteAcao:
     permitidas = {"gerar_etp"}
 
@@ -201,3 +215,14 @@ def test_web_confirma_acao_do_telegram_sem_aceitar_argumentos_adulterados(banco,
     assert agente.execucoes == 1
     banco.upsert_acesso("gestor", "gestor", ["355030"])
     assert client.post("/api/susbot/perguntar", json=body).status_code == 403
+
+
+def test_comando_etp_propoe_confirmacao_sem_modelo_ou_escrita(banco):
+    from api.core.susbot_agent import ClaraAgent
+    agente = ClaraAgent("351300", permitidas={"gerar_etp"})
+    eventos = list(agente.stream_eventos("Prepare um ETP de Soro"))
+    proposta = next(e["data"] for e in eventos if e["event"] == "confirmacao_pendente")
+    assert proposta["argumentos"]["item"] == "Soro"
+    assert eventos[-1]["data"]["aguardando_confirmacao"]
+    with banco._conn() as con:
+        assert con.execute("SELECT COUNT(*) FROM etps").fetchone()[0] == 0

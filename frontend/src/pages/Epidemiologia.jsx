@@ -119,7 +119,8 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
               {onOpenClara && <button style={botao} onClick={() => onOpenClara(
                 `Analise a previsão de dengue de 30, 60 e 90 dias para ${dados.municipio.nome}. ` +
                 `Modelo: ${previsao.modelo}. Valores: ${previsao.serie.map(item => `${mesLongo(item.mes)} ${item.casos_previstos} casos, intervalo ${item.limite_inferior} a ${item.limite_superior}`).join('; ')}. ` +
-                `${previsao.aviso} Diferencie claramente dados observados de estimativas e explique a incerteza.`
+                `${previsao.aviso} Diferencie claramente dados observados de estimativas e explique a incerteza.`,
+                { tela: "epidemiologia", periodo }
               )}><MIcon m="smart_toy" size={15} /> Analisar previsão com Clara</button>}
             </div>
           </> : <p style={forecastUnavailable}>Previsão indisponível: {previsao?.motivo || 'a série histórica não possui dados suficientes.'}</p>}

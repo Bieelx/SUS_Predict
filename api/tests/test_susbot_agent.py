@@ -363,12 +363,15 @@ def test_consulta_de_insumos_nao_e_confundida_com_perfil_de_outro_usuario(db):
         usuario="user-gabriel",
         memoria_usuario={"fatos": {"nome": "Gabriel"}},
         llm=LLMIgnoraFerramenta(),
+        tools={"consultar_aquisicoes": lambda **_: {"encontrado": True, "dados": [
+            {"insumo_padronizado": "Amoxicilina 500mg", "unidade_fornecimento": "un", "faixa_risco_aquisicao": "BAIXO"}
+        ]}},
     )
     eventos = list(agente.stream_eventos("Me fale sobre os insumos de Cotia"))
     fim = next(evento for evento in eventos if evento["event"] == "fim")
 
-    assert fim["data"]["plano"]["ferramenta"] == "consultar_estoque"
-    itens = [dado["item"] for dado in fim["data"]["resultado_ferramenta"]["dados"]]
+    assert fim["data"]["plano"]["ferramenta"] == "consultar_aquisicoes"
+    itens = [dado["insumo_padronizado"] for dado in fim["data"]["resultado_ferramenta"]["dados"]]
     assert "Amoxicilina 500mg" in itens
     assert "Não tenho acesso à memória" not in fim["data"]["resposta"]
 
@@ -376,7 +379,7 @@ def test_consulta_de_insumos_nao_e_confundida_com_perfil_de_outro_usuario(db):
 @pytest.mark.parametrize("pergunta", [
     "Como está o estoque de insumos?",
     "Como está o estoque de insumos em Cotia?",
-    "Me fale sobre os insumos em Cotia",
+    "Me fale sobre o estoque de insumos em Cotia",
 ])
 def test_consulta_generica_de_insumos_retorna_estoque_completo(db, pergunta):
     from api.core.susbot_agent import criar_susbot_agente

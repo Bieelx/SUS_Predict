@@ -109,11 +109,14 @@ def rotear_intencao(pergunta: str) -> IntentRoute | None:
         return IntentRoute("gerar_etp", 0.99, {"acao": "ferramenta", "ferramenta": "gerar_etp", "argumentos": argumentos, "resposta": ""}, "rascunho com confirmação")
 
     # Aquisição tem precedência: "não trate como estoque" não deve consultar estoque.
-    if "aquisicao" in texto or "compras" in texto:
+    if "aquisicao" in texto or "aquisicoes" in texto or "compras" in texto:
         return IntentRoute("consultar_aquisicoes", 0.99, {"acao": "ferramenta", "ferramenta": "consultar_aquisicoes", "argumentos": {}, "resposta": "", "referencia_rota": "/alertas"}, "fonte de aquisições")
 
     if texto.startswith(("o que e ", "o que sao ", "explique ", "como funciona ")):
         return None
+
+    if _contem_termo(texto, {"insumo"}) and not _contem_termo(texto, {"estoque", "saldo", "consumo", "cobertura", "falta", "faltando", "ruptura", "acabando"}):
+        return IntentRoute("consultar_aquisicoes", 0.95, {"acao": "ferramenta", "ferramenta": "consultar_aquisicoes", "argumentos": {}, "resposta": "", "referencia_rota": "/insumos"}, "insumos da plataforma sem pressupor estoque físico")
 
     termos_estoque = {"estoque", "insumo", "medicamento", "remedio", "abastecimento"}
     termos_risco = {"falta", "faltando", "critico", "ruptura", "acabando", "baixo"}

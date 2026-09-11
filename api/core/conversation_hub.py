@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS clara_acoes (
     resultado TEXT
 );
 CREATE INDEX IF NOT EXISTS clara_acoes_conversa ON clara_acoes(conversa_id);
+CREATE TABLE IF NOT EXISTS clara_evidencias (
+    mensagem_id TEXT PRIMARY KEY REFERENCES susbot_mensagens(id) ON DELETE CASCADE,
+    conversa_id TEXT NOT NULL REFERENCES susbot_conversas(id) ON DELETE CASCADE,
+    artefato TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS clara_evidencias_conversa ON clara_evidencias(conversa_id);
 """
 
 
@@ -32,10 +38,30 @@ def _decode(row):
     if row is None:
         return None
     row = dict(row)
-    for key in ("contexto", "dados", "resultado"):
+    for key in ("contexto", "dados", "resultado", "artefato"):
         if isinstance(row.get(key), str):
             row[key] = json.loads(row[key])
     return row
+
+
+def salvar_evidencia(conversa_id: str, mensagem_id: str, artefato: dict) -> None:
+    row = {"mensagem_id": mensagem_id, "conversa_id": conversa_id, "artefato": artefato}
+    if db._clara_remoto():
+        db._rest("POST", "clara_evidencias", row)
+    else:
+        with db._conn() as con:
+            con.execute("INSERT INTO clara_evidencias VALUES (:mensagem_id,:conversa_id,:artefato)",
+                        {**row, "artefato": json.dumps(artefato)})
+
+
+def listar_evidencias(conversa_id: str, usuario: str) -> dict:
+    verificar_dono(conversa_id, usuario)
+    if db._clara_remoto():
+        rows, _ = db._rest("GET", f"clara_evidencias?conversa_id=eq.{db._e(conversa_id)}")
+    else:
+        with db._conn() as con:
+            rows = con.execute("SELECT * FROM clara_evidencias WHERE conversa_id=?", (conversa_id,)).fetchall()
+    return {row["mensagem_id"]: _decode(row)["artefato"] for row in rows}
 
 
 def verificar_dono(conversa_id: str, usuario: str) -> dict:
@@ -103,7 +129,13 @@ def listar_acoes(conversa_id: str, usuario: str) -> list[dict]:
     else:
         with db._conn() as con:
             rows = con.execute("SELECT * FROM clara_acoes WHERE conversa_id=? ORDER BY criado_em", (conversa_id,)).fetchall()
-    return [_decode(row) for row in rows]
+    acoes = [_decode(row) for row in rows]
+    agora = datetime.now(timezone.utc)
+    for acao in acoes:
+        if acao["status"] == "pendente" and datetime.fromisoformat(acao["expira_em"]) <= agora:
+            if transicionar(acao["id"], "pendente", "expirada"):
+                acao["status"] = "expirada"
+    return acoes
 
 
 def obter_acao(acao_id: str, conversa_id: str, usuario: str) -> dict:
@@ -130,6 +162,8 @@ def executar_acao(acao_id: str, conversa_id: str, usuario: str, agente):
     if acao["status"] == "concluida":
         yield from acao["resultado"] or []
         return
+    if acao["status"] == "expirada":
+        raise HTTPException(410, "Esta ação expirou. Peça à Clara uma nova proposta.")
     if acao["status"] != "pendente":
         raise HTTPException(409, "Ação cancelada ou já em processamento. Reabra a conversa para verificar o resultado.")
     if datetime.fromisoformat(acao["expira_em"]) <= datetime.now(timezone.utc):
@@ -163,5 +197,11 @@ def resumo_conversa(conversa: dict) -> str:
         pergunta = str(msg.get("pergunta") or "")
         resposta = str(msg.get("resposta") or "")
         partes.append(f"Você: {pergunta[:180]}{'…' if len(pergunta) > 180 else ''}\nClara: {resposta[:280]}{'…' if len(resposta) > 280 else ''}")
+    for acao in listar_acoes(conversa["id"], conversa["usuario"])[-3:]:
+        if acao["status"] == "pendente":
+            partes.append(f"Aguardando confirmação no SusPredict: {acao['dados'].get('resumo') or acao['dados']['ferramenta']}")
+        elif acao["status"] == "concluida":
+            fim = next((e.get("data", {}) for e in acao.get("resultado") or [] if e.get("event") == "fim"), {})
+            partes.append(f"Última ação concluída: {str(fim.get('resposta') or acao['dados']['ferramenta'])[:280]}")
     partes.append("Resumo das últimas mensagens; os dados serão consultados novamente na próxima pergunta.\nPode continuar o assunto. Use /conversas para trocar ou /nova para começar outro.")
     return "\n\n".join(partes)

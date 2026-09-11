@@ -104,7 +104,8 @@ def test_pareamento_tem_token_unico_confirmacao_bilateral_e_revogacao(canais):
     assert reivindicado["external_username"] == "marcia"
     assert conexao["status"] == "ativo"
     assert conexao["provedor"] == "telegram"
-    assert mensagens[-1][1].startswith("Telegram conectado")
+    assert any(texto.startswith("Telegram conectado") for _, texto in mensagens)
+    assert "conversas recentes" in mensagens[-1][1]
 
     itens = router_module.listar_canais(user=_user())["itens"]
     assert len(itens) == 1

@@ -14,7 +14,6 @@ def test_roteia_item_de_estoque_e_extrai_nome():
 @pytest.mark.parametrize("pergunta", [
     "Como está o estoque de insumos?",
     "Como está o estoque de insumos em Cotia?",
-    "Me fale sobre os insumos em Cotia",
     "Como está o estoque de medicamentos?",
 ])
 def test_consulta_geral_de_insumos_nao_confunde_categoria_com_item(pergunta):
@@ -39,3 +38,10 @@ def test_roteia_uti_com_escopo_e_periodo():
         "ano_fim": 2023,
         "escopo_solicitado": "uti",
     }
+
+
+@pytest.mark.parametrize("pergunta", ["Me fale sobre os insumos em Cotia", "Quais insumos estão em risco?", "Explique as aquisições de insumos"])
+def test_insumos_da_plataforma_nao_pressupoem_estoque_fisico(pergunta):
+    rota = rotear_intencao(pergunta)
+    assert rota.plano["ferramenta"] == "consultar_aquisicoes"
+    assert rota.plano["argumentos"] == {}

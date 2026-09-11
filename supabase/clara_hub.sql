@@ -19,4 +19,13 @@ alter table public.clara_contextos enable row level security;
 alter table public.clara_acoes enable row level security;
 revoke all on public.clara_contextos, public.clara_acoes from public, anon, authenticated;
 grant select, insert, update, delete on public.clara_contextos, public.clara_acoes to service_role;
+create table if not exists public.clara_evidencias (
+  mensagem_id text primary key references public.susbot_mensagens(id) on delete cascade,
+  conversa_id text not null references public.susbot_conversas(id) on delete cascade,
+  artefato jsonb not null
+);
+create index if not exists clara_evidencias_conversa on public.clara_evidencias(conversa_id);
+alter table public.clara_evidencias enable row level security;
+revoke all on public.clara_evidencias from public, anon, authenticated;
+grant select, insert, update, delete on public.clara_evidencias to service_role;
 commit;

@@ -1,3 +1,5 @@
+> Atualização de 11/09/2026: o escopo municipal para dados locais e ações e a atribuição pelo admin estão implementados. Veja [Hub conversacional](12-hub-conversacional.md).
+
 # SusPredict — Identidade, permissões e memória da Clara
 
 **Status: APROVADO. Fase 0 implementada em 05/09/2026; Fase 1 implementada e validada em produção em 05/09/2026; Fase 4 (parte: admin de usuários + `usuarios_acesso_log`) antecipada em 05/09/2026; Fases 2 e 3 pendentes.**

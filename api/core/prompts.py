@@ -35,7 +35,7 @@ FERRAMENTAS_PLANEJAVEIS = (
 DESCRICOES_FERRAMENTAS = {
     "consultar_estoque": "- consultar_estoque: item (string opcional), somente_risco (boolean opcional). Palavras genericas (insumos, medicamentos, estoque) NAO sao item. somente_risco=true para falta, ruptura, critico, baixo, acabando.",
     "consultar_aquisicoes": "- consultar_aquisicoes: item (string opcional). Mesmas fontes das telas Alertas e Insumos; risco de aquisição, nunca estoque físico.",
-    "consultar_alertas": "- consultar_alertas: status (string opcional), tipo (string opcional).",
+    "consultar_alertas": "- consultar_alertas: status (string opcional), tipo (string opcional). Apenas alertas operacionais locais cadastrados. Para a Central de Alertas ou risco de aquisição, use consultar_aquisicoes.",
     "consultar_epidemiologia": '- consultar_epidemiologia: sistema (SIM|SIH|SINASC|SIA|SINAN), ano_ini, ano_fim (inteiros opcionais), doenca_cod, escopo_solicitado (strings opcionais). Internacao, hospital, leito, UTI => SIH (UTI: escopo_solicitado="uti"). Obito => SIM. Nascimento => SINASC. Ambulatorial => SIA. Casos, notificacoes, dengue => SINAN.',
     "gerar_etp": "- gerar_etp: item (string obrigatoria), alerta_id (opcional). So quando o usuario pedir explicitamente um ETP; exige confirmacao humana.",
     "sobre_o_projeto": "- sobre_o_projeto: sem argumentos. Perguntas sobre o que e o SUS Predict, o que a Clara faz, quais bases usa, quem e voce.",

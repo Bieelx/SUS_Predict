@@ -226,6 +226,8 @@ CREATE INDEX IF NOT EXISTS idx_memorias_owner ON susbot_memorias (owner_ref, atu
 def _conn():
     con = sqlite3.connect(str(_SQLITE_PATH), check_same_thread=False, timeout=30)
     con.row_factory = sqlite3.Row
+    # SQLite exige esta configuração em cada conexão, não apenas no init_db.
+    con.execute("PRAGMA foreign_keys=ON")
     try:
         yield con
         con.commit()

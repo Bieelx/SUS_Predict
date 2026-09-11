@@ -190,7 +190,10 @@ function aplicarHub(thread, hub) {
   const resultados = (hub?.acoes || []).flatMap(acao => (acao.resultado || [])
     .filter(e => e.event === 'fim')
     .map(e => ({ id: `resultado-${acao.id}`, autor: 'bot', texto: e.data.resposta || '', artefato: e.data.artefato, ts: parseIsoDate(acao.criado_em) })));
-  return { ...thread, contexto: hub?.contexto || null, mensagens: [...thread.mensagens, ...acoes, ...resultados] };
+  const mensagens = thread.mensagens.map(msg => ({ ...msg,
+    artefato: hub?.evidencias?.[msg.id.replace(/-bot$/, '')] || msg.artefato,
+  }));
+  return { ...thread, contexto: hub?.contexto || null, mensagens: [...mensagens, ...acoes, ...resultados] };
 }
 
 // ─── Markdown mínimo: **negrito** e listas "- item" ────────────────────────────
@@ -1061,7 +1064,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
   const ibge6Atual = normalizarIbge6(ibge6);
 
   useEffect(() => {
-    if (viewMode === 'chat') fimRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (viewMode === 'chat') fimRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }, [current.mensagens, enviando, viewMode]);
 
   // Avisa o shell para encolher o conteúdo principal — o painel é um card ao
@@ -1205,24 +1208,30 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
   const conversaTelegramAberta = viewMode === 'chat' && current.conversaId;
   useEffect(() => {
     if (!open || demoReplay || !(viewMode === 'history' || conversaTelegramAberta)) return;
+    let atualizando = false;
     const timer = window.setInterval(async () => {
-      if (document.hidden || enviandoRef.current) return;
+      if (document.hidden || enviandoRef.current || atualizando) return;
+      const sequencia = conversaLoadSeq.current;
       if (viewMode === 'history') {
         void recarregarHistoricoSilencioso();
         return;
       }
+      atualizando = true;
       try {
         const data = await listarMensagensSusbot({
           conversaId: current.conversaId, baseUrl: API_BASE, headers: getAuthHeaders(), page: 1, pageSize: 100,
         });
         const hub = await consultarHubSusbot({ conversaId: current.conversaId, baseUrl: API_BASE, headers: getAuthHeaders() });
-        if (enviandoRef.current) return;
+        if (enviandoRef.current || sequencia !== conversaLoadSeq.current) return;
         const itens = Array.isArray(data?.itens) ? data.itens : [];
-        setCurrent(c => c.conversaId === current.conversaId
-          ? aplicarHub({ ...c, mensagens: itens.slice().reverse().flatMap(row => mensagemBancoParaMensagens(row, page)) }, hub)
+        const revisao = JSON.stringify([itens, hub]);
+        setCurrent(c => c.conversaId === current.conversaId && c.hubRevisao !== revisao
+          ? { ...aplicarHub({ ...c, mensagens: itens.slice().reverse().flatMap(row => mensagemBancoParaMensagens(row, page)) }, hub), hubRevisao: revisao }
           : c);
       } catch {
         // Próxima volta tenta de novo.
+      } finally {
+        atualizando = false;
       }
     }, 3000);
     return () => window.clearInterval(timer);
@@ -1259,7 +1268,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
       const hub = await consultarHubSusbot({ conversaId: conversa.id, baseUrl: API_BASE, headers: getAuthHeaders() });
       if (conversaLoadSeq.current !== seq) return;
       const mensagensBanco = Array.isArray(data?.itens) ? data.itens : [];
-      setCurrent(aplicarHub(montarThreadPersistida(conversa, mensagensBanco, page), hub));
+      setCurrent({ ...aplicarHub(montarThreadPersistida(conversa, mensagensBanco, page), hub), hubRevisao: JSON.stringify([mensagensBanco, hub]) });
     } catch (error) {
       if (conversaLoadSeq.current !== seq) return;
       setErroConversa(error?.message || 'Não foi possível carregar esta conversa.');
@@ -1278,6 +1287,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
   async function enviar(textoForcado) {
     const pergunta = (textoForcado ?? input).trim();
     if (!pergunta || enviando) return;
+    conversaLoadSeq.current += 1;
     setInput('');
 
     if (demoReplay) {
@@ -1392,6 +1402,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
 
   async function confirmarAcao(idMensagemConfirmacao, ferramenta, argumentos) {
     if (enviando) return;
+    conversaLoadSeq.current += 1;
 
     atualizarMensagemAtual(idMensagemConfirmacao, msg => (
       msg.confirmacao ? { ...msg, confirmacao: { ...msg.confirmacao, processando: true, erro: null } } : msg
@@ -1470,6 +1481,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
   }
 
   async function cancelarConfirmacao(idMensagemConfirmacao) {
+    conversaLoadSeq.current += 1;
     const acaoId = current.mensagens.find(m => m.id === idMensagemConfirmacao)?.confirmacao?.acao_id;
     if (!acaoId) return;
     try {
