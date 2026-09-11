@@ -604,10 +604,14 @@ class FallbackClaraLLM:
         plano: dict[str, Any],
         resultado_ferramenta: dict[str, Any] | None,
     ) -> Iterable[str]:
+        emitiu = False
         try:
-            yield from self._primario.stream_resposta(pergunta, contexto, plano, resultado_ferramenta)
+            for token in self._primario.stream_resposta(pergunta, contexto, plano, resultado_ferramenta):
+                if token:
+                    emitiu = True
+                yield token
         except Exception as exc:
-            if self._fallback is None:
+            if emitiu or self._fallback is None:
                 raise
             log.warning("LLM primário falhou na resposta (%s) — caindo pro fallback", exc)
             yield from self._fallback.stream_resposta(pergunta, contexto, plano, resultado_ferramenta)
@@ -618,14 +622,25 @@ def _montar_llm_com_fallback() -> Any:
     if provedor == "local":
         from api.core.local_llm import LocalClaraLLM
 
-        log.info("Clara usando Ollama local")
-        return LocalClaraLLM()
+        local = LocalClaraLLM()
+        try:
+            reserva = _montar_llm_cloud()
+        except Exception:
+            log.warning("Clara usando Ollama local sem reserva cloud configurada")
+            return local
+        log.info("Clara usando Ollama local com fallback Gemini → Groq")
+        return FallbackClaraLLM(local, reserva)
     if provedor == "groq":
         log.info("Clara usando Groq (Gemini ignorado)")
         return GroqClaraLLM()
     if provedor and provedor not in {"gemini", "cloud", "auto"}:
         raise RuntimeError(f"SUSBOT_LLM_PROVIDER desconhecido: {provedor}")
 
+    return _montar_llm_cloud()
+
+
+def _montar_llm_cloud() -> Any:
+    """Monta a reserva Gemini → Groq, aceitando apenas um deles configurado."""
     primario = None
     erro_primario: Exception | None = None
     try:

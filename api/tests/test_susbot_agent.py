@@ -626,3 +626,64 @@ def test_coluna_inteiramente_vazia_nao_vai_para_a_tela():
 
     assert card["colunas"] == ["tipo", "severidade", "descricao"]
     assert card["colunas_detalhe"] == ["status"]
+
+
+@pytest.mark.parametrize("falhas,esperado", [(set(), "local"), ({"local"}, "gemini"), ({"local", "gemini"}, "groq")])
+def test_local_prioriza_ollama_e_reservas_em_ordem(monkeypatch, falhas, esperado):
+    from api.core import susbot_agent, local_llm
+    monkeypatch.setenv("SUSBOT_LLM_PROVIDER", "local")
+    chamadas = []
+
+    class Provider:
+        def __init__(self, nome):
+            self.nome = nome
+
+        def planejar(self, *args):
+            chamadas.append(self.nome)
+            if self.nome in falhas:
+                raise RuntimeError("indisponivel")
+            return {"provider": self.nome}
+
+        def stream_resposta(self, *args):
+            chamadas.append(self.nome)
+            if self.nome in falhas:
+                raise RuntimeError("indisponivel")
+            yield self.nome
+
+    monkeypatch.setattr(local_llm, "LocalClaraLLM", lambda: Provider("local"))
+    monkeypatch.setattr(susbot_agent, "GeminiClaraLLM", lambda: Provider("gemini"))
+    monkeypatch.setattr(susbot_agent, "GroqClaraLLM", lambda: Provider("groq"))
+    llm = susbot_agent._montar_llm_com_fallback()
+    assert llm.planejar("p", {}, []) == {"provider": esperado}
+    ordem = ["local", "gemini", "groq"]
+    assert chamadas == ordem[:ordem.index(esperado) + 1]
+    chamadas.clear()
+    assert list(llm.stream_resposta("p", {}, {}, None)) == [esperado]
+    assert chamadas == ordem[:ordem.index(esperado) + 1]
+
+
+def test_local_funciona_sem_chaves_cloud(monkeypatch):
+    from api.core import susbot_agent, local_llm
+    monkeypatch.setenv("SUSBOT_LLM_PROVIDER", "local")
+    local = object()
+    def indisponivel():
+        raise RuntimeError("sem chave")
+    monkeypatch.setattr(local_llm, "LocalClaraLLM", lambda: local)
+    monkeypatch.setattr(susbot_agent, "GeminiClaraLLM", indisponivel)
+    monkeypatch.setattr(susbot_agent, "GroqClaraLLM", indisponivel)
+    assert susbot_agent._montar_llm_com_fallback() is local
+
+
+def test_fallback_nao_mistura_resposta_parcial_com_outro_provider():
+    from api.core.susbot_agent import FallbackClaraLLM
+    class Parcial:
+        def stream_resposta(self, *args):
+            yield "inicio"
+            raise RuntimeError("conexao perdida")
+    class Reserva:
+        def stream_resposta(self, *args):
+            pytest.fail("nao deve reiniciar resposta ja emitida")
+    stream = FallbackClaraLLM(Parcial(), Reserva()).stream_resposta("p", {}, {}, None)
+    assert next(stream) == "inicio"
+    with pytest.raises(RuntimeError, match="conexao perdida"):
+        next(stream)
