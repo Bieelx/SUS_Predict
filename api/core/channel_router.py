@@ -466,17 +466,27 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
     return resposta, resposta_canal
 
 
+WHATSAPP_OPCAO_NOVA = "0. Nova conversa"
+
+
+def _conversas_do_quadro(usuario: str) -> list[tuple[dict, str]]:
+    conversas = db.listar_conversas(usuario, page_size=6)
+    return [(c, f"{_data_curta(c.get('atualizada_em')) or ''} · {c['titulo'][:42] or 'Conversa sem título'}") for c in conversas]
+
+
 def _quadro_conversas(conexao: dict) -> None:
-    conversas = db.listar_conversas(conexao["usuario"], page_size=6)
-    rotulos = [f"{_data_curta(c.get('atualizada_em')) or ''} · {c['titulo'][:42] or 'Conversa sem título'}" for c in conversas]
+    itens = _conversas_do_quadro(conexao["usuario"])
+    rotulos = [rotulo for _, rotulo in itens]
     if conexao["provedor"] == "whatsapp":
-        # ponytail: lista numerada em texto; botões interativos não são confiáveis no Baileys.
-        linhas = [f"{indice}. {rotulo}" for indice, rotulo in enumerate(rotulos, start=1)]
-        linhas.append("0. Nova conversa")
-        _enviar("whatsapp", conexao["external_chat_id"],
-                "**Suas conversas recentes**\n" + "\n".join(linhas)
-                + "\n\nResponda só com o número para continuar um assunto. Depois da seleção, envie sua pergunta.")
+        # Botões e listas não existem fora da Cloud API; a enquete é o único clicável.
+        # O número no rótulo deixa digitar funcionando como alternativa (e fallback).
+        opcoes = [f"{indice}. {rotulo}" for indice, rotulo in enumerate(rotulos, start=1)] + [WHATSAPP_OPCAO_NOVA]
+        chat_id = conexao["external_chat_id"]
+        if not _whatsapp_poll(chat_id, "Suas conversas recentes — toque em uma para continuar", opcoes):
+            _enviar("whatsapp", chat_id, "**Suas conversas recentes**\n" + "\n".join(opcoes)
+                    + "\n\nResponda só com o número para continuar um assunto. Depois da seleção, envie sua pergunta.")
         return
+    conversas = [c for c, _ in itens]
     botoes = [[{"text": rotulo, "callback_data": f"clara:abrir:{c['id']}"}] for c, rotulo in zip(conversas, rotulos)]
     botoes.append([{"text": "Nova conversa", "callback_data": "clara:nova"}])
     _telegram_send(conexao["external_chat_id"],
@@ -682,25 +692,34 @@ def _markdown_para_whatsapp(texto: str) -> str:
     return re.sub(r"\*\*(.+?)\*\*", r"*\1*", texto, flags=re.DOTALL)
 
 
-def _whatsapp_send(chat_id: str, texto: str) -> bool:
+def _openwa_post(rota: str, corpo: dict) -> bool:
     base_url, api_key, sessao = _openwa_config()
     if not api_key or not sessao:
-        log.info("OPENWA_API_KEY/OPENWA_SESSION_ID ausentes; mensagem para %s nao enviada", chat_id)
+        log.info("OPENWA_API_KEY/OPENWA_SESSION_ID ausentes; %s para %s nao enviado", rota, corpo.get("chatId"))
         return False
-    for parte in _dividir_texto_telegram(texto):
-        request = urllib.request.Request(
-            f"{base_url}/api/sessions/{urllib.parse.quote(sessao, safe='')}/messages/send-text",
-            data=json.dumps({"chatId": chat_id, "text": _markdown_para_whatsapp(parte)}).encode("utf-8"),
-            headers={"Content-Type": "application/json", "X-API-Key": api_key},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=15):
-                pass
-        except (urllib.error.URLError, TimeoutError) as exc:
-            log.warning("Falha ao enviar mensagem ao WhatsApp: %s", exc)
-            return False
-    return True
+    request = urllib.request.Request(
+        f"{base_url}/api/sessions/{urllib.parse.quote(sessao, safe='')}/messages/{rota}",
+        data=json.dumps(corpo).encode("utf-8"),
+        headers={"Content-Type": "application/json", "X-API-Key": api_key},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15):
+            return True
+    except (urllib.error.URLError, TimeoutError) as exc:
+        log.warning("Falha no %s do WhatsApp: %s", rota, exc)
+        return False
+
+
+def _whatsapp_send(chat_id: str, texto: str) -> bool:
+    return all(
+        _openwa_post("send-text", {"chatId": chat_id, "text": _markdown_para_whatsapp(parte)})
+        for parte in _dividir_texto_telegram(texto)
+    )
+
+
+def _whatsapp_poll(chat_id: str, titulo: str, opcoes: list[str]) -> bool:
+    return _openwa_post("send-poll", {"chatId": chat_id, "name": titulo[:255], "options": [o[:100] for o in opcoes]})
 
 
 def _enviar(provedor: str, chat_id: str, texto: str) -> bool:
@@ -723,12 +742,40 @@ def _transcrever_audio_whatsapp(mensagem: dict[str, Any]) -> ResultadoTranscrica
     return transcrever_audio(conteudo, mime_type=mime_type, duracao_segundos=None)
 
 
+def _processar_voto_whatsapp(voto: dict) -> None:
+    """Voto na enquete do quadro chega como message.reaction (patch deploy/openwa-poll-vote.patch)."""
+
+    opcao = str(voto.get("reaction") or "")
+    # Emoji comum ou voto desmarcado: não é seleção do quadro.
+    if not re.match(r"\d+\. ", opcao):
+        return
+    # remote da enquete é o chat pareado; senderId cobre o caso de o WhatsApp devolver @lid só num dos dois.
+    conexao = next((c for c in (db.get_conexao_canal_por_externo("whatsapp", str(voto.get(k) or ""))
+                                for k in ("chatId", "senderId")) if c), None)
+    if not conexao:
+        return
+    if opcao == WHATSAPP_OPCAO_NOVA:
+        _selecionar_conversa(conexao, None)
+        return
+    # Rótulo é recalculado agora: enquete antiga cuja lista mudou não abre a conversa errada.
+    itens = _conversas_do_quadro(conexao["usuario"])
+    escolhida = next((c for i, (c, rotulo) in enumerate(itens, start=1) if f"{i}. {rotulo}" == opcao[:100]), None)
+    if escolhida:
+        _selecionar_conversa(conexao, escolhida["id"])
+    else:
+        _enviar("whatsapp", conexao["external_chat_id"], "Essa lista ficou desatualizada. Segue a versão atual:")
+        _quadro_conversas(conexao)
+
+
 def processar_evento_whatsapp(evento: dict) -> None:
-    if evento.get("event") != "message.received":
+    if evento.get("event") not in {"message.received", "message.reaction"}:
         return
     mensagem = evento.get("data") if isinstance(evento.get("data"), dict) else {}
     chave = str(evento.get("idempotencyKey") or mensagem.get("id") or "").strip()
     if chave and not db.registrar_evento_canal("whatsapp", chave):
+        return
+    if evento["event"] == "message.reaction":
+        _processar_voto_whatsapp(mensagem)
         return
     chat_id = str(mensagem.get("from") or "").strip()
     # ponytail: grupos, status e mensagens do próprio número são ignorados em silêncio —

@@ -1,0 +1,40 @@
+diff --git a/src/engine/adapters/wwebjs-message-events.ts b/src/engine/adapters/wwebjs-message-events.ts
+index a52955a..9230b0b 100644
+--- a/src/engine/adapters/wwebjs-message-events.ts
++++ b/src/engine/adapters/wwebjs-message-events.ts
+@@ -5,7 +5,7 @@ import {
+   type ReactionEvent,
+   type EditedMessage,
+ } from '../interfaces/whatsapp-engine.interface';
+-import { type SerializedWid } from '../types/whatsapp-web-js.types';
++import { readWid, type SerializedWid } from '../types/whatsapp-web-js.types';
+ import { buildEditedMessage, buildIncomingMessageBase, mapContactFields } from './message-mapper';
+ import { extractWwebjsCall, wwebjsAckToDeliveryStatus } from './wwebjs-messaging';
+ import { type WwebjsEngineHost } from './wwebjs-host';
+@@ -198,6 +198,26 @@ export function registerWwebjsMessageEvents(client: Client, host: WwebjsEngineHo
+     }
+   });
+ 
++  // SUS Predict patch: poll votes ride the message.reaction pipeline (no dedicated event upstream).
++  // `reaction` carries the selected option name; empty string = vote cleared.
++  client.on('vote_update', vote => {
++    try {
++      const poll = vote as unknown as {
++        voter: string;
++        selectedOptions?: Array<{ name: string }>;
++        parentMsgKey?: SerializedWid & { remote?: SerializedWid | string };
++      };
++      host.getCallbacks().onMessageReaction?.({
++        messageId: readWid(poll.parentMsgKey) ?? '',
++        chatId: readWid(poll.parentMsgKey?.remote) ?? '',
++        reaction: poll.selectedOptions?.[0]?.name ?? '',
++        senderId: poll.voter,
++      });
++    } catch (error) {
++      host.logger.error('Error processing vote_update', String(error));
++    }
++  });
++
+   client.on('message_edit', (message, newBody) => {
+     try {
+       // whatsapp-web.js keeps `message.timestamp` at the ORIGINAL creation time. Consumers need

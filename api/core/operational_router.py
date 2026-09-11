@@ -65,35 +65,35 @@ def _meta(tabelas: list[str], referencias: list[Any]) -> dict[str, Any]:
     }
 
 
-def _prever_tres_meses(linhas: list[dict]) -> dict[str, Any]:
+def _prever_meses(linhas: list[dict], horizonte_meses: int = 3) -> dict[str, Any]:
     serie = [
         {"mes": item.get("mes_ano"), "total": item.get("casos_atual")}
         for item in linhas
         if item.get("mes_ano")
     ]
     try:
-        previsao, modelo, diagnostico = gerar_predicao_mensal(serie, meses_previsao=3)
+        previsao, modelo, diagnostico = gerar_predicao_mensal(serie, meses_previsao=horizonte_meses)
     except (KeyError, TypeError, ValueError) as exc:
         return {
             "disponivel": False,
             "motivo": f"Série histórica insuficiente ou inválida: {exc}",
-            "horizonte_meses": 3,
+            "horizonte_meses": horizonte_meses,
         }
 
     ultimo_observado = max(str(item["mes_ano"])[:10] for item in linhas if item.get("mes_ano"))
     fim_horizonte = previsao[-1]["mes"]
     mes_atual = date.today().replace(day=1).isoformat()
-    defasada = fim_horizonte < mes_atual
+    defasada = ultimo_observado < mes_atual
     return {
         "disponivel": True,
-        "horizonte_meses": 3,
+        "horizonte_meses": horizonte_meses,
         "ultimo_mes_observado": ultimo_observado,
         "fim_horizonte": fim_horizonte,
         "status_temporal": "defasada" if defasada else "atual",
         "aviso": (
-            "A fonte termina antes do mês atual; esta projeção representa os três meses seguintes ao último dado observado."
+            f"A fonte termina antes do mês atual; esta projeção representa os {horizonte_meses} meses seguintes ao último dado observado, não os {horizonte_meses} meses seguintes ao mês atual."
             if defasada else
-            "Projeção para os três meses seguintes ao último dado observado."
+            f"Projeção para os {horizonte_meses} meses seguintes ao último dado observado."
         ),
         "modelo": modelo,
         "intervalo_confianca_pct": diagnostico.get("nivel_intervalo"),
@@ -125,9 +125,13 @@ def epidemiologia(
     ibge: str = Query(...),
     periodo: str = Query("12 Meses"),
     _acesso: Acesso = Depends(require_acesso("consultar_epidemiologia")),
+    horizonte_meses: int = Query(3, ge=1, le=12),
 ) -> dict[str, Any]:
     codigo = _ibge6(ibge)
     janela = _periodo(periodo)
+    # Chamadas Python diretas (testes e integrações internas antigas) não passam
+    # pela resolução de parâmetros do FastAPI e recebem o objeto Query padrão.
+    horizonte = horizonte_meses if isinstance(horizonte_meses, int) else 3
     municipio = _municipio(codigo)
 
     casos = _select("sinan_dengue_municipios_total_casos", {"cod_ibge_municipio": codigo, "periodo": janela})
@@ -146,7 +150,7 @@ def epidemiologia(
         {"cod_ibge_municipio": codigo, "periodo": "5 Anos"},
         order="mes_ano.asc",
     )
-    previsao = _prever_tres_meses(historico_previsao)
+    previsao = _prever_meses(historico_previsao, horizonte)
     desfecho = _select("sinan_dengue_municipios_desfecho_clinico_anual", {"cod_ibge_municipio": codigo}, order="ano_referencia.asc")
 
     referencias = [
@@ -180,6 +184,8 @@ def epidemiologia(
         "faixa_etaria": faixa,
         "genero": genero,
         "sazonalidade": sazonalidade,
+        "previsao_mensal": previsao,
+        # Compatibilidade temporária com consumidores anteriores ao horizonte configurável.
         "previsao_3_meses": previsao,
         "desfecho_anual": desfecho,
         "distribuicao_cidades": [],  # Compatibilidade; nenhuma tela usa este ranking.

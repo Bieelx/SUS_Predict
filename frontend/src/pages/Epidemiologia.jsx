@@ -14,9 +14,10 @@ const mesLongo = valor => new Date(valor).toLocaleDateString('pt-BR', { month: '
 
 export default function Epidemiologia({ municipio, onOpenClara }) {
   const [periodo, setPeriodo] = useState('12 Meses');
-  const { dados, carregando, erro, recarregar } = useDadosOperacionais('epidemiologia', { ibge: municipio.ibge6, periodo });
+  const [horizonteMeses, setHorizonteMeses] = useState(3);
+  const { dados, carregando, erro, recarregar } = useDadosOperacionais('epidemiologia', { ibge: municipio.ibge6, periodo, horizonte_meses: horizonteMeses });
 
-  const previsao = dados?.previsao_3_meses;
+  const previsao = dados?.previsao_mensal || dados?.previsao_3_meses;
   const serieAnalitica = useMemo(() => {
     const observada = (dados?.sazonalidade || []).map(item => ({
       mes: mes(item.mes_ano),
@@ -78,18 +79,25 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
           <div style={forecastHeader}>
             <div>
               <p className="eyebrow">Previsão epidemiológica</p>
-              <SectionTitle>Casos observados e projeção de 90 dias</SectionTitle>
+              <SectionTitle>Casos observados e projeção de {horizonteMeses} {horizonteMeses === 1 ? 'mês' : 'meses'}</SectionTitle>
             </div>
-            {previsao?.disponivel && <Badge
-              label={previsao.status_temporal === 'defasada' ? 'Fonte defasada' : 'Horizonte atual'}
-              color={previsao.status_temporal === 'defasada' ? 'var(--warn)' : 'var(--good)'}
-            />}
+            <div style={forecastControls}>
+              <label style={forecastLabel}>Horizonte
+                <select value={horizonteMeses} onChange={event => setHorizonteMeses(Number(event.target.value))} disabled={carregando} style={forecastSelect}>
+                  {Array.from({ length: 12 }, (_, index) => index + 1).map(value => <option key={value} value={value}>{value} {value === 1 ? 'mês' : 'meses'}</option>)}
+                </select>
+              </label>
+              {previsao?.disponivel && <Badge
+                label={previsao.status_temporal === 'defasada' ? 'Fonte defasada' : 'Horizonte atual'}
+                color={previsao.status_temporal === 'defasada' ? 'var(--warn)' : 'var(--good)'}
+              />}
+            </div>
           </div>
           {previsao?.disponivel && previsao.status_temporal === 'defasada' && <div role="note" style={avisoDefasagem}>
             <MIcon m="history" size={18} />
             <span><strong>Esta não é uma previsão do mês atual.</strong> {previsao.aviso}</span>
           </div>}
-          {serieAnalitica.length ? <div role="group" aria-label="Série mensal de casos observados, média histórica, ano anterior, previsão de três meses e intervalo de incerteza de 80 por cento">
+          {serieAnalitica.length ? <div role="group" aria-label={`Série mensal de casos observados, média histórica, ano anterior, previsão de ${horizonteMeses} meses e intervalo de incerteza de 80 por cento`}>
             <ResponsiveContainer width="100%" height={290}>
             <ComposedChart accessibilityLayer data={serieAnalitica} margin={{ top: 14, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="var(--ink-100)" vertical={false} />
@@ -107,9 +115,9 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
 
           <ChartData title="Série mensal de casos" rows={serieAnalitica} columns={[['mes', 'Mês'], ['atual', 'Observado', inteiro], ['anterior', 'Ano anterior', inteiro], ['media', 'Média histórica', decimal], ['previsto', 'Previsão', inteiro]]} />
           {previsao?.disponivel ? <>
-            <div className="responsive-grid-3" style={forecastValues}>
+            <div style={forecastValues}>
               {previsao.serie.map((item, index) => <div key={item.mes} style={forecastValue}>
-                <span>{index === 0 ? '30 dias' : index === 1 ? '60 dias' : '90 dias'} · {mesLongo(item.mes)}</span>
+                <span>Mês +{index + 1} · {mesLongo(item.mes)}</span>
                 <strong>{inteiro(item.casos_previstos)} casos</strong>
                 <small>intervalo: {inteiro(item.limite_inferior)} a {inteiro(item.limite_superior)}</small>
               </div>)}
@@ -117,7 +125,7 @@ export default function Epidemiologia({ municipio, onOpenClara }) {
             <div style={forecastFooter}>
               <p><strong>{previsao.modelo}</strong> · intervalo empírico de {previsao.intervalo_confianca_pct}% · treino com {inteiro(previsao.diagnostico?.pontos_treino)} meses. Estimativa estatística, não contagem observada.</p>
               {onOpenClara && <button style={botao} onClick={() => onOpenClara(
-                `Analise a previsão de dengue de 30, 60 e 90 dias para ${dados.municipio.nome}. ` +
+                `Analise a previsão de dengue para os ${previsao.horizonte_meses} meses após o último dado observado em ${dados.municipio.nome}. ` +
                 `Modelo: ${previsao.modelo}. Valores: ${previsao.serie.map(item => `${mesLongo(item.mes)} ${item.casos_previstos} casos, intervalo ${item.limite_inferior} a ${item.limite_superior}`).join('; ')}. ` +
                 `${previsao.aviso} Diferencie claramente dados observados de estimativas e explique a incerteza.`,
                 { tela: "epidemiologia", periodo }
@@ -174,8 +182,11 @@ const descricao = { fontSize: 13, color: 'var(--ink-400)', margin: '5px 0 0' };
 const grid4 = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 };
 const grid2 = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 18, marginTop: 18 };
 const forecastHeader = { display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' };
+const forecastControls = { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' };
+const forecastLabel = { display: 'flex', gap: 7, alignItems: 'center', color: 'var(--ink-500)', fontSize: 11, fontWeight: 650 };
+const forecastSelect = { border: '1px solid var(--ink-200)', borderRadius: 8, background: 'var(--elev)', color: 'var(--ink-800)', padding: '7px 9px', font: 'inherit' };
 const avisoDefasagem = { display: 'flex', gap: 9, alignItems: 'flex-start', margin: '12px 0 2px', padding: '10px 12px', borderRadius: 9, background: 'color-mix(in srgb, var(--warn) 9%, transparent)', color: 'var(--ink-700)', fontSize: 12, lineHeight: 1.5 };
-const forecastValues = { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', borderTop: '1px solid var(--ink-100)', marginTop: 8 };
+const forecastValues = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', borderTop: '1px solid var(--ink-100)', marginTop: 8 };
 const forecastValue = { display: 'grid', gap: 4, padding: '14px 12px 8px', color: 'var(--ink-400)', fontSize: 10.5 };
 const forecastFooter = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', borderTop: '1px solid var(--ink-100)', marginTop: 10, paddingTop: 13, color: 'var(--ink-400)', fontSize: 10.5, lineHeight: 1.5 };
 const forecastUnavailable = { color: 'var(--ink-400)', fontSize: 12.5, margin: '16px 0 0' };

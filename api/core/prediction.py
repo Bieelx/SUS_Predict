@@ -245,8 +245,8 @@ def gerar_predicao_mensal(
     are available. Shorter series fall back to the existing Holt/OLS cascade.
     The returned interval is an empirical 80% model interval, not a guarantee.
     """
-    if meses_previsao < 1:
-        raise ValueError("meses_previsao deve ser maior que zero")
+    if not 1 <= meses_previsao <= 12:
+        raise ValueError("meses_previsao deve estar entre 1 e 12")
 
     continuous = _continuous_monthly_series(serie)
     if len(continuous) < 2:

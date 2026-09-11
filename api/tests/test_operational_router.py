@@ -163,6 +163,30 @@ def test_epidemiologia_inclui_previsao_mensal_de_90_dias(monkeypatch):
     assert "Holt-Winters" in previsao["modelo"]
 
 
+def test_epidemiologia_permite_horizonte_de_doze_meses(monkeypatch):
+    sazonal = [
+        {"mes_ano": f"{year}-{month:02d}-01", "casos_atual": month * 3, "periodo": "5 Anos"}
+        for year in range(2022, 2025)
+        for month in range(1, 13)
+    ]
+
+    def fake_select(table, eq=None, order=None, limit=None):
+        if table == "ibge_sp":
+            return [MUNICIPIO]
+        if table == "sinan_dengue_municipios_sazonalidade":
+            return sazonal
+        return []
+
+    monkeypatch.setattr(operational, "_select", fake_select)
+
+    resposta = operational.epidemiologia("351300", "12 Meses", {}, 12)
+    previsao = resposta["previsao_mensal"]
+
+    assert previsao["horizonte_meses"] == 12
+    assert len(previsao["serie"]) == 12
+    assert resposta["previsao_3_meses"] is previsao
+
+
 def test_ruptura_deduplica_por_insumo_e_unidade_usando_maior_risco(monkeypatch):
     fake_select, _ = _fake_select_factory({
         "ruptura_insumos_alertas_atuais": [

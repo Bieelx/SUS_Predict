@@ -1,4 +1,5 @@
 from api.core.prediction import gerar_predicao_mensal
+import pytest
 
 
 def _monthly_series(years=3):
@@ -42,3 +43,16 @@ def test_previsao_mensal_curta_usa_fallback():
     assert len(forecast) == 3
     assert "série mensal curta" in model
     assert diagnostics["sazonalidade_meses"] is None
+
+
+@pytest.mark.parametrize("horizonte", [1, 6, 12])
+def test_previsao_mensal_aceita_horizonte_de_um_a_doze_meses(horizonte):
+    forecast, _, _ = gerar_predicao_mensal(_monthly_series(), horizonte)
+
+    assert len(forecast) == horizonte
+
+
+@pytest.mark.parametrize("horizonte", [0, 13])
+def test_previsao_mensal_rejeita_horizonte_fora_do_limite(horizonte):
+    with pytest.raises(ValueError, match="entre 1 e 12"):
+        gerar_predicao_mensal(_monthly_series(), horizonte)

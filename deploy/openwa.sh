@@ -67,11 +67,19 @@ cmd_up() {
     command -v docker >/dev/null || { err "docker não encontrado"; return 1; }
     if [ -d "$OPENWA_DIR/.git" ]; then
         info "Atualizando $OPENWA_DIR"
+        # O patch local impediria o fast-forward; desfaz, atualiza e reaplica abaixo.
+        git -C "$OPENWA_DIR" checkout -- . 2>/dev/null
         git -C "$OPENWA_DIR" pull --ff-only || warn "git pull falhou; seguindo com a cópia local"
     else
         info "Clonando OpenWA em $OPENWA_DIR"
         git clone --depth 1 "$OPENWA_REPO" "$OPENWA_DIR" || return 1
     fi
+
+    # Voto de enquete vira message.reaction (o upstream não repassa voto pro webhook).
+    # É o que faz os "botões" do quadro de conversas funcionarem.
+    git -C "$OPENWA_DIR" apply "$ROOT_DIR/deploy/openwa-poll-vote.patch" \
+        && ok "Patch de voto em enquete aplicado" \
+        || { err "Patch de voto não aplica mais nesta versão do OpenWA — atualize deploy/openwa-poll-vote.patch"; return 1; }
 
     if [ -f "$OPENWA_DIR/.env" ]; then
         warn "$OPENWA_DIR/.env já existe — mantido como está"
@@ -197,7 +205,7 @@ cmd_webhook() {
     local id; id="$(sessao_id)"
     [ -n "$id" ] || { err "Sessão não existe — rode 'bash deploy/openwa.sh sessao'"; return 1; }
     local corpo; corpo="$(python3 -c 'import json,sys
-print(json.dumps({"url":sys.argv[1],"events":["message.received","session.status"],"secret":sys.argv[2],"retryCount":3}))' "$url" "$OPENWA_WEBHOOK_SECRET")"
+print(json.dumps({"url":sys.argv[1],"events":["message.received","message.reaction","session.status"],"secret":sys.argv[2],"retryCount":3}))' "$url" "$OPENWA_WEBHOOK_SECRET")"
     local resposta; resposta="$(api POST "/api/sessions/$id/webhooks" "$corpo")"
     local webhook_id; webhook_id="$(echo "$resposta" | campo id)"
     [ -n "$webhook_id" ] || { err "Falhou: $resposta"; return 1; }

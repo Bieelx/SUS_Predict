@@ -462,6 +462,37 @@ def test_whatsapp_pareia_por_link_wa_me_e_conversa_no_mesmo_historico(canais):
     assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] is None
 
 
+def _wa_voto(chave, opcao, chat=WA_CHAT):
+    return {"event": "message.reaction", "idempotencyKey": chave,
+            "data": {"messageId": "true_poll", "chatId": chat, "reaction": opcao, "senderId": chat}}
+
+
+def test_whatsapp_quadro_vira_enquete_e_voto_seleciona_conversa(canais, monkeypatch):
+    router_module, db_module, mensagens = canais
+    enquetes = []
+    monkeypatch.setattr(router_module, "_whatsapp_poll", lambda chat, titulo, opcoes: enquetes.append(opcoes) or True)
+    _parear_whatsapp(canais)
+    router_module.processar_evento_whatsapp(_wa_evento("v-1", "Estoque de dipirona"))
+    conversa = db_module.listar_conversas("user-abc", canal="whatsapp")[0]
+    db_module.atualizar_conversa_canal(db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["id"], None)
+
+    router_module.processar_evento_whatsapp(_wa_evento("v-2", "/conversas"))
+    opcoes = enquetes[-1]
+    assert opcoes[0].startswith("1. ") and opcoes[-1] == "0. Nova conversa"
+
+    router_module.processar_evento_whatsapp(_wa_voto("r-emoji", "👍"))
+    router_module.processar_evento_whatsapp(_wa_voto("r-1", opcoes[0]))
+    assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] == conversa["id"]
+
+    router_module.processar_evento_whatsapp(_wa_voto("r-velho", "1. 01/01/2020 · sumiu"))
+    assert "desatualizada" in mensagens[-1][1]
+
+    router_module.processar_evento_whatsapp(_wa_voto("r-nova", "0. Nova conversa"))
+    assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] is None
+    router_module.processar_evento_whatsapp(_wa_voto("r-intruso", opcoes[0], chat="5500000000000@c.us"))
+    assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] is None
+
+
 def test_whatsapp_ignora_nao_pareado_grupo_proprio_e_duplicado(canais):
     router_module, db_module, mensagens = canais
     router_module.processar_evento_whatsapp(_wa_evento("x-1", "oi"))
