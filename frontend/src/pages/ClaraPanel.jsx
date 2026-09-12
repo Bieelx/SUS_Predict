@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { Fragment, useState, useRef, useEffect } from 'react';
 import { briefingDemo } from '../demo/adapter.js';
 import QRCode from 'react-qr-code';
 import { API_BASE, MIcon } from '../shared/ui.jsx';
@@ -587,6 +587,35 @@ function RascunhoLocalView({ rascunho, onNavigate }) {
   );
 }
 
+function RascunhoOperacionalView({ rascunho, onNavigate }) {
+  if (!rascunho?.id || !rascunho?.payload_proposto) return null;
+  const payload = rascunho.payload_proposto;
+  const linhas = Object.entries(payload).map(([chave, valor]) => [
+    chave.replaceAll('_', ' '), String(valor),
+  ]);
+  return (
+    <section aria-label="Rascunho de atualização operacional" style={{
+      marginTop: 10, padding: '10px 12px', border: '1px solid var(--ink-100)',
+      borderRadius: 12, background: 'var(--elev)', display: 'grid', gap: 8,
+    }}>
+      <p className="eyebrow" style={{ margin: 0 }}>Aguardando sua confirmação · {rascunho.tipo}</p>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-700)' }}>
+        <strong>{rascunho.estabelecimento?.no_fantasia}</strong>
+        {rascunho.estabelecimento?.cnes ? ` · CNES ${rascunho.estabelecimento.cnes}` : ''}
+      </p>
+      <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'minmax(90px, auto) 1fr', gap: '3px 10px', fontSize: 11.5 }}>
+        {linhas.map(([chave, valor]) => <Fragment key={chave}><dt style={{ color: 'var(--ink-400)' }}>{chave}</dt><dd style={{ margin: 0 }}>{valor}</dd></Fragment>)}
+      </dl>
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--warn)' }}>Nenhum saldo ou leito foi alterado ainda.</p>
+      <button type="button" onClick={() => onNavigate?.('registros-unidade')} style={{
+        justifySelf: 'start', padding: '5px 11px', background: 'var(--primary-soft)',
+        border: '1px solid var(--primary-soft-border)', borderRadius: 999, cursor: 'pointer',
+        fontSize: 11, fontWeight: 700, color: 'var(--primary)',
+      }}>revisar e confirmar →</button>
+    </section>
+  );
+}
+
 function Bolha({ msg, onNavigate, onConfirmar, onCancelar, onAbrirMemoria }) {
   const isUser = msg.autor === 'user';
   const isErro = msg.autor === 'error';
@@ -620,6 +649,7 @@ function Bolha({ msg, onNavigate, onConfirmar, onCancelar, onAbrirMemoria }) {
 
       {!isErro && <ArtefatoView artefato={msg.artefato} />}
       {!isErro && <RascunhoLocalView rascunho={msg.rascunhoLocal} onNavigate={onNavigate} />}
+      {!isErro && <RascunhoOperacionalView rascunho={msg.rascunhoOperacional} onNavigate={onNavigate} />}
       {!isErro && <AvisoMemoria estado={msg.memoria} onAbrir={onAbrirMemoria} />}
       {!isErro && <ConfirmacaoAcao msg={msg} onConfirmar={onConfirmar} onCancelar={onCancelar} />}
 
@@ -1384,6 +1414,11 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
     const registroLocal = querRegistrar && unidadeRegistro?.id
       ? { unidade_id: unidadeRegistro.id, chave_idempotencia: chaveIdempotenciaRelato(idResposta) }
       : undefined;
+    const estabelecimento = current.contexto?.estabelecimento || contextoEntrada?.estabelecimento || null;
+    const querInputOperacional = (current.contexto?.intencao || contextoEntrada?.intencao) === 'input_operacional';
+    const inputOperacional = querInputOperacional && estabelecimento?.id
+      ? { id_estabelecimento: estabelecimento.id, chave_idempotencia: chaveIdempotenciaRelato(idResposta) }
+      : undefined;
 
     try {
       const resp = await conversarComSusbot({
@@ -1396,6 +1431,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         contexto: current.contexto || { tela: page, periodo: "12 Meses", ...(contextoEntrada || {}) },
         dados_tela: dadosTela || undefined,
         registro_local: registroLocal,
+        input_operacional: inputOperacional,
         baseUrl: API_BASE,
         headers: getAuthHeaders(),
         onStatus: status => {
@@ -1445,6 +1481,9 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         // registro — a confirmação acontece na tela Registros da unidade.
         onRascunhoLocal: rascunho => {
           atualizarMensagemAtual(idResposta, msg => ({ ...msg, rascunhoLocal: rascunho }));
+        },
+        onRascunhoOperacional: rascunho => {
+          atualizarMensagemAtual(idResposta, msg => ({ ...msg, rascunhoOperacional: rascunho }));
         },
       });
 

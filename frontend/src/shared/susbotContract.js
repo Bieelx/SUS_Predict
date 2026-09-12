@@ -24,6 +24,7 @@ export const SUSBOT_SSE_EVENTS = {
   // Modo de registro local: o backend devolve o rascunho estruturado (relato_id,
   // registros e versões) em vez de resposta de consulta. Não significa confirmação.
   rascunho_local_pronto: 'rascunho_local_pronto',
+  rascunho_operacional_pronto: 'rascunho_operacional_pronto',
 };
 
 export const SUSBOT_REQUEST_FIELDS = {

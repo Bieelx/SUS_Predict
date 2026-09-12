@@ -7,6 +7,10 @@ test('o evento do rascunho local existe no contrato', () => {
   assert.equal(SUSBOT_SSE_EVENTS.rascunho_local_pronto, 'rascunho_local_pronto');
 });
 
+test('o evento do rascunho operacional existe no contrato', () => {
+  assert.equal(SUSBOT_SSE_EVENTS.rascunho_operacional_pronto, 'rascunho_operacional_pronto');
+});
+
 test('chave de idempotência é estável para a mesma mensagem', () => {
   const primeira = chaveIdempotenciaRelato('m-42');
   assert.equal(primeira, chaveIdempotenciaRelato('m-42'), 'reenvio da mesma mensagem não pode gerar outro relato');

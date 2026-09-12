@@ -51,6 +51,11 @@ class ContextoRegistroLocal(StrictModel):
     chave_idempotencia: str = Field(min_length=8, max_length=120)
 
 
+class ContextoInputOperacional(StrictModel):
+    id_estabelecimento: str = Field(min_length=1, max_length=40)
+    chave_idempotencia: str = Field(min_length=8, max_length=120)
+
+
 class PerguntaClaraRequest(BaseModel):
     pergunta: str = ""
     conversa_id: str | None = None
@@ -61,6 +66,7 @@ class PerguntaClaraRequest(BaseModel):
     contexto: dict[str, Any] | None = None
     dados_tela: dict[str, Any] | None = None
     registro_local: ContextoRegistroLocal | None = None
+    input_operacional: ContextoInputOperacional | None = None
 
 
 @router.get("/metricas-uso")
@@ -140,6 +146,24 @@ def perguntar(
     # docs/09: acesso resolvido antes de qualquer LLM. Sem linha = provisiona (equipe ou
     # visitante) a partir do e-mail do token; inativo = 403.
     acesso = provisionar_acesso_http(user)
+
+    if (req.contexto or {}).get("intencao") == "input_operacional" and req.input_operacional is None:
+        raise HTTPException(422, "Envie input_operacional com id_estabelecimento e chave_idempotencia.")
+    if req.input_operacional is not None:
+        if req.confirmar:
+            raise HTTPException(422, "Confirme o input operacional pela operação estruturada.")
+        from api.core.operational_inputs_interpreter import operational_summary
+        from api.core.operational_inputs_router import service as operational_service
+        from fastapi.encoders import jsonable_encoder
+        draft = operational_service().create_draft(usuario, req.input_operacional.id_estabelecimento,
+            req.pergunta, req.input_operacional.chave_idempotencia)
+        summary = operational_summary(draft)
+        events = (_sse("rascunho_operacional_pronto", jsonable_encoder(draft))
+                  + _sse("token", {"texto": summary + " Revise e confirme em Registros da unidade."})
+                  + _sse("fim", {"resposta": summary, "referencia_rota": "/registros-unidade",
+                                 "rascunho_id": str(draft["id"])}))
+        return StreamingResponse(iter([events]), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     if (req.contexto or {}).get("intencao") == "registro_local" and req.registro_local is None:
         raise HTTPException(422, "Envie registro_local com unidade_id e chave_idempotencia para registrar com a Clara.")

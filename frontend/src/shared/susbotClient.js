@@ -248,6 +248,7 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
   let referenciaRota = null;
   let referenciaLabel = null;
   let rascunhoLocal = null;
+  let rascunhoOperacional = null;
   let conversaId = response.headers.get('x-conversa-id') || null;
 
   const registrarEvento = evento => {
@@ -284,6 +285,12 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
     if (evento.event === SUSBOT_SSE_EVENTS.rascunho_local_pronto) {
       rascunhoLocal = evento.data || null;
       handlers.onRascunhoLocal?.(rascunhoLocal);
+      return;
+    }
+
+    if (evento.event === SUSBOT_SSE_EVENTS.rascunho_operacional_pronto) {
+      rascunhoOperacional = evento.data || null;
+      handlers.onRascunhoOperacional?.(rascunhoOperacional);
       return;
     }
 
@@ -355,6 +362,7 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
     referenciaRota,
     referenciaLabel,
     rascunhoLocal,
+    rascunhoOperacional,
     eventos,
     status: eventos.find(evento => evento.event === SUSBOT_SSE_EVENTS.status)?.data ?? null,
   };
@@ -373,6 +381,7 @@ export async function conversarComSusbot({
   contexto,
   dados_tela,
   registro_local,
+  input_operacional,
   baseUrl = '',
   fetchImpl = globalThis.fetch,
   timeoutMs = SUSBOT_TIMEOUT_MS,
@@ -388,6 +397,7 @@ export async function conversarComSusbot({
   onFim,
   onEvento,
   onRascunhoLocal,
+  onRascunhoOperacional,
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
   if (typeof fetchFn !== 'function') {
@@ -434,6 +444,7 @@ export async function conversarComSusbot({
         // Modo de registro local: sem unidade_id e chave_idempotencia o backend
         // recusa com 422, em vez de rodar uma consulta no lugar de gravar.
         registro_local: registro_local || undefined,
+        input_operacional: input_operacional || undefined,
       }),
       signal: controller.signal,
     });
@@ -448,6 +459,7 @@ export async function conversarComSusbot({
       onFim,
       onEvento,
       onRascunhoLocal,
+      onRascunhoOperacional,
     });
   } finally {
     limparSignalExterno();
