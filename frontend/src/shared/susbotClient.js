@@ -469,7 +469,7 @@ export async function conversarComSusbot({
 
 // Definido no contrato para ser testável sem import.meta.env (variáveis do
 // Vite não existem no runtime do node --test); reexportado aqui por conveniência.
-export { chaveIdempotenciaRelato } from './susbotContract.js';
+export { chaveIdempotenciaRelato, pareceRelatoLocal } from './susbotContract.js';
 
 export function criarClienteSusbot(opcoes = {}) {
   return {

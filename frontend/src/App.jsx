@@ -973,7 +973,7 @@ export default function App() {
           onToggleMais={() => setMobileMaisAberto(aberto => !aberto)}
         />
         <Suspense fallback={null}>
-          {municipioExibido && <ClaraPanel key={demoAtiva ? `demo-${demoSessao}-${demoCorte}` : 'real'} demoReplay={demoReplay} page={page} onNavigate={navegar} ibge6={municipioExibido.ibge6} onOpenChange={setChatAberto} openRequest={claraOpenRequest} />}
+          {municipioExibido && <ClaraPanel key={demoAtiva ? `demo-${demoSessao}-${demoCorte}` : 'real'} demoReplay={demoReplay} page={page} onNavigate={navegar} ibge6={municipioExibido.ibge6} unidadeId={rota.registrosParams?.unidade || null} onOpenChange={setChatAberto} openRequest={claraOpenRequest} />}
         </Suspense>
       </div>
     </DemoContext.Provider>

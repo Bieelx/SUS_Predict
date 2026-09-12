@@ -40,10 +40,11 @@ def interpret(text, today=None):
     elif relative:
         period = (today - timedelta(days=1 if relative[0] == "ontem" else 0)).isoformat()
     # Separação pelos verbos impede que a quantidade de uma cláusula contamine outra.
-    clauses = re.split(r"(?=\b(?:aplicamos|atendemos|encaminhamos)\b)", source)
+    verbs = r"apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos"
+    clauses = re.split(r"(?=\b(?:" + verbs + r")\b)", source)
     proposals = []
     for clause in clauses:
-        match = re.match(r"(aplicamos|atendemos|encaminhamos)\s+(" + NUMBER + r")\b(.*)", clause, re.S)
+        match = re.match(r"(" + verbs + r")\s+(" + NUMBER + r")\b(.*)", clause, re.S)
         if not match:
             continue
         verb, number, rest = match.groups()
@@ -53,7 +54,7 @@ def interpret(text, today=None):
             fail(422, "quantidade_ambigua", "Informe uma quantidade única por indicador.")
         amount = str(NUMBERS[number]) if number in NUMBERS else number.replace(",", ".")
         dims = {}
-        if verb == "aplicamos":
+        if verb in ("apliquei", "aplicamos"):
             if not re.match(r"\s+doses?\b", rest):
                 continue
             indicator = "doses_vacina_aplicadas"
@@ -64,7 +65,7 @@ def interpret(text, today=None):
                           if re.search(r"\b" + word + r"\b", rest)]
             if len(dose_types) == 1:
                 dims["tipo_dose"] = dose_types[0]
-        elif verb == "atendemos":
+        elif verb in ("atendi", "atendemos"):
             if "suspeita" not in rest:
                 continue
             indicator = "atendimentos_suspeita_dengue"

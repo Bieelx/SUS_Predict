@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SUSBOT_SSE_EVENTS, chaveIdempotenciaRelato } from './susbotContract.js';
+import { SUSBOT_SSE_EVENTS, chaveIdempotenciaRelato, pareceRelatoLocal } from './susbotContract.js';
 
 test('o evento do rascunho local existe no contrato', () => {
   // O backend emite este nome em /api/susbot/perguntar (susbot_router.py).
@@ -28,4 +28,10 @@ test('chave respeita os limites de 8 a 120 caracteres exigidos pelo backend', ()
 test('caracteres fora do conjunto seguro são descartados', () => {
   assert.equal(chaveIdempotenciaRelato('id com espaço/e#símbolo'), 'web-idcomespaoesmbolo');
   assert.match(chaveIdempotenciaRelato('m-1'), /^web-[A-Za-z0-9_-]+$/);
+});
+
+test('relato local em linguagem natural é enviado ao fluxo estruturado', () => {
+  assert.equal(pareceRelatoLocal('Clara, hoje apliquei 20 doses da vacina da dengue'), true);
+  assert.equal(pareceRelatoLocal('Hoje aplicamos 32 doses contra dengue'), true);
+  assert.equal(pareceRelatoLocal('Quantas doses de dengue foram aplicadas?'), false);
 });

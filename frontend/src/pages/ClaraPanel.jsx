@@ -12,6 +12,7 @@ import {
   consultarMemoriaSusbot,
   consultarPareamentoCanalSusbot,
   chaveIdempotenciaRelato,
+  pareceRelatoLocal,
   conversarComSusbot,
   criarPareamentoCanalSusbot,
   listarCanaisSusbot,
@@ -1117,7 +1118,7 @@ function AvisoMemoria({ estado, onAbrir }) {
 
 // ─── Componente principal ───────────────────────────────────────────────────
 
-export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChange, openRequest = null, demoReplay = null }) {
+export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId = null, onOpenChange, openRequest = null, demoReplay = null }) {
   const [open, setOpen] = useState(false);
   const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'history' | 'channels' | 'memory'
   const [threads, setThreads] = useState([]);
@@ -1411,12 +1412,15 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
     // executar uma consulta genérica no lugar de gravar um registro.
     const unidadeRegistro = current.contexto?.unidade || contextoEntrada?.unidade || null;
     const querRegistrar = (current.contexto?.intencao || contextoEntrada?.intencao) === 'registro_local';
-    const registroLocal = querRegistrar && unidadeRegistro?.id
-      ? { unidade_id: unidadeRegistro.id, chave_idempotencia: chaveIdempotenciaRelato(idResposta) }
+    const unidadeDoRelato = unidadeRegistro?.id || (page === 'registros-unidade' && pareceRelatoLocal(pergunta) ? unidadeId : null);
+    const registroLocal = (querRegistrar || pareceRelatoLocal(pergunta)) && unidadeDoRelato
+      ? { unidade_id: unidadeDoRelato, chave_idempotencia: chaveIdempotenciaRelato(idResposta) }
       : undefined;
     const estabelecimento = current.contexto?.estabelecimento || contextoEntrada?.estabelecimento || null;
     const querInputOperacional = (current.contexto?.intencao || contextoEntrada?.intencao) === 'input_operacional';
-    const inputOperacional = querInputOperacional && estabelecimento?.id
+    // Uma dose aplicada é produção assistencial local, não saída automática
+    // de estoque. O relato local prevalece mesmo no atalho operacional.
+    const inputOperacional = !registroLocal && querInputOperacional && estabelecimento?.id
       ? { id_estabelecimento: estabelecimento.id, chave_idempotencia: chaveIdempotenciaRelato(idResposta) }
       : undefined;
 

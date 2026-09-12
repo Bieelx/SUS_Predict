@@ -1,5 +1,6 @@
 """Regras de domínio exercitadas em transações isoladas, sem Supabase online."""
 from datetime import date
+import json
 from pathlib import Path
 import re
 import sqlite3
@@ -240,6 +241,27 @@ def test_clara_explicit_local_mode_sse(svc, monkeypatch):
     assert response.status_code == 200, response.text
     assert "event: rascunho_local_pronto" in response.text
     assert "event: fim" in response.text
+    assert svc.summary("manager", UNIT, TODAY, TODAY)["itens"] == []
+
+
+def test_clara_accepts_first_person_local_report(svc, monkeypatch):
+    from api.core import susbot_router
+    monkeypatch.setattr(router, "service", lambda: svc)
+    monkeypatch.setattr(susbot_router, "provisionar_acesso_http", lambda user: None)
+    app = FastAPI()
+    app.include_router(susbot_router.router)
+    app.dependency_overrides[susbot_router.require_user] = lambda: {"id": "writer"}
+    app.dependency_overrides[susbot_router.verificar_acesso_susbot] = lambda: "test"
+    with TestClient(app) as client:
+        response = client.post("/api/susbot/perguntar", json={
+            "pergunta": "Clara, hoje apliquei 20 doses da vacina da dengue",
+            "registro_local": {"unidade_id": UNIT, "chave_idempotencia": "sse-singular-001"},
+        })
+    assert response.status_code == 200, response.text
+    assert "event: rascunho_local_pronto" in response.text
+    rascunho = json.loads(next(line[6:] for line in response.text.splitlines() if line.startswith("data: ")))
+    assert float(rascunho["registros"][0]["atual"]["valor"]) == 20
+    assert rascunho["registros"][0]["atual"]["dimensoes"]["vacina"] == "dengue"
     assert svc.summary("manager", UNIT, TODAY, TODAY)["itens"] == []
 
 

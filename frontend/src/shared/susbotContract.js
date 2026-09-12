@@ -49,6 +49,16 @@ export function chaveIdempotenciaRelato(semente) {
   return `web-${base || 'relato'}`.padEnd(8, '0').slice(0, 120);
 }
 
+// Reconhece somente acontecimentos locais explícitos. A interpretação e a
+// validação definitivas continuam no backend; isto apenas escolhe a rota
+// estruturada em vez de deixar o relato cair numa consulta analítica.
+export function pareceRelatoLocal(texto) {
+  const normalizado = String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /\b(?:apliquei|aplicamos)\s+\d+\s+doses?\b/.test(normalizado)
+    || /\b(?:atendi|atendemos)\s+\d+\b[^.]*\bsuspeit/.test(normalizado)
+    || /\b(?:encaminhei|encaminhamos)\s+\d+\b/.test(normalizado);
+}
+
 export const SUSBOT_PAGE_LABELS = {
   'visao-geral': 'Visão Geral',
   alertas: 'Alertas',
