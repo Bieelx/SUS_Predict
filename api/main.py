@@ -76,6 +76,8 @@ from api.core.susbot_router import router as susbot_router
 from api.core.susbot_access import avisar_se_protecao_desativada
 from api.core.channel_router import router as channel_router
 from api.core.admin_router import router as admin_router, require_admin
+from api.core.local_records_router import router as local_records_router
+from api.core.local_records_frontend import router as local_records_frontend_router
 from api.core.permissoes import Acesso, require_acesso
 from api.core.rate_limit import identidade_requisicao, limitar
 
@@ -135,6 +137,8 @@ app.include_router(operational_router)
 app.include_router(susbot_router)
 app.include_router(channel_router)
 app.include_router(admin_router)
+app.include_router(local_records_router)
+app.include_router(local_records_frontend_router)
 
 jobs: dict = {}
 TEMP_DIR = Path("./temp_data")

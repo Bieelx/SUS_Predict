@@ -13,7 +13,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
+from api.core.local_records_models import StrictModel
+from uuid import UUID
 
 from api.core.auth import require_user
 from api.core.identidade import usuario_referencia
@@ -44,6 +46,11 @@ class ConfirmarFerramentaRequest(BaseModel):
     argumentos: dict[str, Any] = {}
 
 
+class ContextoRegistroLocal(StrictModel):
+    unidade_id: UUID
+    chave_idempotencia: str = Field(min_length=8, max_length=120)
+
+
 class PerguntaClaraRequest(BaseModel):
     pergunta: str = ""
     conversa_id: str | None = None
@@ -53,6 +60,7 @@ class PerguntaClaraRequest(BaseModel):
     confirmar: ConfirmarFerramentaRequest | None = None
     contexto: dict[str, Any] | None = None
     dados_tela: dict[str, Any] | None = None
+    registro_local: ContextoRegistroLocal | None = None
 
 
 @router.get("/metricas-uso")
@@ -132,6 +140,30 @@ def perguntar(
     # docs/09: acesso resolvido antes de qualquer LLM. Sem linha = provisiona (equipe ou
     # visitante) a partir do e-mail do token; inativo = 403.
     acesso = provisionar_acesso_http(user)
+
+    if (req.contexto or {}).get("intencao") == "registro_local" and req.registro_local is None:
+        raise HTTPException(422, "Envie registro_local com unidade_id e chave_idempotencia para registrar com a Clara.")
+    if req.registro_local is not None:
+        if req.confirmar:
+            raise HTTPException(422, "Use a operação estruturada do registro para confirmar.")
+        from api.core.local_records_router import service, receive_report
+        from api.core.local_records_models import RelatoRequest
+        from api.core.local_records_interpreter import report_summary
+        from fastapi.encoders import jsonable_encoder
+        try:
+            relato_request = RelatoRequest(unidade_id=req.registro_local.unidade_id,
+                texto=req.pergunta, chave_idempotencia=req.registro_local.chave_idempotencia,
+                conversa_id=req.conversa_id)
+        except ValidationError:
+            raise HTTPException(422, "Informe um relato de até 8000 caracteres e uma referência de conversa válida.") from None
+        report = receive_report(relato_request, usuario, service())
+        summary = report_summary(report)
+        events = (_sse("rascunho_local_pronto", jsonable_encoder(report))
+                  + _sse("token", {"texto": summary})
+                  + _sse("fim", {"resposta": summary, "referencia_rota": "/registros-unidade",
+                                 "relato_id": str(report["relato_id"])}))
+        return StreamingResponse(iter([events]), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     pergunta = " ".join(str(req.pergunta or "").split()).strip()
     if not pergunta and not req.confirmar:

@@ -16,13 +16,17 @@ CREATE TABLE IF NOT EXISTS usuarios_acesso (
 );
 
 INSERT INTO usuarios_acesso (usuario, perfil, municipios, ativo, atribuido_por, criado_em, atualizado_em)
+-- `municipios` precisa ser idêntico ao que está no Postgres (migration
+-- 20260912130700): o serviço de registros locais valida o ibge6 da unidade nas
+-- DUAS cópias e recusa com 403 se faltar em qualquer uma. O curinga "*" só é
+-- aceito para perfil admin, por isso as gestoras levam "*" e o ibge6 do piloto.
 VALUES
   -- gabbriel.araujo@outlook.com
-  ('971ffd73-af1a-44f5-b7d9-9d2b2665170b', 'admin',  '[]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  ('971ffd73-af1a-44f5-b7d9-9d2b2665170b', 'admin',  '["*"]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   -- ariadinevamaral@gmail.com
-  ('77abe361-faa2-4b6d-a40f-fc770aae789e', 'gestor', '[]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  ('77abe361-faa2-4b6d-a40f-fc770aae789e', 'gestor', '["*","355030"]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   -- yasminmiguez@outlook.com
-  ('340fab46-455e-4d78-abad-10d9660df272', 'gestor', '[]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+  ('340fab46-455e-4d78-abad-10d9660df272', 'gestor', '["*","355030"]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))
   -- Para cadastrar alguém novo: copie a linha abaixo, troque UID e perfil, e acrescente
   -- uma vírgula na linha anterior.
   -- ('00000000-0000-0000-0000-000000000000', 'gestor', '[]', 1, 'gabbriel.araujo@outlook.com', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))

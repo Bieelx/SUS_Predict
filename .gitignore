@@ -105,6 +105,7 @@ PRODUCT.md
 .playwright-mcp
 .docs/*
 .docs/
+docs
 docs/superpowers/plans/
 docs/superpowers/specs/
 .md
@@ -113,6 +114,7 @@ frontend/tests/*
 !frontend/tests/auditoria-interface.spec.js
 !frontend/tests/mobile-interface.spec.js
 !frontend/tests/mobile-rework.spec.js
+evidencias
 
 # estado dos hooks do plugin ruflo (regravado a cada comando)
 .claude-flow/

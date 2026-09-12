@@ -11,6 +11,7 @@ const LoginScreen = lazy(() => import('./pages/Login.jsx'));
 const VisaoGeral = lazy(() => import('./pages/VisaoGeral.jsx'));
 const Alertas = lazy(() => import('./pages/Alertas.jsx'));
 const Insumos = lazy(() => import('./pages/Insumos.jsx'));
+const RegistrosUnidade = lazy(() => import('./pages/RegistrosUnidade.jsx'));
 const Documentos = lazy(() => import('./pages/Documentos.jsx'));
 const Epidemiologia = lazy(() => import('./pages/Epidemiologia.jsx'));
 const Internacoes = lazy(() => import('./pages/Internacoes.jsx'));
@@ -19,6 +20,7 @@ const PageConfiguracoes = lazy(() => import('./pages/Configuracoes.jsx'));
 const PagePerfil = lazy(() => import('./pages/Perfil.jsx'));
 const ClaraPanel = lazy(() => import('./pages/ClaraPanel.jsx').then(modulo => ({ default: modulo.ClaraPanel })));
 import { getCurrentUser, signOut, validateSession } from './shared/auth.js';
+import { aplicarParamsRegistros, lerParamsRegistros } from './features/registros-locais/regras.js';
 import { obterDadosOperacionais, preCarregarDadosOperacionais } from './shared/operationalClient.js';
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -45,6 +47,8 @@ const NAV_OPERACIONAL = [
   { id: 'visao-geral', label: 'Visão Geral', icon: 'grid_view' },
   { id: 'alertas',     label: 'Alertas',     icon: 'notifications' },
   { id: 'insumos',     label: 'Insumos',     icon: 'medication' },
+  // Registros informados pelas unidades (docs/15). Origem local, nunca DataSUS.
+  { id: 'registros-unidade', label: 'Registros da unidade', icon: 'assignment_turned_in' },
 ];
 
 const NAV_ANALISES = [
@@ -60,6 +64,7 @@ const NAV_MOBILE_PRINCIPAL = [
 ];
 
 const NAV_MOBILE_SECUNDARIA = [
+  { id: 'registros-unidade', label: 'Registros da unidade', icon: 'assignment_turned_in' },
   ...NAV_ANALISES,
   { id: 'documentos', label: 'Documentos', icon: 'description' },
   { id: 'configuracoes', label: 'Configurações', icon: 'settings' },
@@ -70,6 +75,7 @@ const PAGE_PATHS = {
   'visao-geral': '/visao-geral',
   alertas: '/alertas',
   insumos: '/insumos',
+  'registros-unidade': '/registros-unidade',
   documentos: '/documentos',
   epidemiologia: '/epidemiologia',
   internacoes: '/internacoes',
@@ -79,7 +85,7 @@ const PAGE_PATHS = {
 };
 
 function lerRotaAtual() {
-  if (typeof window === 'undefined') return { page: 'visao-geral', alertaId: null, alertaTipo: 'todos' };
+  if (typeof window === 'undefined') return { page: 'visao-geral', alertaId: null, alertaTipo: 'todos', registroId: null, registrosParams: null };
   const partes = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
   if (partes[0] === 'beta') partes.shift();
   const candidata = partes[0] || 'visao-geral';
@@ -89,6 +95,8 @@ function lerRotaAtual() {
     page,
     alertaId: page === 'alertas' && partes[1] ? partes[1] : null,
     alertaTipo: page === 'alertas' ? (params.get('tipo') || 'todos') : 'todos',
+    registroId: page === 'registros-unidade' && partes[1] ? partes[1] : null,
+    registrosParams: page === 'registros-unidade' ? lerParamsRegistros(window.location.search) : null,
   };
 }
 
@@ -97,9 +105,14 @@ function urlDaRota(rota) {
   const url = new URL(window.location.href);
   url.pathname = page === 'alertas' && rota.alertaId
     ? `/alertas/${encodeURIComponent(rota.alertaId)}`
-    : PAGE_PATHS[page];
+    : page === 'registros-unidade' && rota.registroId
+      ? `/registros-unidade/${encodeURIComponent(rota.registroId)}`
+      : PAGE_PATHS[page];
   if (/^\/beta(?:\/|$)/.test(window.location.pathname)) url.pathname = `/beta${url.pathname}`;
   url.searchParams.delete('tipo');
+  // Os parâmetros dos registros locais são desta área e só dela: sair da rota
+  // os remove da URL em vez de contaminar as outras telas.
+  aplicarParamsRegistros(url, page === 'registros-unidade' ? rota.registrosParams : null);
   if (page === 'alertas' && rota.alertaTipo && rota.alertaTipo !== 'todos') {
     url.searchParams.set('tipo', rota.alertaTipo);
   }
@@ -583,7 +596,7 @@ function MobileMoreSheet({ current, aberta, onClose, onNav }) {
               <span><MIcon m={item.icon} size={20} /></span>
               <span>
                 <strong>{item.label}</strong>
-                <small>{NAV_ANALISES.some(nav => nav.id === item.id) ? 'Análise sob demanda' : item.id === 'documentos' ? 'ETPs e rascunhos' : item.id === 'perfil' ? 'Identidade e acesso' : 'Preferências do sistema'}</small>
+                <small>{NAV_ANALISES.some(nav => nav.id === item.id) ? 'Análise sob demanda' : item.id === 'registros-unidade' ? 'Informado pelas unidades' : item.id === 'documentos' ? 'ETPs e rascunhos' : item.id === 'perfil' ? 'Identidade e acesso' : 'Preferências do sistema'}</small>
               </span>
               <MIcon m="chevron_right" size={20} />
             </button>
@@ -757,6 +770,8 @@ export default function App() {
       page: PAGE_PATHS[parcial?.page] ? parcial.page : 'visao-geral',
       alertaId: parcial?.page === 'alertas' ? (parcial.alertaId || null) : null,
       alertaTipo: parcial?.page === 'alertas' ? (parcial.alertaTipo || 'todos') : 'todos',
+      registroId: parcial?.page === 'registros-unidade' ? (parcial.registroId || null) : null,
+      registrosParams: parcial?.page === 'registros-unidade' ? (parcial.registrosParams || null) : null,
     };
     const href = urlDaRota(proxima);
     if (opcoes.replace) window.history.replaceState({ page: proxima.page }, '', href);
@@ -847,6 +862,11 @@ export default function App() {
     const municipio = municipioExibido;
     if (demoAtiva && ['epidemiologia', 'internacoes', 'vacinacao', 'perfil'].includes(page)) {
       return <div className="rise"><h1>{page === 'perfil' ? 'Perfil de demonstração' : 'Área fora do cenário histórico'}</h1><p style={{ margin: '16px 0', color: 'var(--ink-500)' }}>Esta demonstração cobre Visão Geral, Alertas, Insumos e rascunhos de Documentos de Campinas em 2024. Saia da demo para acessar as demais áreas.</p><button className="touch-target" onClick={sairDemo}>Sair da demo</button></div>;
+    }
+    // Registros da unidade tem escopo próprio (a unidade autorizada), então não
+    // depende da lista de municípios nem do recorte municipal global.
+    if (page === 'registros-unidade') {
+      return <RegistrosUnidade rota={rota} onNavegar={navegar} onOpenClara={abrirClara} />;
     }
     if (!municipio) {
       return <EstadoConsulta carregando={municipios.carregando} erro={municipios.erro || 'Nenhum município retornado pela dimensão IBGE.'} onRetry={() => carregarMunicipios(true)} />;
