@@ -21,6 +21,9 @@ export const SUSBOT_SSE_EVENTS = {
   memoria: 'memoria',
   fim: 'fim',
   erro: 'erro',
+  // Modo de registro local: o backend devolve o rascunho estruturado (relato_id,
+  // registros e versões) em vez de resposta de consulta. Não significa confirmação.
+  rascunho_local_pronto: 'rascunho_local_pronto',
 };
 
 export const SUSBOT_REQUEST_FIELDS = {
@@ -35,6 +38,15 @@ export const SUSBOT_HISTORY_FIELDS = {
 };
 
 export const SUSBOT_TIMEOUT_MS = 45_000;
+
+// Chave de idempotência do relato local: o backend exige de 8 a 120 caracteres
+// e usa a chave para reconhecer reenvio da MESMA mensagem (mesmo texto → mesmo
+// relato, sem duplicar). Por isso deriva do id da mensagem, nunca do instante
+// do envio. Vive aqui, e não no cliente, para ser testável sem import.meta.env.
+export function chaveIdempotenciaRelato(semente) {
+  const base = String(semente ?? '').replace(/[^A-Za-z0-9_-]/g, '');
+  return `web-${base || 'relato'}`.padEnd(8, '0').slice(0, 120);
+}
 
 export const SUSBOT_PAGE_LABELS = {
   'visao-geral': 'Visão Geral',

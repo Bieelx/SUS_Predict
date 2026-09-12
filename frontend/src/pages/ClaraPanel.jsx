@@ -11,6 +11,7 @@ import {
   confirmarPareamentoCanalSusbot,
   consultarMemoriaSusbot,
   consultarPareamentoCanalSusbot,
+  chaveIdempotenciaRelato,
   conversarComSusbot,
   criarPareamentoCanalSusbot,
   listarCanaisSusbot,
@@ -535,6 +536,57 @@ function ConfirmacaoAcao({ msg, onConfirmar, onCancelar }) {
   );
 }
 
+// Rascunho de registro local: mostra o que o backend estruturou, com os IDs
+// dele. "Aguardando revisão" é estado de rascunho — nada foi confirmado aqui.
+function RascunhoLocalView({ rascunho, onNavigate }) {
+  const registros = Array.isArray(rascunho?.registros) ? rascunho.registros : [];
+  if (!registros.length) return null;
+
+  return (
+    <section
+      aria-label="Rascunho dos registros da unidade"
+      style={{
+        marginTop: 10, padding: '10px 12px', border: '1px solid var(--ink-100)',
+        borderRadius: 12, background: 'var(--elev)', display: 'grid', gap: 8,
+      }}
+    >
+      <p className="eyebrow" style={{ margin: 0 }}>
+        Aguardando revisão · {registros.length} {registros.length === 1 ? 'registro' : 'registros'}
+      </p>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+        {registros.map(registro => {
+          const versao = registro?.atual || {};
+          const pendencias = Array.isArray(versao.pendencias) ? versao.pendencias : [];
+          return (
+            <li key={registro.id} style={{ fontSize: 12, color: 'var(--ink-700)' }}>
+              <strong style={{ color: 'var(--ink-900)' }}>{registro.indicador_nome || registro.indicador}</strong>
+              {': '}
+              {versao.valor == null ? 'quantidade não informada' : `${versao.valor} ${registro.unidade_medida || ''}`.trim()}
+              {versao.periodo_inicio ? ` · ${versao.periodo_inicio.split('-').reverse().join('/')}` : ''}
+              {pendencias.length > 0 && (
+                <span style={{ display: 'block', color: 'var(--warn)' }}>
+                  Falta completar: {pendencias.join(', ')}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <button
+        type="button"
+        onClick={() => onNavigate?.('registros-unidade')}
+        style={{
+          justifySelf: 'start', padding: '5px 11px', background: 'var(--primary-soft)',
+          border: '1px solid var(--primary-soft-border)', borderRadius: 999, cursor: 'pointer',
+          fontSize: 11, fontWeight: 700, color: 'var(--primary)',
+        }}
+      >
+        revisar e confirmar →
+      </button>
+    </section>
+  );
+}
+
 function Bolha({ msg, onNavigate, onConfirmar, onCancelar, onAbrirMemoria }) {
   const isUser = msg.autor === 'user';
   const isErro = msg.autor === 'error';
@@ -567,6 +619,7 @@ function Bolha({ msg, onNavigate, onConfirmar, onCancelar, onAbrirMemoria }) {
       )}
 
       {!isErro && <ArtefatoView artefato={msg.artefato} />}
+      {!isErro && <RascunhoLocalView rascunho={msg.rascunhoLocal} onNavigate={onNavigate} />}
       {!isErro && <AvisoMemoria estado={msg.memoria} onAbrir={onAbrirMemoria} />}
       {!isErro && <ConfirmacaoAcao msg={msg} onConfirmar={onConfirmar} onCancelar={onCancelar} />}
 
@@ -1323,6 +1376,15 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
     setEtapa('digitando...');
     setErroConversa('');
 
+    // Intenção de registro local precisa virar campo estruturado: só
+    // `contexto.intencao` faz o backend recusar com 422, de propósito, para não
+    // executar uma consulta genérica no lugar de gravar um registro.
+    const unidadeRegistro = current.contexto?.unidade || contextoEntrada?.unidade || null;
+    const querRegistrar = (current.contexto?.intencao || contextoEntrada?.intencao) === 'registro_local';
+    const registroLocal = querRegistrar && unidadeRegistro?.id
+      ? { unidade_id: unidadeRegistro.id, chave_idempotencia: chaveIdempotenciaRelato(idResposta) }
+      : undefined;
+
     try {
       const resp = await conversarComSusbot({
         pergunta,
@@ -1333,6 +1395,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
         ibge6: current.contexto?.ibge6 || ibge6Atual,
         contexto: current.contexto || { tela: page, periodo: "12 Meses", ...(contextoEntrada || {}) },
         dados_tela: dadosTela || undefined,
+        registro_local: registroLocal,
         baseUrl: API_BASE,
         headers: getAuthHeaders(),
         onStatus: status => {
@@ -1377,6 +1440,11 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, onOpenChan
             streaming: false,
             memoria: estado === 'sem_mudanca' ? undefined : estado,
           }));
+        },
+        // Rascunho estruturado: guarda os IDs do backend. Nada aqui confirma o
+        // registro — a confirmação acontece na tela Registros da unidade.
+        onRascunhoLocal: rascunho => {
+          atualizarMensagemAtual(idResposta, msg => ({ ...msg, rascunhoLocal: rascunho }));
         },
       });
 

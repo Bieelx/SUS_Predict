@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test vite.config.test.js src/shared/sessionCache.test.js src/shared/formatters.test.js src/pages/login.codigo.test.js src/demo/adapter.test.js src/features/registros-locais/regras.test.js",
+    "test": "node --test vite.config.test.js src/shared/sessionCache.test.js src/shared/formatters.test.js src/pages/login.codigo.test.js src/demo/adapter.test.js src/features/registros-locais/regras.test.js src/shared/susbotContract.test.js",
     "test:e2e": "playwright test",
     "build": "vite build",
     "preview": "vite preview"

@@ -247,6 +247,7 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
   let respostaFinal = '';
   let referenciaRota = null;
   let referenciaLabel = null;
+  let rascunhoLocal = null;
   let conversaId = response.headers.get('x-conversa-id') || null;
 
   const registrarEvento = evento => {
@@ -275,6 +276,14 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
       referenciaRota = evento.data?.rota ?? evento.data?.referencia_rota ?? null;
       referenciaLabel = evento.data?.label ?? referenciaLabel;
       handlers.onReferencia?.(referenciaRota, evento.data);
+      return;
+    }
+
+    // Rascunho estruturado do registro local: IDs vêm daqui, nunca do Markdown
+    // da resposta. O evento não significa confirmação.
+    if (evento.event === SUSBOT_SSE_EVENTS.rascunho_local_pronto) {
+      rascunhoLocal = evento.data || null;
+      handlers.onRascunhoLocal?.(rascunhoLocal);
       return;
     }
 
@@ -345,6 +354,7 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
     resposta: respostaFinal,
     referenciaRota,
     referenciaLabel,
+    rascunhoLocal,
     eventos,
     status: eventos.find(evento => evento.event === SUSBOT_SSE_EVENTS.status)?.data ?? null,
   };
@@ -362,6 +372,7 @@ export async function conversarComSusbot({
   confirmar,
   contexto,
   dados_tela,
+  registro_local,
   baseUrl = '',
   fetchImpl = globalThis.fetch,
   timeoutMs = SUSBOT_TIMEOUT_MS,
@@ -376,6 +387,7 @@ export async function conversarComSusbot({
   onMemoria,
   onFim,
   onEvento,
+  onRascunhoLocal,
 } = {}) {
   const fetchFn = fetchImpl || globalThis.fetch;
   if (typeof fetchFn !== 'function') {
@@ -419,6 +431,9 @@ export async function conversarComSusbot({
         confirmar: confirmar || undefined,
         contexto: contexto || undefined,
         dados_tela: dados_tela || undefined,
+        // Modo de registro local: sem unidade_id e chave_idempotencia o backend
+        // recusa com 422, em vez de rodar uma consulta no lugar de gravar.
+        registro_local: registro_local || undefined,
       }),
       signal: controller.signal,
     });
@@ -432,12 +447,17 @@ export async function conversarComSusbot({
       onMemoria,
       onFim,
       onEvento,
+      onRascunhoLocal,
     });
   } finally {
     limparSignalExterno();
     if (timer) clearTimeout(timer);
   }
 }
+
+// Definido no contrato para ser testável sem import.meta.env (variáveis do
+// Vite não existem no runtime do node --test); reexportado aqui por conveniência.
+export { chaveIdempotenciaRelato } from './susbotContract.js';
 
 export function criarClienteSusbot(opcoes = {}) {
   return {
