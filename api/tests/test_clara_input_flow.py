@@ -279,3 +279,13 @@ def test_registrador_nao_contorna_papel_pelo_chat(flow):
     assert done['evento'] is None
     assert 'Não enviado' in done['resposta']
     assert svc.detail('writer', draft['payload']['registros'][0]['id'])['confirmada_vigente'] is None
+
+
+def test_audio_misto_avisa_o_que_ficou_de_fora():
+    from api.core.local_records_interpreter import ignored_parts
+    text = ('Claro, hoje eu apliquei 30 doses da vacina da Dengue, também precisa internar 20 pessoas por conta '
+            'da Dengue também e tivemos uma entrada de 10 embalagens de pirona.')
+    items = interpret(text, date(2026, 9, 13))
+    assert [(i['indicador'], i['valor']) for i in items] == [('doses_vacina_aplicadas', '30'), ('internacoes_dengue', '20')]
+    notes = ignored_parts(text, items)
+    assert len(notes) == 1 and 'estoque' in notes[0]

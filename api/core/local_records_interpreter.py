@@ -44,6 +44,8 @@ def interpret(text, today=None):
     source = re.sub(r"\bforam atendid[ao]s?\b", "atendemos", source)
     source = re.sub(r"\bforam encaminhad[ao]s?\b", "encaminhamos", source)
     source = re.sub(r"\bforam internad[ao]s?\b", "internamos", source)
+    # Transcrição de áudio: "precisei/precisamos/tivemos que internar 20 pessoas".
+    source = re.sub(r"\b(?:precis\w*|tivemos que|tive que|foi preciso|foi necessario)\s+internar\b", "internamos", source)
     # "tivemos 3 encaminhamentos" / "houve uma internação" viram verbo + quantidade.
     source = re.sub(r"\b(?:tivemos|tive|teve|houve|registramos|foram|foi|mais)\s+(" + NUMBER + r")\s+encaminhamentos?\b",
                     r"encaminhamos \1", source)
@@ -101,6 +103,25 @@ def interpret(text, today=None):
     if not proposals:
         fail(422, "relato_sem_indicadores", "Informe, por exemplo: Hoje aplicamos 32 doses contra dengue. Para estoque, descreva uma entrada ou saída; para leitos, informe ocupados e disponíveis.")
     return proposals
+
+
+def ignored_parts(text, proposals):
+    """Avisa sobre trechos que parecem relato mas não viraram item, em vez de sumir com eles."""
+    source, found = fold(text), {p["indicador"] for p in proposals}
+    notes = []
+    if re.search(r"\b(entrada|saida|recebi|recebemos|chegaram|retirei|retiramos|utilizei|utilizamos)\b", source) and \
+            re.search(r"\b(doses?|vacinas?|medicamentos?|embalagens?|estoque)\b", source):
+        notes.append("movimentação de estoque (entrada/saída) — envie em mensagem separada; para medicamento informe "
+                     "nome, concentração, forma, embalagem e unidades por embalagem")
+    if re.search(r"\bleitos?\b", source):
+        notes.append("situação de leitos — envie separada, ex.: “UTI: 19 leitos ocupados e 1 disponível”")
+    if re.search(r"\bintern", source) and "internacoes_dengue" not in found:
+        notes.append("internação — informe a quantidade e que foi por dengue, ex.: “tivemos 2 internações de dengue”")
+    if re.search(r"\bencaminh", source) and "encaminhamentos_dengue" not in found:
+        notes.append("encaminhamento — informe a quantidade, ex.: “tivemos 3 encaminhamentos de dengue”")
+    if re.search(r"\batend", source) and "atendimentos_suspeita_dengue" not in found:
+        notes.append("atendimento — informe a quantidade e a suspeita de dengue")
+    return notes
 
 
 def report_summary(report, footer="Revise os dados e solicite a confirmação por uma pessoa autorizada da unidade."):

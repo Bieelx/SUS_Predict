@@ -8,7 +8,7 @@ import re
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from api.core import db, conversation_hub as hub
-from api.core.local_records_interpreter import fold, interpret, report_summary, NUMBER, NUMBERS
+from api.core.local_records_interpreter import fold, interpret, ignored_parts, report_summary, NUMBER, NUMBERS
 
 
 def input_kind(text):
@@ -240,6 +240,9 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
             footer = CONFIRM_FOOTER if ready else 'Faltam dados para enviar. Envie o relato completo novamente ou complete em Registros da unidade.'
             if ready and len(ready) < len(draft['registros']):
                 footer = 'Os itens com “Complete” precisam ser completados em Registros da unidade. ' + footer.replace('enviar', 'enviar os demais', 1)
+            notes = ignored_parts(state['texto'], proposals)
+            if notes:
+                footer = '⚠️ Não registrei nesta mensagem:\n' + '\n'.join('• ' + n for n in notes) + '\n' + footer
             response = report_summary(draft, footer)
             items = [{'id': str(r['id']), 'versao': r['atual']['numero_versao'],
                       'rotulo': f"{r['indicador_nome']}: {r['atual']['valor']}"} for r in ready]
