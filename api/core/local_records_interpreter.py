@@ -43,9 +43,17 @@ def interpret(text, today=None):
     source = re.sub(r"\bforam aplicad[ao]s?\b", "aplicamos", source)
     source = re.sub(r"\bforam atendid[ao]s?\b", "atendemos", source)
     source = re.sub(r"\bforam encaminhad[ao]s?\b", "encaminhamos", source)
-    source = re.sub(r"\b(apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos)\s+(?:hoje|ontem)\s+", r"\1 ", source)
+    source = re.sub(r"\bforam internad[ao]s?\b", "internamos", source)
+    # "tivemos 3 encaminhamentos" / "houve uma internação" viram verbo + quantidade.
+    source = re.sub(r"\b(?:tivemos|tive|teve|houve|registramos|foram|foi|mais)\s+(" + NUMBER + r")\s+encaminhamentos?\b",
+                    r"encaminhamos \1", source)
+    source = re.sub(r"\b(?:tivemos|tive|teve|houve|registramos|foram|foi|mais)\s+(" + NUMBER + r")\s+internac(?:ao|oes)\b",
+                    r"internamos \1", source)
+    source = re.sub(r"\b(?:tivemos|tive|teve|houve|registramos|foram|foi|mais)\s+(" + NUMBER + r")\s+atendimentos?\b",
+                    r"atendemos \1", source)
+    source = re.sub(r"\b(apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos|internei|internamos)\s+(?:hoje|ontem)\s+", r"\1 ", source)
     # Separação pelos verbos impede que a quantidade de uma cláusula contamine outra.
-    verbs = r"apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos"
+    verbs = r"apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos|internei|internamos"
     clauses = re.split(r"(?=\b(?:" + verbs + r")\b)", source)
     proposals = []
     for clause in clauses:
@@ -76,6 +84,12 @@ def interpret(text, today=None):
             indicator = "atendimentos_suspeita_dengue"
             if "dengue" in rest:
                 dims["doenca"] = "dengue"
+        elif verb in ("internei", "internamos"):
+            # Indicador é só de dengue; internação genérica segue fora do piloto.
+            if "dengue" not in rest:
+                continue
+            indicator = "internacoes_dengue"
+            dims["doenca"] = "dengue"
         else:
             indicator = "encaminhamentos_dengue"
             if "dengue" in rest:
@@ -89,12 +103,13 @@ def interpret(text, today=None):
     return proposals
 
 
-def report_summary(report):
+def report_summary(report, footer="Revise os dados e solicite a confirmação por uma pessoa autorizada da unidade."):
     lines = ["Preparei os rascunhos abaixo. Nenhum valor entrou nos indicadores confirmados."]
-    for record in report["registros"]:
+    for index, record in enumerate(report["registros"], 1):
         v = record["atual"]
-        lines.append(f"• {record['indicador_nome']}: {v['valor']}, data {v['periodo_inicio'] or 'a informar'}.")
+        dims = ", ".join(f"{k}: {val}" for k, val in v["dimensoes"].items())
+        lines.append(f"{index}. {record['indicador_nome']}: {v['valor']}{' (' + dims + ')' if dims else ''}, data {v['periodo_inicio'] or 'a informar'}.")
         if v["pendencias"]:
             lines.append("  Complete: " + ", ".join(v["pendencias"]) + ".")
-    lines.append("Revise os dados e solicite a confirmação por uma pessoa autorizada da unidade.")
+    lines.append(footer)
     return "\n".join(lines)

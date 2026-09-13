@@ -242,3 +242,40 @@ def test_pendencia_sobrevive_a_consulta_intermediaria(flow):
     final = process_input('writer', 'foram 25 doses', conversation, '355030', channel='whatsapp')
     assert final['evento'] == 'rascunho_local_pronto'
     assert int(final['payload']['registros'][0]['atual']['valor']) == 25
+
+
+def test_relato_multiplo_separa_itens():
+    text = 'Hoje aplicamos vinte doses de vacina pra dengue, tivemos três encaminhamentos pra dengue e tivemos uma internação de dengue'
+    items = interpret(text, date(2026, 9, 13))
+    assert [(i['indicador'], i['valor']) for i in items] == [
+        ('doses_vacina_aplicadas', '20'), ('encaminhamentos_dengue', '3'), ('internacoes_dengue', '1')]
+    assert all(i['periodo_inicio'] == '2026-09-13' for i in items)
+    assert input_kind(text) == 'registro_local'
+
+
+@pytest.mark.parametrize('channel', ['telegram', 'whatsapp'])
+def test_confirmo_no_chat_grava_todos_os_itens(flow, monkeypatch, channel):
+    svc, conversation = flow
+    monkeypatch.setattr(svc, 'units', lambda actor: {'itens': [{'id': UNIT, 'nome': 'UBS teste', 'ibge6': '355030'}]})
+    conversation = db.criar_conversa('reviewer', 'Relato')['id']
+    text = 'Hoje aplicamos 20 doses contra dengue, tivemos 3 encaminhamentos de dengue e tivemos 1 internação de dengue'
+    draft = process_input('reviewer', text, conversation, '355030', channel=channel, input_type='audio')
+    assert len(draft['payload']['registros']) == 3
+    assert 'CONFIRMO' in draft['resposta']
+    persist_input(draft, conversation, channel, text)
+    done = process_input('reviewer', 'Confirmo.', conversation, '355030', channel=channel)
+    assert done['evento'] == 'registro_confirmado'
+    assert done['artefato']['pendente'] is None
+    for record in draft['payload']['registros']:
+        assert svc.detail('reviewer', record['id'])['confirmada_vigente'] is not None
+
+
+def test_registrador_nao_contorna_papel_pelo_chat(flow):
+    svc, conversation = flow
+    text = 'Hoje apliquei 20 doses contra dengue'
+    draft = process_input('writer', text, conversation, '355030', channel='whatsapp')
+    persist_input(draft, conversation, 'whatsapp', text)
+    done = process_input('writer', 'confirmo', conversation, '355030', channel='whatsapp')
+    assert done['evento'] is None
+    assert 'Não enviado' in done['resposta']
+    assert svc.detail('writer', draft['payload']['registros'][0]['id'])['confirmada_vigente'] is None

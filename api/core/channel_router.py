@@ -428,7 +428,7 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
         response = result['resposta']
         if result['referencia_rota']:
             base = os.getenv('FRONTEND_URL', '').rstrip('/')
-            response += '\n\nRevisar no SusPredict: ' + base + result['referencia_rota']
+            response += '\n\nSe preferir, revise no SusPredict: ' + base + result['referencia_rota']
         return result['resposta'], response
     aprender_da_mensagem(usuario, texto, origem=canal)
     historico = _historico_da_conversa(usuario, conversa["id"], texto)

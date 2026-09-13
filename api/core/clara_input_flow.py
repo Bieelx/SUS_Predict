@@ -1,4 +1,4 @@
-"""Entrada conversacional comum à web, Telegram e WhatsApp, sem confirmação automática."""
+"""Entrada conversacional comum à web, Telegram e WhatsApp; só grava após CONFIRMO explícito."""
 from datetime import datetime, date
 from hashlib import sha256
 from uuid import uuid4
@@ -16,7 +16,9 @@ def input_kind(text):
     # Perguntar sobre uma ação não declara que ela aconteceu.
     if '?' in text or re.search(r'\b(como|quanto|quantos|quantas|posso|devo|deveria|preciso|vou|vamos|amanha|se eu|se nos)\b', text):
         return None
-    if re.search(r'\b(apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos|foram aplicad[ao]s?|foram atendid[ao]s?|foram encaminhad[ao]s?)\b', text):
+    if re.search(r'\b(apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos|internei|internamos|foram aplicad[ao]s?|foram atendid[ao]s?|foram encaminhad[ao]s?|foram internad[ao]s?)\b', text):
+        return 'registro_local'
+    if re.search(r'\b(tivemos|tive|teve|houve|registramos)\s+' + NUMBER + r'\s+(encaminhamentos?|internac(ao|oes)|atendimentos?)\b', text):
         return 'registro_local'
     if re.search(r'\b(entrada|saida|recebi|recebemos|chegaram|retirei|retiramos|utilizei|utilizamos)\b', text) and re.search(r'\b(doses?|vacinas?|medicamentos?|embalagens?|estoque)\b', text):
         return 'input_operacional'
@@ -44,6 +46,67 @@ def _result(text, pending=None, event=None, payload=None, route=None):
     return {'resposta': text, 'referencia_rota': route, 'artefato': artifact,
             'evento': event, 'payload': payload}
 
+
+
+CONFIRM_WORDS = {'confirmo', 'confirmar', 'confirma', 'confirmado', 'sim confirmo', 'sim, confirmo'}
+CANCEL_WORDS = {'cancelar', 'cancela', 'cancelo', 'descartar', 'deixa pra la', 'deixe para la'}
+CONFIRM_FOOTER = 'Está correto? Responda CONFIRMO para enviar ou CANCELAR para descartar.'
+
+
+def _services(kind):
+    if kind == 'registro_local':
+        from api.core.local_records_router import service
+    else:
+        from api.core.operational_inputs_router import service
+    return service()
+
+
+def _error(exc):
+    detail = exc.detail
+    return detail.get('mensagem', 'operação recusada') if isinstance(detail, dict) else str(detail)
+
+
+def _confirm(actor, pending):
+    """Confirma cada rascunho pelo mesmo caso de uso da tela: papel, versão e duplicidade valem aqui."""
+    from api.core.local_records_models import AcaoRequest
+    svc = _services(pending['tipo'])
+    sent, blocked = [], []
+    for item in pending['itens']:
+        key = 'clara-confirma-' + sha256(f"{actor}|{item['id']}|{item['versao']}".encode()).hexdigest()
+        try:
+            if pending['tipo'] == 'registro_local':
+                svc.mutate(actor, item['id'], 'confirmar', AcaoRequest(versao_esperada=item['versao'], chave_idempotencia=key))
+            else:
+                svc.confirm(actor, item['id'], item['versao'], key)
+            sent.append(item['rotulo'])
+        except HTTPException as exc:
+            blocked.append(f"{item['rotulo']} — {_error(exc)}")
+    lines = []
+    if sent:
+        lines += ['Enviado ✅'] + ['• ' + label for label in sent]
+    if blocked:
+        lines += ['Não enviado (continua como rascunho em Registros da unidade):'] + ['• ' + label for label in blocked]
+    event = 'registro_confirmado' if sent else None
+    return _result('\n'.join(lines), event=event, route='/registros-unidade' if blocked else None)
+
+
+def _discard(actor, pending):
+    from api.core.local_records_models import AcaoRequest
+    svc = _services(pending['tipo'])
+    kept = 0
+    for item in pending['itens']:
+        key = 'clara-descarta-' + sha256(f"{actor}|{item['id']}|{item['versao']}".encode()).hexdigest()
+        try:
+            if pending['tipo'] == 'registro_local':
+                svc.mutate(actor, item['id'], 'rejeitar', AcaoRequest(versao_esperada=item['versao'], chave_idempotencia=key))
+            else:
+                svc.reject(actor, item['id'], item['versao'], key)
+        except HTTPException:
+            kept += 1
+    text = 'Tudo bem, nada foi enviado.'
+    if kept:
+        text += ' Seu papel não permite descartar; o rascunho fica sem efeito até alguém revisar em Registros da unidade.'
+    return _result(text)
 
 
 def _approximate_quantity(text, day):
@@ -79,6 +142,15 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
     context = context or {}
     pending = _pending(conversation, actor)
     kind = input_kind(text)
+    if pending and pending.get('etapa') == 'confirmacao':
+        answer = fold(text).strip(' .!')
+        if answer in CONFIRM_WORDS:
+            return _confirm(actor, pending)
+        if answer in CANCEL_WORDS:
+            return _discard(actor, pending)
+        if not kind:
+            return None
+        pending = None  # Novo relato substitui a confirmação em aberto.
     if pending and fold(text).strip(' .!').lower() in {'obrigado', 'obrigada', 'ok', 'entendi'}:
         return None
     if pending and fold(text).strip() in {'cancelar', 'deixa pra la', 'deixe para la'}:
@@ -164,16 +236,25 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
                           if state.get('esclarecimento') else state['texto'])
             draft = svc.create_report(actor, target, audit_text, key, proposals, conversation,
                                       channel=state['canal'], input_type=state['tipo_entrada'])
-            response = report_summary(draft)
+            ready = [r for r in draft['registros'] if not r['atual']['pendencias'] and r['atual']['status'] == 'rascunho']
+            footer = CONFIRM_FOOTER if ready else 'Faltam dados para enviar. Envie o relato completo novamente ou complete em Registros da unidade.'
+            if ready and len(ready) < len(draft['registros']):
+                footer = 'Os itens com “Complete” precisam ser completados em Registros da unidade. ' + footer.replace('enviar', 'enviar os demais', 1)
+            response = report_summary(draft, footer)
+            items = [{'id': str(r['id']), 'versao': r['atual']['numero_versao'],
+                      'rotulo': f"{r['indicador_nome']}: {r['atual']['valor']}"} for r in ready]
             route = '/registros-unidade/' + str(draft['registros'][0]['id']) if len(draft['registros']) == 1 else '/registros-unidade'
             route += '?unidade=' + target + '&aba=pendentes'
             event = 'rascunho_local_pronto'
         else:
             from api.core.operational_inputs_interpreter import operational_summary
             draft = svc.create_draft(actor, target, state['texto'], key)
-            response = operational_summary(draft) + ' Preparei um rascunho. Revise e confirme em Registros da unidade; nenhum saldo ou leito foi alterado.'
+            ready = draft['status'] == 'rascunho'
+            response = operational_summary(draft) + ' Preparei um rascunho; nenhum saldo ou leito foi alterado ainda.\n' + CONFIRM_FOOTER
+            items = [{'id': str(draft['id']), 'versao': draft['versao'], 'rotulo': operational_summary(draft)}] if ready else []
             route, event = '/registros-unidade', 'rascunho_operacional_pronto'
-        return _result(response, event=event, payload=jsonable_encoder(draft), route=route)
+        confirmation = {'etapa': 'confirmacao', 'tipo': kind, 'itens': items} if items else None
+        return _result(response, confirmation, event=event, payload=jsonable_encoder(draft), route=route)
     except HTTPException as exc:
         detail = exc.detail
         message = detail.get('mensagem', 'Não consegui preparar o registro.') if isinstance(detail, dict) else str(detail)

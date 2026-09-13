@@ -24,7 +24,9 @@ UNIT = "10000000-0000-4000-8000-000000000001"
 @pytest.fixture
 def svc(tmp_path):
     path = tmp_path / "records.db"
-    sql = (Path(__file__).parents[2] / "supabase/migrations/20260912130745_clara_registros_locais.sql").read_text()
+    migrations = Path(__file__).parents[2] / "supabase/migrations"
+    sql = (migrations / "20260912130745_clara_registros_locais.sql").read_text()
+    sql = sql.replace("-- POSTGRES SECURITY", (migrations / "20260913120000_indicador_internacoes_dengue.sql").read_text() + "\n-- POSTGRES SECURITY", 1)
     # Mesmo DDL de tabelas/seed; emulação apenas dos tipos/operadores PostgreSQL.
     sql = sql.split("-- POSTGRES SECURITY")[0].replace("public.", "").replace("::jsonb", "")
     sql = sql.replace("DEFAULT now()", "DEFAULT CURRENT_TIMESTAMP").replace("jsonb_typeof", "json_type")
@@ -282,7 +284,7 @@ def test_frontend_transport_confirm_edited_fields_atomically(svc):
     app.dependency_overrides[transport.actor] = lambda: "reviewer"
     with TestClient(app) as client:
         assert client.get('/api/local/unidades').json()["unidades"][0]["capacidades"]["confirmar"]
-        assert len(client.get('/api/local/catalogo', params={"unidade": UNIT}).json()["indicadores"]) == 3
+        assert len(client.get('/api/local/catalogo', params={"unidade": UNIT}).json()["indicadores"]) == 4
         body = {"versao_esperada": 1, "valor": 30, "dimensoes": {"vacina": "dengue"}}
         response = client.post(f'/api/local/registros/{record}/confirmar', json=body, headers={"Idempotency-Key": "frontend-key"})
         assert response.status_code == 200, response.text
