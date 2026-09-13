@@ -226,7 +226,7 @@ def test_clear_inicia_nova_conversa(canais):
     assert len(db_module.listar_conversas("user-abc")) == 2
 
 
-def test_inatividade_do_telegram_oferece_conversas_sem_perder_historico(canais, monkeypatch):
+def test_inatividade_do_telegram_mantem_conversa_e_processa_mensagem(canais, monkeypatch):
     router_module, db_module, _mensagens = canais
     monkeypatch.setenv("TELEGRAM_SESSION_TIMEOUT_MINUTES", "30")
     _parear(canais)
@@ -246,8 +246,8 @@ def test_inatividade_do_telegram_oferece_conversas_sem_perder_historico(canais, 
     conexao_atualizada = db_module.get_conexao_canal_por_externo("telegram", "778899")
     assert conexao_atualizada["conversa_atual_id"] == primeira_conversa_id
     assert db_module.contar_conversas("user-abc", canal="telegram") == 1
-    assert "Como quer seguir?" in _mensagens[-1][1]
-    assert db_module.contar_mensagens(primeira_conversa_id) == 1
+    assert "Pergunta depois da pausa" in _mensagens[-1][1]
+    assert db_module.contar_mensagens(primeira_conversa_id) == 2
 
 
 def test_telegram_mantem_conversa_dentro_da_janela_de_atividade(canais, monkeypatch):

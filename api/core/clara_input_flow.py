@@ -26,11 +26,17 @@ def input_kind(text):
 
 
 def _pending(conversation, actor):
-    messages = db.listar_mensagens(conversation, page_size=1)
-    if not messages:
-        return None
-    artifact = hub.listar_evidencias(conversation, actor).get(messages[0]['id'], {})
-    return artifact.get('pendente') if artifact.get('tipo') == 'entrada_clara' else None
+    evidence = hub.listar_evidencias(conversation, actor)
+    page = 1
+    while True:
+        messages = db.listar_mensagens(conversation, page=page, page_size=100)
+        for message in messages:
+            artifact = evidence.get(message['id'], {})
+            if artifact.get('tipo') == 'entrada_clara':
+                return artifact.get('pendente')
+        if len(messages) < 100:
+            return None
+        page += 1
 
 
 def _result(text, pending=None, event=None, payload=None, route=None):
@@ -73,10 +79,16 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
     context = context or {}
     pending = _pending(conversation, actor)
     kind = input_kind(text)
+    if pending and fold(text).strip(' .!').lower() in {'obrigado', 'obrigada', 'ok', 'entendi'}:
+        return None
     if pending and fold(text).strip() in {'cancelar', 'deixa pra la', 'deixe para la'}:
         return _result('Tudo bem. Interrompi este relato; nenhum registro foi confirmado.')
     if not kind and ('?' in text or re.search(r'\b(como|quanto|quantos|quantas|qual|quais|posso|devo|amanha|vou|vamos|me mostre|consulte)\b', fold(text))):
         return None
+    if pending and not kind:
+        from api.core.susbot_intents import eh_continuacao, rotear_intencao
+        if eh_continuacao(text) or rotear_intencao(text) is not None:
+            return None
     explicit_kind = 'registro_local' if local else 'input_operacional' if operational else None
     continuing = not kind and pending is not None
     kind = kind or explicit_kind

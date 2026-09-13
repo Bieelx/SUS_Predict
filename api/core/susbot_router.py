@@ -103,9 +103,9 @@ def _verificar_ownership(conversa: dict | None, usuario: str) -> dict:
     return conversa
 
 
-def _historico_da_conversa(usuario: str, conversa_id: str) -> list[dict[str, str]]:
-    conversa = _verificar_ownership(db.get_conversa(conversa_id), usuario)
-    return montar_historico_recente(db.listar_mensagens(conversa["id"], page_size=8))
+def _historico_da_conversa(usuario: str, conversa_id: str, pergunta: str = '') -> list[dict]:
+    from api.core.conversation_context import carregar_historico
+    return carregar_historico(usuario, conversa_id, pergunta)
 
 
 def _meta_paginacao(page: int, page_size: int, total: int) -> dict[str, Any]:
@@ -211,7 +211,7 @@ def perguntar(
         aprender_da_mensagem(usuario, pergunta, origem=req.tela_origem or "web")
 
     permitidas = ferramentas_no_municipio(acesso, ibge6)
-    historico = _historico_da_conversa(usuario, conversa["id"])
+    historico = _historico_da_conversa(usuario, conversa["id"], pergunta)
     agente = None if comando_memoria else criar_susbot_agente(
         ibge6,
         tela_origem=req.tela_origem,
@@ -229,6 +229,7 @@ def perguntar(
         referencia_rota = None
         proposta = ""
         artefato = None
+        dados_fim = None
 
         try:
             yield _sse(
@@ -262,6 +263,7 @@ def perguntar(
                     evento = {**evento, "data": {**evento["data"], "acao_id": acao["id"]}}
                 yield _sse(evento["event"], evento["data"])
                 if evento["event"] == "fim":
+                    dados_fim = evento["data"]
                     texto_final = str(evento["data"].get("resposta") or "")
                     referencia_rota = evento["data"].get("referencia_rota")
 
@@ -286,8 +288,8 @@ def perguntar(
                     resposta=texto_final or proposta,
                     referencia_rota=referencia_rota,
                 )
-                if artefato:
-                    hub.salvar_evidencia(conversa["id"], mensagem["id"], artefato)
+                from api.core.conversation_context import evidencia_com_contexto
+                hub.salvar_evidencia(conversa["id"], mensagem["id"], evidencia_com_contexto(artefato, dados_fim))
             except Exception as exc:  # pragma: no cover - não deve falhar nos testes
                 log.warning("Falha ao persistir mensagem da Clara: %s", exc)
 

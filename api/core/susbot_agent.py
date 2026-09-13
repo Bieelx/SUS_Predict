@@ -35,7 +35,7 @@ from api.core.prompts import (
 )
 from api.core.permissoes import mensagem_ferramenta_negada
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
-from api.core.susbot_intents import normalizar_texto, rotear_intencao
+from api.core.susbot_intents import normalizar_texto, rotear_intencao, rotear_com_contexto
 from api.core.susbot_metrics import registrar_execucao
 
 log = logging.getLogger("sus_predict.susbot_agent")
@@ -762,7 +762,8 @@ class ClaraAgent:
             "ibge6": self.ibge6,
             "tela_origem": self.tela_origem,
             "usuario_autenticado": bool(self.usuario),
-            "historico_recente": self.historico[-8:],
+            "historico_recente": self.historico,
+            "consulta_anterior": next((m["plano_consulta"] for m in reversed(self.historico) if m.get("plano_consulta")), None),
             "contexto_conversa": self.contexto_conversa or {},
         }
 
@@ -994,7 +995,7 @@ class ClaraAgent:
     def stream_eventos(self, pergunta: str) -> Iterable[dict[str, Any]]:
         yield {"event": "status", "data": {"mensagem": "Planejando resposta"}}
 
-        rota_local = None if self.dados_tela else rotear_intencao(pergunta)
+        rota_local = None if self.dados_tela else rotear_com_contexto(pergunta, self.historico)
         plano_obrigatorio = rota_local.plano if rota_local else None
         # Perguntas operacionais sobre saúde/estoque precisam chegar à ferramenta
         # antes das heurísticas de perfil. Expressões como "fale sobre a situação"

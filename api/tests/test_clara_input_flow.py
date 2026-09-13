@@ -143,7 +143,7 @@ def test_estoque_pede_estabelecimento_e_nao_movimenta_saldo(operational_svc, mon
         assert tx.one('SELECT count(*) total FROM vacinacao_usuario')['total'] == 0
 
 
-def test_relato_apos_sessao_expirada_nao_se_perde_no_menu(flow, monkeypatch):
+def test_inatividade_preserva_a_conversa_selecionada(flow, monkeypatch):
     from datetime import datetime, timedelta, timezone
     _, old_conversation = flow
     connection = {'id': 'c1', 'usuario': 'writer', 'ibge6': '355030', 'provedor': 'telegram',
@@ -157,7 +157,7 @@ def test_relato_apos_sessao_expirada_nao_se_perde_no_menu(flow, monkeypatch):
     monkeypatch.setattr(channel_router, '_enviar', lambda *args: sent.append(args[-1]))
     channel_router._processar_mensagem_canal('telegram', '42', '42', 'teste', 'Hoje apliquei 20 doses contra dengue', None, None, evento_id='tg-expired-1')
     assert 'rascunhos' in sent[0]
-    assert db.listar_mensagens(old_conversation) == []
+    assert len(db.listar_mensagens(old_conversation)) == 1
 
 
 @pytest.mark.parametrize('channel', ['web', 'telegram', 'whatsapp'])
@@ -231,3 +231,14 @@ def test_correcao_de_quantidade_nao_contorna_acesso_revogado(flow, monkeypatch):
     assert result['evento'] is None
     with svc.store.transaction() as tx:
         assert tx.one('SELECT count(*) total FROM local_registros')['total'] == 0
+
+
+def test_pendencia_sobrevive_a_consulta_intermediaria(flow):
+    svc, conversation = flow
+    first = process_input('writer', 'Hoje apliquei cerca de 20 doses contra dengue', conversation, '355030')
+    persist_input(first, conversation, 'web', 'Hoje apliquei cerca de 20 doses contra dengue')
+    assert process_input('writer', 'Qual o estoque de dipirona?', conversation, '355030') is None
+    db.adicionar_mensagem(conversation, 'telegram', 'Qual o estoque de dipirona?', 'Estoque indisponível.', '/insumos')
+    final = process_input('writer', 'foram 25 doses', conversation, '355030', channel='whatsapp')
+    assert final['evento'] == 'rascunho_local_pronto'
+    assert int(final['payload']['registros'][0]['atual']['valor']) == 25

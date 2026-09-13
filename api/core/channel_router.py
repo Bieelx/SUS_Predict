@@ -123,11 +123,9 @@ def _resumo_conexao(conexao: dict) -> dict:
     }
 
 
-def _historico_da_conversa(usuario: str, conversa_id: str) -> list[dict[str, str]]:
-    conversa = db.get_conversa(conversa_id)
-    if not conversa or conversa.get("usuario") != usuario:
-        return []
-    return montar_historico_recente(db.listar_mensagens(conversa_id, page_size=8))
+def _historico_da_conversa(usuario: str, conversa_id: str, pergunta: str = '') -> list[dict]:
+    from api.core.conversation_context import carregar_historico
+    return carregar_historico(usuario, conversa_id, pergunta)
 
 
 def _obter_pareamento_do_usuario(pareamento_id: str, usuario: str) -> dict:
@@ -406,7 +404,7 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
     except AcessoNegado as exc:
         log.warning("%s recusado (usuario=%s): %s", nome, usuario, exc)
         return str(exc), str(exc)
-    conversa_id_atual = None if _telegram_sessao_expirada(conexao) else conexao.get("conversa_atual_id")
+    conversa_id_atual = conexao.get("conversa_atual_id")
     conversa = db.get_conversa(conversa_id_atual) if conversa_id_atual else None
     if not conversa or conversa.get("usuario") != usuario:
         titulo = " ".join(texto.split()).strip()[:60] or f"Conversa pelo {nome}"
@@ -433,7 +431,7 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
             response += '\n\nRevisar no SusPredict: ' + base + result['referencia_rota']
         return result['resposta'], response
     aprender_da_mensagem(usuario, texto, origem=canal)
-    historico = _historico_da_conversa(usuario, conversa["id"])
+    historico = _historico_da_conversa(usuario, conversa["id"], texto)
     agente = criar_susbot_agente(
         ibge6,
         tela_origem=canal,
@@ -470,8 +468,8 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
     if confirmacao_pendente:
         resposta += f"\n\nEsta acao precisa ser confirmada no SusPredict. Nenhuma alteracao foi executada pelo {nome}."
     mensagem = db.adicionar_mensagem(conversa["id"], canal, texto, resposta, referencia)
-    if (dados_fim or {}).get("artefato"):
-        hub.salvar_evidencia(conversa["id"], mensagem["id"], dados_fim["artefato"])
+    from api.core.conversation_context import evidencia_com_contexto
+    hub.salvar_evidencia(conversa["id"], mensagem["id"], evidencia_com_contexto((dados_fim or {}).get("artefato"), dados_fim))
     db.atualizar_conversa_canal(conexao["id"], conversa["id"])
     resposta_canal = _formatar_resposta_telegram(resposta_base, dados_fim)
     if confirmacao_pendente:
@@ -658,9 +656,7 @@ def _processar_mensagem_canal(
     if comando in {"/conversas", "/continuar"}:
         _quadro_conversas(conexao)
         return
-    from api.core.clara_input_flow import input_kind
-    relato_novo = input_kind(texto) is not None or transcrever is not None
-    if comando in {"/start", "/menu"} or (_telegram_sessao_expirada(conexao) and not comando.startswith("/nova") and not relato_novo):
+    if comando in {"/start", "/menu"}:
         _menu_inicial(conexao)
         return
     if comando in {"/nova", "/new", "/clear"}:

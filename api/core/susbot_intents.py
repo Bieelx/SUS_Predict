@@ -187,3 +187,25 @@ def rotear_intencao(pergunta: str) -> IntentRoute | None:
         )
 
     return None
+
+
+def eh_continuacao(pergunta: str) -> bool:
+    texto = normalizar_texto(pergunta)
+    return bool(re.search(r'^(?:e\b|mas\b|por que\b|por qual motivo\b|nesse\b|nessa\b|entao\b|compare\b|comparar\b|detalhe\b|continue\b|resuma\b|explique melhor\b)', texto)
+                or re.search(r'\b(?:esse dado|essa quantidade|esse valor|isso|disso|mesmo periodo|mesma unidade|anterior|que voce (?:disse|mostrou))\b', texto))
+
+
+def rotear_com_contexto(pergunta: str, historico: list[dict]) -> IntentRoute | None:
+    """Continuação exata de período reaproveita só filtros de consulta já executada."""
+    texto = normalizar_texto(pergunta)
+    match = re.fullmatch(r'e\s+(?:em|no ano de)\s+((?:19|20)\d{2})[?!.]*', texto)
+    if match and historico:
+        previous = historico[-1].get('plano_consulta')
+        if previous and previous.get('ferramenta') == 'consultar_epidemiologia':
+            args = {**previous.get('argumentos', {}), 'ano_ini': int(match[1]), 'ano_fim': int(match[1])}
+            plan = {**previous, 'argumentos': args}
+            return IntentRoute('consultar_epidemiologia', 1.0, plan, 'continuidade de período na consulta anterior')
+    # O planejador recebe a conversa para resolver referências gerais e ambiguidades.
+    if historico and eh_continuacao(pergunta):
+        return None
+    return rotear_intencao(pergunta)
