@@ -421,6 +421,17 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
 
     contexto = hub.fixar_contexto(conversa["id"], usuario, ibge6, {"tela": canal})
     ibge6 = contexto["ibge6"]
+    from api.core.clara_input_flow import process_input, persist_input
+    result = process_input(usuario, texto, conversa['id'], ibge6, channel=canal,
+                           event_id=conexao.get('_evento_id'), input_type=conexao.get('_tipo_entrada', 'texto'))
+    if result is not None:
+        persist_input(result, conversa['id'], canal, texto)
+        db.atualizar_conversa_canal(conexao['id'], conversa['id'])
+        response = result['resposta']
+        if result['referencia_rota']:
+            base = os.getenv('FRONTEND_URL', '').rstrip('/')
+            response += '\n\nRevisar no SusPredict: ' + base + result['referencia_rota']
+        return result['resposta'], response
     aprender_da_mensagem(usuario, texto, origem=canal)
     historico = _historico_da_conversa(usuario, conversa["id"])
     agente = criar_susbot_agente(
@@ -598,6 +609,7 @@ def _processar_mensagem_canal(
     texto: str,
     token_pareamento: str | None,
     transcrever: Callable[[], ResultadoTranscricao] | None,
+    evento_id: str | None = None,
 ) -> None:
     """Fluxo comum a Telegram e WhatsApp depois que o adaptador normalizou a mensagem.
 
@@ -632,6 +644,7 @@ def _processar_mensagem_canal(
     except AcessoNegado:
         enviar("Seu acesso está desativado. Fale com o administrador.")
         return
+    conexao = {**conexao, '_evento_id': evento_id, '_tipo_entrada': 'audio' if transcrever else 'texto'}
     comando = texto.lower()
     if provedor == "whatsapp" and re.fullmatch(r"[0-6]", comando):
         indice = int(comando)
@@ -645,7 +658,9 @@ def _processar_mensagem_canal(
     if comando in {"/conversas", "/continuar"}:
         _quadro_conversas(conexao)
         return
-    if comando in {"/start", "/menu"} or (_telegram_sessao_expirada(conexao) and not comando.startswith("/nova")):
+    from api.core.clara_input_flow import input_kind
+    relato_novo = input_kind(texto) is not None or transcrever is not None
+    if comando in {"/start", "/menu"} or (_telegram_sessao_expirada(conexao) and not comando.startswith("/nova") and not relato_novo):
         _menu_inicial(conexao)
         return
     if comando in {"/nova", "/new", "/clear"}:
@@ -665,7 +680,7 @@ def _processar_mensagem_canal(
             return
 
         resumo = texto if len(texto) <= 600 else f"{texto[:597].rstrip()}…"
-        enviar(f"🎙️ Entendi seu áudio como:\n\n“{resumo}”\n\nVou analisar a pergunta.")
+        enviar(f"🎙️ Entendi seu áudio como:\n\n“{resumo}”\n\nVou organizar sua mensagem.")
     try:
         _resposta_historico, resposta_canal = _processar_pergunta_canal(conexao, texto)
     except Exception as exc:  # pragma: no cover - defesa para webhook externo
@@ -701,6 +716,7 @@ def processar_update_telegram(update: dict) -> None:
     _processar_mensagem_canal(
         "telegram", chat_id, external_user_id, remetente.get("username"), texto, token,
         (lambda: _transcrever_audio_telegram(mensagem)) if tem_audio else None,
+        evento_id=update_id,
     )
 
 
@@ -847,6 +863,7 @@ def processar_evento_whatsapp(evento: dict) -> None:
         "whatsapp", chat_id, chat_id, str(username)[:80], texto,
         (pedido.group(1) or "") if pedido else None,
         (lambda: _transcrever_audio_whatsapp(mensagem)) if tem_audio else None,
+        evento_id=chave,
     )
 
 

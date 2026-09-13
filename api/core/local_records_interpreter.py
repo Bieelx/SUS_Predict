@@ -39,6 +39,11 @@ def interpret(text, today=None):
             fail(422, "periodo_invalido", "Informe uma data válida.")
     elif relative:
         period = (today - timedelta(days=1 if relative[0] == "ontem" else 0)).isoformat()
+    # Voz passiva e data entre verbo/quantidade são relatos do mesmo acontecimento.
+    source = re.sub(r"\bforam aplicad[ao]s?\b", "aplicamos", source)
+    source = re.sub(r"\bforam atendid[ao]s?\b", "atendemos", source)
+    source = re.sub(r"\bforam encaminhad[ao]s?\b", "encaminhamos", source)
+    source = re.sub(r"\b(apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos)\s+(?:hoje|ontem)\s+", r"\1 ", source)
     # Separação pelos verbos impede que a quantidade de uma cláusula contamine outra.
     verbs = r"apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos"
     clauses = re.split(r"(?=\b(?:" + verbs + r")\b)", source)
@@ -80,7 +85,7 @@ def interpret(text, today=None):
         proposals.append({"indicador": indicator, "valor": amount, "periodo_inicio": period,
                           "periodo_fim": period, "dimensoes": dims})
     if not proposals:
-        fail(422, "relato_sem_indicadores", "Informe, por exemplo: Hoje aplicamos 32 doses contra dengue. Estoque e internações ainda não fazem parte deste piloto.")
+        fail(422, "relato_sem_indicadores", "Informe, por exemplo: Hoje aplicamos 32 doses contra dengue. Para estoque, descreva uma entrada ou saída; para leitos, informe ocupados e disponíveis.")
     return proposals
 
 

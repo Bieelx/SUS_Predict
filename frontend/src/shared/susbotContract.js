@@ -54,9 +54,8 @@ export function chaveIdempotenciaRelato(semente) {
 // estruturada em vez de deixar o relato cair numa consulta analítica.
 export function pareceRelatoLocal(texto) {
   const normalizado = String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  return /\b(?:apliquei|aplicamos)\s+\d+\s+doses?\b/.test(normalizado)
-    || /\b(?:atendi|atendemos)\s+\d+\b[^.]*\bsuspeit/.test(normalizado)
-    || /\b(?:encaminhei|encaminhamos)\s+\d+\b/.test(normalizado);
+  if (normalizado.includes('?') || /\b(como|quanto|quantos|quantas|posso|devo|vou|vamos|amanha)\b/.test(normalizado)) return false;
+  return /\b(apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos|foram aplicad[ao]s?|foram atendid[ao]s?|foram encaminhad[ao]s?)\b/.test(normalizado);
 }
 
 export function detalheLegivelSusbot(error) {

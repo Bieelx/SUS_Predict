@@ -380,6 +380,7 @@ export async function conversarComSusbot({
   confirmar,
   contexto,
   dados_tela,
+  chave_mensagem,
   registro_local,
   input_operacional,
   baseUrl = '',
@@ -443,6 +444,7 @@ export async function conversarComSusbot({
         dados_tela: dados_tela || undefined,
         // Modo de registro local: sem unidade_id e chave_idempotencia o backend
         // recusa com 422, em vez de rodar uma consulta no lugar de gravar.
+        chave_mensagem: chave_mensagem || undefined,
         registro_local: registro_local || undefined,
         input_operacional: input_operacional || undefined,
       }),

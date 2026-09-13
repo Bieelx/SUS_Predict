@@ -657,8 +657,8 @@ function Bolha({ msg, onNavigate, onConfirmar, onCancelar, onAbrirMemoria }) {
       )}
 
       {!isErro && <ArtefatoView artefato={msg.artefato} />}
-      {!isErro && <RascunhoLocalView rascunho={msg.rascunhoLocal} onNavigate={onNavigate} />}
-      {!isErro && <RascunhoOperacionalView rascunho={msg.rascunhoOperacional} onNavigate={onNavigate} />}
+      {!isErro && <RascunhoLocalView rascunho={msg.rascunhoLocal || (msg.artefato?.evento === 'rascunho_local_pronto' ? msg.artefato.rascunho : null)} onNavigate={onNavigate} />}
+      {!isErro && <RascunhoOperacionalView rascunho={msg.rascunhoOperacional || (msg.artefato?.evento === 'rascunho_operacional_pronto' ? msg.artefato.rascunho : null)} onNavigate={onNavigate} />}
       {!isErro && <AvisoMemoria estado={msg.memoria} onAbrir={onAbrirMemoria} />}
       {!isErro && <ConfirmacaoAcao msg={msg} onConfirmar={onConfirmar} onCancelar={onCancelar} />}
 
@@ -1419,22 +1419,22 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId 
     // `contexto.intencao` faz o backend recusar com 422, de propósito, para não
     // executar uma consulta genérica no lugar de gravar um registro.
     const unidadeRegistro = current.contexto?.unidade || contextoEntrada?.unidade || null;
-    const querRegistrar = (current.contexto?.intencao || contextoEntrada?.intencao) === 'registro_local';
     const unidadeDoRelato = unidadeRegistro?.id || (page === 'registros-unidade' && pareceRelatoLocal(pergunta) ? unidadeId : null);
-    const registroLocal = (querRegistrar || pareceRelatoLocal(pergunta)) && unidadeDoRelato
+    const registroLocal = pareceRelatoLocal(pergunta) && unidadeDoRelato
       ? { unidade_id: unidadeDoRelato, chave_idempotencia: chaveIdempotenciaRelato(idResposta) }
       : undefined;
     const estabelecimento = current.contexto?.estabelecimento || contextoEntrada?.estabelecimento || null;
     const querInputOperacional = (current.contexto?.intencao || contextoEntrada?.intencao) === 'input_operacional';
     // Uma dose aplicada é produção assistencial local, não saída automática
     // de estoque. O relato local prevalece mesmo no atalho operacional.
-    const inputOperacional = !registroLocal && querInputOperacional && estabelecimento?.id
+    const inputOperacional = !pareceRelatoLocal(pergunta) && !/[?]|\b(como|quanto|quantos|quantas|posso|devo|vou|vamos)\b/i.test(pergunta) && querInputOperacional && estabelecimento?.id
       ? { id_estabelecimento: estabelecimento.id, chave_idempotencia: chaveIdempotenciaRelato(idResposta) }
       : undefined;
 
     try {
       const resp = await conversarComSusbot({
         pergunta,
+        chave_mensagem: chaveIdempotenciaRelato(idResposta),
         telaAtual: page,
         tela_atual: page,
         tela_origem: page,

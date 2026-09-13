@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 from api.core.local_records_models import StrictModel
 from uuid import UUID
 
@@ -58,6 +58,7 @@ class ContextoInputOperacional(StrictModel):
 
 class PerguntaClaraRequest(BaseModel):
     pergunta: str = ""
+    chave_mensagem: str | None = Field(default=None, min_length=8, max_length=120)
     conversa_id: str | None = None
     ibge6: str | None = None
     ibge: str | None = None
@@ -147,52 +148,22 @@ def perguntar(
     # visitante) a partir do e-mail do token; inativo = 403.
     acesso = provisionar_acesso_http(user)
 
-    if (req.contexto or {}).get("intencao") == "input_operacional" and req.input_operacional is None:
-        raise HTTPException(422, "Envie input_operacional com id_estabelecimento e chave_idempotencia.")
-    if req.input_operacional is not None:
-        if req.confirmar:
-            raise HTTPException(422, "Confirme o input operacional pela operação estruturada.")
-        from api.core.operational_inputs_interpreter import operational_summary
-        from api.core.operational_inputs_router import service as operational_service
-        from fastapi.encoders import jsonable_encoder
-        draft = operational_service().create_draft(usuario, req.input_operacional.id_estabelecimento,
-            req.pergunta, req.input_operacional.chave_idempotencia)
-        summary = operational_summary(draft)
-        events = (_sse("rascunho_operacional_pronto", jsonable_encoder(draft))
-                  + _sse("token", {"texto": summary + " Revise e confirme em Registros da unidade."})
-                  + _sse("fim", {"resposta": summary, "referencia_rota": "/registros-unidade",
-                                 "rascunho_id": str(draft["id"])}))
-        return StreamingResponse(iter([events]), media_type="text/event-stream",
-                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-    if (req.contexto or {}).get("intencao") == "registro_local" and req.registro_local is None:
-        raise HTTPException(422, "Envie registro_local com unidade_id e chave_idempotencia para registrar com a Clara.")
-    if req.registro_local is not None:
-        if req.confirmar:
-            raise HTTPException(422, "Use a operação estruturada do registro para confirmar.")
-        from api.core.local_records_router import service, receive_report
-        from api.core.local_records_models import RelatoRequest
-        from api.core.local_records_interpreter import report_summary
-        from fastapi.encoders import jsonable_encoder
-        try:
-            relato_request = RelatoRequest(unidade_id=req.registro_local.unidade_id,
-                texto=req.pergunta, chave_idempotencia=req.registro_local.chave_idempotencia,
-                conversa_id=req.conversa_id)
-        except ValidationError:
-            raise HTTPException(422, "Informe um relato de até 8000 caracteres e uma referência de conversa válida.") from None
-        report = receive_report(relato_request, usuario, service())
-        summary = report_summary(report)
-        events = (_sse("rascunho_local_pronto", jsonable_encoder(report))
-                  + _sse("token", {"texto": summary})
-                  + _sse("fim", {"resposta": summary, "referencia_rota": "/registros-unidade",
-                                 "relato_id": str(report["relato_id"])}))
-        return StreamingResponse(iter([events]), media_type="text/event-stream",
-                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    if req.registro_local and req.input_operacional:
+        raise HTTPException(422, "Envie um tipo de registro por mensagem.")
+    if req.confirmar and (req.registro_local or req.input_operacional):
+        raise HTTPException(422, "Confirme o registro na tela Registros da unidade.")
 
     pergunta = " ".join(str(req.pergunta or "").split()).strip()
     if not pergunta and not req.confirmar:
         raise HTTPException(400, "pergunta ausente")
 
+    if not (req.ibge6 or req.ibge) and req.registro_local:
+        from api.core.local_records_router import service
+        units = service().units(usuario)['itens']
+        unit = next((u for u in units if str(u['id']) == str(req.registro_local.unidade_id)), None)
+        if not unit:
+            raise HTTPException(403, 'Unidade não autorizada.')
+        req.ibge6 = str(unit['ibge6'])
     ibge6 = _ibge6(req)
     if req.confirmar and not req.conversa_id:
         raise HTTPException(422, "A confirmação precisa da conversa de origem.")
@@ -209,18 +180,37 @@ def perguntar(
 
     contexto = hub.fixar_contexto(conversa["id"], usuario, ibge6, req.contexto or {"tela": req.tela_origem})
     ibge6 = contexto["ibge6"]
-    permitidas = ferramentas_no_municipio(acesso, ibge6)
     if req.confirmar:
         acao = hub.obter_acao(req.confirmar.acao_id, conversa["id"], usuario)
-        if acao["dados"]["ferramenta"] not in permitidas:
+        if acao["dados"]["ferramenta"] not in ferramentas_no_municipio(acesso, ibge6):
             raise HTTPException(403, "Seu perfil ou município não permite esta ação.")
 
     comando_memoria = executar_comando_memoria(usuario, pergunta) if pergunta else None
+    if not req.confirmar and comando_memoria is None:
+        from api.core.clara_input_flow import process_input, persist_input
+        result = process_input(usuario, pergunta, conversa["id"], ibge6,
+            context=req.contexto, local=req.registro_local, operational=req.input_operacional,
+            event_id=req.chave_mensagem or (req.registro_local.chave_idempotencia if req.registro_local
+                else req.input_operacional.chave_idempotencia if req.input_operacional else None))
+        if result is not None:
+            persist_input(result, conversa["id"], req.tela_origem or 'web', pergunta)
+            events = _sse('status', {'mensagem': 'Organizando seu relato', 'conversa_id': conversa['id'],
+                'conversa_criada': conversa_criada, 'contexto': contexto})
+            if result['evento']:
+                events += _sse(result['evento'], result['payload'])
+            events += _sse('token', {'texto': result['resposta']})
+            events += _sse('fim', {'resposta': result['resposta'], 'referencia_rota': result['referencia_rota'],
+                'relato_id': (result['payload'] or {}).get('relato_id'),
+                'rascunho_id': (result['payload'] or {}).get('id')})
+            return StreamingResponse(iter([events]), media_type='text/event-stream',
+                headers={'X-Conversa-Id': conversa['id'], 'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
     if pergunta and comando_memoria is None:
         # Nome do perfil logado (só grava se ainda não houver nome na memória).
         aprender_do_usuario_autenticado(usuario, user, origem="perfil_autenticado")
         aprender_da_mensagem(usuario, pergunta, origem=req.tela_origem or "web")
 
+    permitidas = ferramentas_no_municipio(acesso, ibge6)
     historico = _historico_da_conversa(usuario, conversa["id"])
     agente = None if comando_memoria else criar_susbot_agente(
         ibge6,

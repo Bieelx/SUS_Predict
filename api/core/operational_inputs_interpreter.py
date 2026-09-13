@@ -19,6 +19,13 @@ def _positive(value, field="quantidade"):
 def interpret_operational_input(text):
     source = " ".join(str(text or "").split()).strip()
     plain = _plain(source)
+    if re.search(r"\b(nao|amanha|talvez|exemplo|aproximadamente|cerca de|vou|vamos|se eu|se nos)\b", plain) or '?' in plain:
+        fail(422, "input_ambiguo", "Descreva uma movimentação realizada ou a situação medida dos leitos, sem hipóteses ou aproximações.")
+    plain = re.sub(r"^(?:(?:clara|oi|ola|bom dia|boa tarde|boa noite)[,!:]?\s*)+", "", plain)
+    plain = re.sub(r"^(?:hoje[, :]*)\s*", "", plain).rstrip('.! ')
+    plain = re.sub(r"^(?:eu |nos )?(?:recebi|recebemos|chegaram)\s+(?:hoje\s+)?", "entrada de ", plain)
+    plain = re.sub(r"^(?:eu |nos )?(?:retirei|retiramos|utilizei|utilizamos)\s+(?:hoje\s+)?", "saida de ", plain)
+    plain = re.sub(r"^(?:estamos com|temos)\s+", "", plain)
 
     vaccine = re.fullmatch(
         r"(?:registrar\s+)?(entrada|saida)\s+(?:de\s+)?(\d+)\s+doses?\s+(?:da\s+vacina\s+|de\s+)?(.+)",

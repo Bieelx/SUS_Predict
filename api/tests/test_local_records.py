@@ -226,11 +226,15 @@ def test_feature_disabled_fails_closed(monkeypatch):
     assert exc.value.status_code == 503
 
 
-def test_clara_explicit_local_mode_sse(svc, monkeypatch):
+def test_clara_explicit_local_mode_sse(svc, monkeypatch, tmp_path):
     from api.core import susbot_router
     monkeypatch.setattr(router, "service", lambda: svc)
     monkeypatch.setattr(susbot_router, "provisionar_acesso_http", lambda user: None)
     # Rota específica não exige município genérico nem usa planejamento livre.
+    from api.core import db
+    monkeypatch.setattr(db, '_SQLITE_PATH', str(tmp_path / 'conversations.db'))
+    monkeypatch.setattr(db, '_clara_remoto', lambda: False)
+    db.init_db()
     app = FastAPI()
     app.include_router(susbot_router.router)
     app.dependency_overrides[susbot_router.require_user] = lambda: {"id": "writer"}
@@ -244,10 +248,14 @@ def test_clara_explicit_local_mode_sse(svc, monkeypatch):
     assert svc.summary("manager", UNIT, TODAY, TODAY)["itens"] == []
 
 
-def test_clara_accepts_first_person_local_report(svc, monkeypatch):
+def test_clara_accepts_first_person_local_report(svc, monkeypatch, tmp_path):
     from api.core import susbot_router
     monkeypatch.setattr(router, "service", lambda: svc)
     monkeypatch.setattr(susbot_router, "provisionar_acesso_http", lambda user: None)
+    from api.core import db
+    monkeypatch.setattr(db, '_SQLITE_PATH', str(tmp_path / 'conversations.db'))
+    monkeypatch.setattr(db, '_clara_remoto', lambda: False)
+    db.init_db()
     app = FastAPI()
     app.include_router(susbot_router.router)
     app.dependency_overrides[susbot_router.require_user] = lambda: {"id": "writer"}
@@ -259,7 +267,7 @@ def test_clara_accepts_first_person_local_report(svc, monkeypatch):
         })
     assert response.status_code == 200, response.text
     assert "event: rascunho_local_pronto" in response.text
-    rascunho = json.loads(next(line[6:] for line in response.text.splitlines() if line.startswith("data: ")))
+    rascunho = json.loads(response.text.split("event: rascunho_local_pronto\ndata: ", 1)[1].split("\n", 1)[0])
     assert float(rascunho["registros"][0]["atual"]["valor"]) == 20
     assert rascunho["registros"][0]["atual"]["dimensoes"]["vacina"] == "dengue"
     assert svc.summary("manager", UNIT, TODAY, TODAY)["itens"] == []

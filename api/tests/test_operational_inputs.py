@@ -119,10 +119,14 @@ def test_estabelecimentos_sao_restritos_ao_municipio(svc):
     assert svc.establishments(OTHER)["itens"] == []
 
 
-def test_modo_explicito_da_clara_emite_rascunho_sem_confirmar(svc, monkeypatch):
+def test_modo_explicito_da_clara_emite_rascunho_sem_confirmar(svc, monkeypatch, tmp_path):
     from api.core import operational_inputs_router, susbot_router
     monkeypatch.setattr(operational_inputs_router, "service", lambda: svc)
     monkeypatch.setattr(susbot_router, "provisionar_acesso_http", lambda user: None)
+    from api.core import db
+    monkeypatch.setattr(db, '_SQLITE_PATH', str(tmp_path / 'conversations.db'))
+    monkeypatch.setattr(db, '_clara_remoto', lambda: False)
+    db.init_db()
     app = FastAPI()
     app.include_router(susbot_router.router)
     app.dependency_overrides[susbot_router.require_user] = lambda: {"id": ACTOR}
