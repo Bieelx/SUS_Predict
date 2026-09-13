@@ -158,3 +158,76 @@ def test_relato_apos_sessao_expirada_nao_se_perde_no_menu(flow, monkeypatch):
     channel_router._processar_mensagem_canal('telegram', '42', '42', 'teste', 'Hoje apliquei 20 doses contra dengue', None, None, evento_id='tg-expired-1')
     assert 'rascunhos' in sent[0]
     assert db.listar_mensagens(old_conversation) == []
+
+
+@pytest.mark.parametrize('channel', ['web', 'telegram', 'whatsapp'])
+def test_quantidade_exata_completa_relato_aproximado(flow, channel):
+    svc, conversation = flow
+    original = 'Claro, hoje eu apliquei cerca de 20 doses da vacina da Dengue.'
+    result = process_input('writer', original, conversation, '355030', channel=channel, input_type='audio')
+    assert result['evento'] is None
+    assert result['artefato']['pendente']['etapa'] == 'quantidade'
+    day = result['artefato']['pendente']['dia']
+    with svc.store.transaction() as tx:
+        assert tx.one('SELECT count(*) total FROM local_registros')['total'] == 0
+    persist_input(result, conversation, channel, original)
+    result = process_input('writer', 'foram 25 doses', conversation, '355030', channel=channel)
+    assert result['evento'] == 'rascunho_local_pronto'
+    record = result['payload']['registros'][0]
+    assert int(record['atual']['valor']) == 25
+    assert record['atual']['dimensoes']['vacina'] == 'dengue'
+    assert record['atual']['periodo_inicio'] == day
+    detail = svc.detail('writer', record['id'])
+    assert detail['confirmada_vigente'] is None
+    assert original in detail['relato']['transcricao']
+    assert 'foram 25 doses' in detail['relato']['transcricao']
+
+
+@pytest.mark.parametrize('answer', ['cerca de 25', '25 ou 30', '25,5 doses', 'não sei', 'vinte e cinco'])
+def test_esclarecimento_ainda_ambiguo_nao_grava(flow, answer):
+    svc, conversation = flow
+    text = 'Hoje apliquei cerca de 20 doses contra dengue'
+    result = process_input('writer', text, conversation, '355030')
+    persist_input(result, conversation, 'web', text)
+    result = process_input('writer', answer, conversation, '355030')
+    assert result['evento'] is None
+    assert result['artefato']['pendente']['etapa'] == 'quantidade'
+    with svc.store.transaction() as tx:
+        assert tx.one('SELECT count(*) total FROM local_registros')['total'] == 0
+
+
+def test_numero_isolado_sem_relato_nao_vira_registro(flow):
+    _, conversation = flow
+    assert process_input('writer', 'foram 25 doses', conversation, '355030') is None
+
+
+def test_quantidade_depois_unidade_preserva_contexto(flow, monkeypatch):
+    svc, conversation = flow
+    units = svc.units('writer')['itens']
+    monkeypatch.setattr(svc, 'units', lambda actor: {'itens': units + [{'id': 'other', 'nome': 'Outra UBS', 'ibge6': '355030'}]})
+    text = 'Hoje apliquei cerca de 20 doses contra dengue'
+    first = process_input('writer', text, conversation, '355030')
+    # Simula esclarecimento no dia seguinte, mantendo o dia do relato.
+    first['artefato']['pendente']['dia'] = '2026-09-12'
+    persist_input(first, conversation, 'whatsapp', text)
+    second = process_input('writer', 'foram 25 doses', conversation, '355030')
+    assert second['evento'] is None
+    assert 'qual unidade' in second['resposta']
+    persist_input(second, conversation, 'whatsapp', 'foram 25 doses')
+    final = process_input('writer', 'UBS teste', conversation, '355030')
+    version = final['payload']['registros'][0]['atual']
+    assert int(version['valor']) == 25
+    assert version['periodo_inicio'] == '2026-09-12'
+    assert version['dimensoes']['vacina'] == 'dengue'
+
+
+def test_correcao_de_quantidade_nao_contorna_acesso_revogado(flow, monkeypatch):
+    svc, conversation = flow
+    text = 'Hoje apliquei cerca de 20 doses contra dengue'
+    first = process_input('writer', text, conversation, '355030')
+    persist_input(first, conversation, 'web', text)
+    monkeypatch.setattr(svc, 'units', lambda actor: {'itens': []})
+    result = process_input('writer', 'foram 25 doses', conversation, '355030')
+    assert result['evento'] is None
+    with svc.store.transaction() as tx:
+        assert tx.one('SELECT count(*) total FROM local_registros')['total'] == 0

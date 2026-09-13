@@ -8,7 +8,7 @@ import re
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from api.core import db, conversation_hub as hub
-from api.core.local_records_interpreter import fold, interpret, report_summary
+from api.core.local_records_interpreter import fold, interpret, report_summary, NUMBER, NUMBERS
 
 
 def input_kind(text):
@@ -39,6 +39,33 @@ def _result(text, pending=None, event=None, payload=None, route=None):
             'evento': event, 'payload': payload}
 
 
+
+def _approximate_quantity(text, day):
+    """Só esclarece uma quantidade aproximada em um único acontecimento válido."""
+    source = fold(text)
+    pattern = r"\b(?:cerca de|aproximadamente|por volta de|mais ou menos)\s+(" + NUMBER + r")\b"
+    matches = list(re.finditer(pattern, source))
+    if len(matches) != 1:
+        return None
+    match = matches[0]
+    candidate = source[:match.start()] + match.group(1) + source[match.end():]
+    try:
+        proposals = interpret(candidate, today=date.fromisoformat(day))
+    except HTTPException:
+        return None
+    if len(proposals) != 1:
+        return None
+    return {'antes': source[:match.start()], 'depois': source[match.end():]}
+
+
+def _exact_quantity(text):
+    source = fold(text).strip().rstrip('.!')
+    match = re.fullmatch(r"(?:(?:na verdade|corrigindo)[,:]?\s+)?(?:(?:foram|foi|sao|eram)\s+)?(?:exatamente\s+)?(" + NUMBER + r")(?:\s+(?:doses?|pessoas?|atendimentos?|encaminhamentos?))?", source)
+    if not match or '.' in match.group(1) or ',' in match.group(1):
+        return None
+    value = match.group(1)
+    return str(NUMBERS[value]) if value in NUMBERS else value
+
 def process_input(actor, text, conversation, city, channel='web', context=None,
                   local=None, operational=None, event_id=None, input_type='texto'):
     """Retorna None para consulta; só seleciona IDs presentes no acesso atual."""
@@ -62,14 +89,31 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
     kind = state['tipo']
     if len(state['texto']) > (8000 if kind == 'registro_local' else 4000):
         return _result('O relato está muito longo. Envie um acontecimento por mensagem, com unidade, data e quantidade.')
-    selection = text.strip() if continuing else ''
+    selection = text.strip() if continuing and state.get('etapa') != 'quantidade' else ''
+    if continuing and state.get('etapa') == 'quantidade':
+        quantity = _exact_quantity(text)
+        if quantity is None:
+            return _result('Qual foi a quantidade exata? Pode responder, por exemplo, “foram 25 doses”. Se ainda não souber, escreva cancelar; não vou registrar uma estimativa.', state)
+        parts = state['quantidade_aproximada']
+        state['texto'] = parts['antes'] + quantity + parts['depois']
+        state['esclarecimento'] = text
+        state['etapa'] = 'unidade'
+    if not continuing and local:
+        state['unidade_sugerida'] = str(local.unidade_id)
+    elif not continuing and isinstance(context.get('unidade'), dict):
+        state['unidade_sugerida'] = context['unidade'].get('id')
     try:
         if kind == 'registro_local':
             from api.core.local_records_router import service
             svc = service()
             units = [u for u in svc.units(actor)['itens'] if str(u['ibge6']) == str(city)]
+            approximate = _approximate_quantity(state['texto'], state['dia'])
+            if approximate:
+                state.update(etapa='quantidade', quantidade_aproximada=approximate,
+                             texto_original=state['texto'])
+                return _result('Entendi o relato. Para preparar o registro, preciso da quantidade exata, pois “cerca de” indica uma estimativa. Quantas foram? Pode responder “foram 25 doses”.', state)
             proposals = interpret(state['texto'], today=date.fromisoformat(state['dia']))
-            target = str(local.unidade_id) if local and not continuing else None
+            target = state.get('unidade_sugerida') if not selection else None
             if not target and not continuing and isinstance(context.get('unidade'), dict):
                 target = context['unidade'].get('id')
             choices = units
@@ -106,7 +150,9 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
         target = str(choices[0]['id'])
         key = 'clara-' + sha256(f"{actor}|{state['canal']}|{state['chave']}".encode()).hexdigest()
         if kind == 'registro_local':
-            draft = svc.create_report(actor, target, state['texto'], key, proposals, conversation,
+            audit_text = (state['texto_original'] + '\nEsclarecimento posterior: ' + state['esclarecimento']
+                          if state.get('esclarecimento') else state['texto'])
+            draft = svc.create_report(actor, target, audit_text, key, proposals, conversation,
                                       channel=state['canal'], input_type=state['tipo_entrada'])
             response = report_summary(draft)
             route = '/registros-unidade/' + str(draft['registros'][0]['id']) if len(draft['registros']) == 1 else '/registros-unidade'
