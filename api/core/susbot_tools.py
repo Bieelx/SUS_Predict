@@ -14,6 +14,7 @@ from functools import wraps
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 import uuid
 
@@ -201,6 +202,7 @@ def _enriquecer_estoque(rows: list[dict]) -> list[dict]:
         qualidade = _qualidade_cobertura(row, dias_restantes)
         itens.append(
             {
+                **{key: row[key] for key in ("id_estabelecimento", "cnes", "estabelecimento", "unidade_medida", "tabela_origem") if key in row},
                 "ibge6": row.get("ibge6"),
                 "item": row.get("item"),
                 "quantidade_atual": row.get("quantidade_atual"),
@@ -248,6 +250,12 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
     def consultar_estoque(item: str | None = None, somente_risco: bool = False, **_kwargs) -> dict:
         todas, rows = _buscar_estoque_por_item(item)
         if not todas:
+            if os.getenv("CLARA_REGISTROS_LOCAIS_ENABLED", "").lower() in {"1", "true"}:
+                return _resposta_vazia(
+                    "Nenhum saldo de vacinas ou medicamentos registrado nos estabelecimentos deste município. Ausência de registro não significa estoque zero.",
+                    ibge6=ibge, item=item, base_disponivel=True,
+                    acao_sugerida="Selecione uma unidade em Registros da unidade e registre a movimentação.", dados=[],
+                )
             return _resposta_vazia(
                 MSG_SEM_FONTE_ESTOQUE,
                 ibge6=ibge,
@@ -267,6 +275,12 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
 
         dados = _enriquecer_estoque(rows)
         if somente_risco:
+            if any(dado["status"] == "indisponivel" for dado in dados):
+                return _resposta_vazia(
+                    "Há saldos registrados, mas falta consumo médio diário para avaliar risco de esgotamento. Consulte os saldos por unidade.",
+                    ibge6=ibge, item=item, somente_risco=True, base_disponivel=True,
+                    risco_disponivel=False, dados=dados,
+                )
             dados = [dado for dado in dados if dado["status"] in {"critico", "alerta"}]
             contexto = _CONSULTA.get()
             if contexto is not None:

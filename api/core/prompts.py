@@ -33,7 +33,7 @@ FERRAMENTAS_PLANEJAVEIS = (
 # ARGUMENTOS e montada so com as permitidas ao perfil (docs/09, barreira 1):
 # descrever uma ferramenta proibida faz o modelo propor e levar rebaixamento.
 DESCRICOES_FERRAMENTAS = {
-    "consultar_estoque": "- consultar_estoque: item (string opcional), somente_risco (boolean opcional). Palavras genericas (insumos, medicamentos, estoque) NAO sao item. somente_risco=true para falta, ruptura, critico, baixo, acabando.",
+    "consultar_estoque": "- consultar_estoque: item (string opcional), somente_risco (boolean opcional). Palavras genericas (insumos, medicamentos, estoque) NAO sao item. somente_risco=true para falta, ruptura, critico, baixo, acabando. Saldos por estabelecimento: vacinas em doses e medicamentos em embalagens por apresentacao. Preserve estabelecimento e unidade_medida na resposta; nao some apresentacoes distintas. Sem consumo medio, nao calcule dias restantes ou risco.",
     "consultar_aquisicoes": "- consultar_aquisicoes: item (string opcional). Mesmas fontes das telas Alertas e Insumos; risco de aquisição, nunca estoque físico.",
     "consultar_alertas": "- consultar_alertas: status (string opcional), tipo (string opcional). Apenas alertas operacionais locais cadastrados. Para a Central de Alertas ou risco de aquisição, use consultar_aquisicoes.",
     "consultar_epidemiologia": '- consultar_epidemiologia: sistema (SIM|SIH|SINASC|SIA|SINAN), ano_ini, ano_fim (inteiros opcionais), doenca_cod, escopo_solicitado (strings opcionais). Internacao, hospital, leito, UTI => SIH (UTI: escopo_solicitado="uti"). Obito => SIM. Nascimento => SINASC. Ambulatorial => SIA. Casos, notificacoes, dengue => SINAN.',

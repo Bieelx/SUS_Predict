@@ -75,6 +75,21 @@ class OperationalInputs:
                           + " AND ".join(clauses) + " ORDER BY e.no_fantasia LIMIT ?", tuple(values))
             return {"itens": rows, "origem": "estabelecimentos"}
 
+    def overview(self, actor, establishment_id):
+        """Lê saldos dos triggers e o histórico original, inclusive fora da Clara."""
+        with self.store.transaction() as tx:
+            establishment = self._establishment(tx, actor, establishment_id)
+            result = {"estabelecimento": establishment, "origem": "estabelecimentos"}
+            for kind in ("vacinacao", "medicamento", "internacao"):
+                # Nomes vêm exclusivamente desta lista fixa, nunca da requisição.
+                result[kind] = {
+                    "saldo": tx.all(f"SELECT * FROM {kind}_estabelecimento WHERE id_estabelecimento=? ORDER BY id",
+                                    (establishment_id,)),
+                    "historico": tx.all(f"SELECT * FROM {kind}_usuario WHERE id_estabelecimento=? "
+                                        "ORDER BY data_atualizacao DESC,id DESC LIMIT 50", (establishment_id,)),
+                }
+            return result
+
     def create_draft(self, actor, establishment_id, text, event_id, interpreted=None):
         if interpreted is None:
             try:
@@ -123,11 +138,16 @@ class OperationalInputs:
             row, establishment = self._draft(tx, actor, draft_id)
             return self._present(row, establishment)
 
-    def list(self, actor, status="rascunho"):
+    def list(self, actor, status="rascunho", establishment_id=None):
         with self.store.transaction() as tx:
             self._access(tx, actor)
-            rows = tx.all("SELECT * FROM clara_inputs_operacionais WHERE user_id=? AND status=? ORDER BY criado_em DESC LIMIT 100",
-                          (actor, status))
+            clause, values = "", [actor, status]
+            if establishment_id:
+                self._establishment(tx, actor, establishment_id)
+                clause = " AND id_estabelecimento=?"
+                values.append(establishment_id)
+            rows = tx.all("SELECT * FROM clara_inputs_operacionais WHERE user_id=? AND status=?" + clause +
+                          " ORDER BY criado_em DESC LIMIT 100", tuple(values))
             result = []
             for row in rows:
                 establishment = self._establishment(tx, actor, row["id_estabelecimento"])
@@ -138,7 +158,7 @@ class OperationalInputs:
         with self.store.transaction() as tx:
             row, establishment = self._draft(tx, actor, draft_id, lock=True)
             proposed = decode(row["payload_proposto"])
-            confirmed = payload or proposed
+            confirmed = proposed if payload is None else payload
             operation_hash = _hash({"rascunho": draft_id, "payload": confirmed})
             if row["status"] == "confirmado" and row["operacao_chave"] == operation_key:
                 if row["operacao_hash"] != operation_hash:
@@ -169,6 +189,8 @@ class OperationalInputs:
     def _validated(self, kind, payload):
         if not isinstance(payload, dict):
             fail(422, "campos_invalidos", "Conteúdo operacional inválido.")
+        if kind not in {"vacinacao", "medicamento", "internacao"}:
+            fail(422, "campos_invalidos", "Tipo de registro inválido.")
         expected = {
             "vacinacao": {"nome_vacina", "qtd_doses", "tipo_movimentacao"},
             "medicamento": {"nome_medicamento", "concentracao", "forma_farmaceutica", "tipo_embalagem",

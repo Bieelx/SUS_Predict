@@ -25,10 +25,15 @@ const query = values => {
 };
 
 export const operationalInputsClient = {
+  obterRegistros: (id, { signal } = {}) =>
+    request(`/estabelecimentos/${encodeURIComponent(id)}/registros`, { signal }),
+  criarRascunho: (id, texto, chave) => request('/rascunhos', {
+    method: 'POST', body: { id_estabelecimento: id, texto, chave_idempotencia: chave },
+  }),
   listarEstabelecimentos: ({ busca = '', limite = 100, signal } = {}) =>
     request(`/estabelecimentos${query({ busca, limite })}`, { signal }),
-  listarRascunhos: ({ status = 'rascunho', signal } = {}) =>
-    request(`/rascunhos${query({ status })}`, { signal }),
+  listarRascunhos: ({ status = 'rascunho', id_estabelecimento, signal } = {}) =>
+    request(`/rascunhos${query({ status, id_estabelecimento })}`, { signal }),
   confirmar: (id, versao, chave, payload) => request(`/rascunhos/${encodeURIComponent(id)}/confirmar`, {
     method: 'POST', body: { versao_esperada: versao, chave_idempotencia: chave, ...(payload ? { payload } : {}) },
   }),

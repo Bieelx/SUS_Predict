@@ -120,3 +120,5 @@ evidencias
 # estado dos hooks do plugin ruflo (regravado a cada comando)
 .claude-flow/
 api/.claude-flow/
+
+!frontend/tests/estoques-leitos.spec.js

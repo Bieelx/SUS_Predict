@@ -30,6 +30,11 @@ def establishments(busca: str = Query(default="", max_length=100), limite: int =
     return svc.establishments(usuario, busca, limite)
 
 
+@router.get("/estabelecimentos/{estabelecimento_id}/registros")
+def overview(estabelecimento_id: str, usuario=Depends(actor), svc=Depends(service)):
+    return svc.overview(usuario, estabelecimento_id)
+
+
 @router.post("/rascunhos", status_code=201)
 def create(req: RascunhoOperacionalRequest, usuario=Depends(actor), svc=Depends(service)):
     return svc.create_draft(usuario, req.id_estabelecimento, req.texto, req.chave_idempotencia)
@@ -37,8 +42,8 @@ def create(req: RascunhoOperacionalRequest, usuario=Depends(actor), svc=Depends(
 
 @router.get("/rascunhos")
 def listing(status: Literal["rascunho", "confirmado", "rejeitado"] = "rascunho",
-            usuario=Depends(actor), svc=Depends(service)):
-    return svc.list(usuario, status)
+            id_estabelecimento: str | None = None, usuario=Depends(actor), svc=Depends(service)):
+    return svc.list(usuario, status, id_estabelecimento)
 
 
 @router.get("/rascunhos/{rascunho_id}")

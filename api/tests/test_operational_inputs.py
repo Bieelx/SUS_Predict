@@ -169,3 +169,54 @@ def test_modo_explicito_da_clara_emite_rascunho_sem_confirmar(svc, monkeypatch, 
     assert "Nenhum" not in response.text
     with svc.store.transaction() as tx:
         assert tx.one("SELECT count(*) total FROM vacinacao_usuario")["total"] == 0
+
+
+def test_overview_le_saldo_e_historico_original_e_isola_municipio(svc):
+    # Registros feitos fora da Clara também pertencem ao histórico da unidade.
+    with svc.store.transaction() as tx:
+        tx.execute("INSERT INTO vacinacao_usuario(user_id,nome_vacina,qtd_doses,tipo_movimentacao,id_estabelecimento,data_atualizacao) VALUES (?,?,?,?,?,?)",
+                   (ACTOR, "Influenza", 800, "entrada", ESTABLISHMENT, "2026-09-12T08:00:00Z"))
+        tx.execute("INSERT INTO vacinacao_usuario(user_id,nome_vacina,qtd_doses,tipo_movimentacao,id_estabelecimento,data_atualizacao) VALUES (?,?,?,?,?,?)",
+                   (ACTOR, "Influenza", 120, "saida", ESTABLISHMENT, "2026-09-12T09:00:00Z"))
+    result = svc.overview(ACTOR, ESTABLISHMENT)
+    assert result["vacinacao"]["saldo"][0]["qtd_doses"] == 680
+    assert len(result["vacinacao"]["historico"]) == 2
+    assert result["vacinacao"]["historico"][0]["tipo_movimentacao"] == "saida"
+    assert result["internacao"] == {"saldo": [], "historico": []}
+    assert result["medicamento"] == {"saldo": [], "historico": []}
+    with pytest.raises(HTTPException) as exc:
+        svc.overview(OTHER, ESTABLISHMENT)
+    assert exc.value.status_code == 403
+
+
+def test_confirmacao_nao_ignora_payload_vazio(svc):
+    draft = svc.create_draft(ACTOR, ESTABLISHMENT, "Entrada de 500 doses da vacina COVID-19", "empty-payload")
+    with pytest.raises(HTTPException) as exc:
+        svc.confirm(ACTOR, draft["id"], 1, "confirm-empty", {})
+    assert exc.value.status_code == 422
+    assert svc.overview(ACTOR, ESTABLISHMENT)["vacinacao"]["historico"] == []
+
+
+def test_tipo_desconhecido_retorna_validacao(svc):
+    with pytest.raises(HTTPException) as exc:
+        svc.create_draft(ACTOR, ESTABLISHMENT, "Relato", "unknown-kind", {"tipo": "outro", "payload": {}})
+    assert exc.value.status_code == 422
+
+
+def test_clara_consulta_saldo_novo_sem_inventar_consumo(svc, monkeypatch):
+    from api.core import db, local_records_store
+    from api.core.susbot_tools import criar_susbot_tools
+    monkeypatch.setenv("CLARA_REGISTROS_LOCAIS_ENABLED", "true")
+    monkeypatch.setattr(local_records_store, "configured_store", lambda: svc.store)
+    draft = svc.create_draft(ACTOR, ESTABLISHMENT, "Entrada de 500 doses da vacina COVID-19", "stock-model")
+    svc.confirm(ACTOR, draft["id"], 1, "confirm-stock-model")
+    rows = db.get_estoque("355030")
+    assert rows[0]["quantidade_atual"] == 500
+    assert rows[0]["unidade_medida"] == "doses"
+    assert rows[0]["consumo_medio_dia"] is None
+    assert db.get_estoque("350950") == []
+    tool = criar_susbot_tools("355030")["consultar_estoque"]
+    result = tool()
+    assert result["dados"][0]["id_estabelecimento"] == ESTABLISHMENT
+    assert result["dados"][0]["dias_restantes"] is None
+    assert tool(somente_risco=True)["risco_disponivel"] is False

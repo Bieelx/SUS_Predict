@@ -12,7 +12,7 @@ import {
 } from '../features/registros-locais/componentes.jsx';
 import { criarClienteDemonstracao, modoDemonstracaoAtivo } from '../features/registros-locais/fixtures.js';
 import { chaveIdempotencia, criarClienteRegistrosLocais, mensagemDoErro } from '../shared/registrosLocaisClient.js';
-import { operationalInputsClient } from '../shared/operationalInputsClient.js';
+import RegistrosEstabelecimento from '../features/registros-locais/RegistrosEstabelecimento.jsx';
 import {
   adaptarResumo, hojeOperacional, intervaloDoAtalho, normalizarCatalogo, normalizarRegistro,
   normalizarUnidade, periodoValido, podeConsolidar, podeRegistrar, registroFoiEditado,
@@ -22,7 +22,7 @@ import { getCurrentUser } from '../shared/auth.js';
 const CHAVE_UNIDADE = 'sus_predict_registros_unidade';
 const TAMANHO_PAGINA = 30;
 
-export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
+function RegistrosLegados({ rota, onNavegar, onOpenClara }) {
   const demonstracao = modoDemonstracaoAtivo();
   const api = useMemo(() => (demonstracao ? criarClienteDemonstracao() : criarClienteRegistrosLocais()), [demonstracao]);
   // Identidade do usuário decide apenas apresentação (editar rascunho próprio);
@@ -39,7 +39,6 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
   const [acao, setAcao] = useState({ salvando: false, erro: null, aviso: null });
   const [anuncio, setAnuncio] = useState('');
   const [pagina, setPagina] = useState(1);
-  const [operacional, setOperacional] = useState({ estabelecimentos: [], rascunhos: [], selecionado: '', busca: '', carregando: true, erro: null, salvando: null });
   const geracao = useRef(0);
   const mutacaoEmCurso = useRef(false);
 
@@ -100,26 +99,6 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
   }, [api, unidadeId]);
 
   useEffect(() => { setPagina(1); }, [unidadeId, periodo.inicio, periodo.fim, aba, params.indicador]);
-
-  const carregarOperacional = useCallback(async (busca = '') => {
-    setOperacional(estado => ({ ...estado, carregando: true, erro: null }));
-    try {
-      const [estabelecimentos, rascunhos] = await Promise.all([
-        operationalInputsClient.listarEstabelecimentos({ busca }),
-        operationalInputsClient.listarRascunhos(),
-      ]);
-      setOperacional(estado => {
-        const itens = estabelecimentos?.itens || [];
-        const selecionado = itens.some(item => item.id === estado.selecionado)
-          ? estado.selecionado : itens.length === 1 ? itens[0].id : '';
-        return { ...estado, estabelecimentos: itens, rascunhos: rascunhos?.itens || [], selecionado, carregando: false, erro: null };
-      });
-    } catch (erro) {
-      setOperacional(estado => ({ ...estado, carregando: false, erro: erro.message }));
-    }
-  }, []);
-
-  useEffect(() => { void carregarOperacional(''); }, [carregarOperacional]);
 
   // ─── Lista e resumo ────────────────────────────────────────────────────────
   const carregarConsulta = useCallback(async (paginaAlvo = 1, acumular = false) => {
@@ -248,86 +227,11 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
     }, { origem: 'registros-unidade', unidade: unidade.nome });
   }
 
-  function registrarInputOperacional() {
-    const estabelecimento = operacional.estabelecimentos.find(item => item.id === operacional.selecionado);
-    if (!estabelecimento) return;
-    onOpenClara?.('', {
-      intencao: 'input_operacional',
-      estabelecimento: {
-        id: estabelecimento.id, cnes: estabelecimento.cnes,
-        nome: estabelecimento.no_fantasia, municipio: estabelecimento.nome_municipio || estabelecimento.no_municipio,
-      },
-      rota_retorno: '/registros-unidade',
-    }, { origem: 'registros-unidade', unidade: estabelecimento.no_fantasia });
-  }
-
-  async function resolverInput(rascunho, acao) {
-    setOperacional(estado => ({ ...estado, salvando: rascunho.id, erro: null }));
-    try {
-      const chave = `${acao}-${rascunho.id}-v${rascunho.versao}`.slice(0, 120);
-      if (acao === 'confirmar') await operationalInputsClient.confirmar(rascunho.id, rascunho.versao, chave);
-      else await operationalInputsClient.rejeitar(rascunho.id, rascunho.versao, chave);
-      setAnuncio(acao === 'confirmar' ? 'Atualização operacional confirmada.' : 'Rascunho operacional rejeitado.');
-      await carregarOperacional(operacional.busca);
-    } catch (erro) {
-      setOperacional(estado => ({ ...estado, salvando: null, erro: erro.message }));
-    }
-  }
-
-  const painelOperacional = (
-    <section className="rl-operacional" aria-labelledby="rl-operacional-titulo">
-      <h2 id="rl-operacional-titulo" style={{ margin: '0 0 6px', fontSize: 'var(--fs-md)' }}>Atualização operacional com a Clara</h2>
-      <p style={{ margin: '0 0 14px', color: 'var(--ink-500)', fontSize: 'var(--fs-sm)' }}>
-        Registre movimentações de vacinas e medicamentos ou a situação atual dos leitos. A Clara cria um rascunho; nada muda antes da confirmação abaixo.
-      </p>
-      <div className="rl-contexto" style={{ marginBottom: 12 }}>
-        <label className="rl-campo">
-          <span className="eyebrow">Buscar estabelecimento</span>
-          <input value={operacional.busca} placeholder="Nome ou CNES" onChange={evento => setOperacional(estado => ({ ...estado, busca: evento.target.value }))}
-            onKeyDown={evento => { if (evento.key === 'Enter') void carregarOperacional(operacional.busca); }} />
-        </label>
-        <label className="rl-campo" style={{ flex: 1 }}>
-          <span className="eyebrow">Estabelecimento autorizado</span>
-          <select value={operacional.selecionado} disabled={operacional.carregando} onChange={evento => setOperacional(estado => ({ ...estado, selecionado: evento.target.value }))}>
-            <option value="">Selecione pelo nome ou CNES</option>
-            {operacional.estabelecimentos.map(item => <option key={item.id} value={item.id}>{item.no_fantasia} · CNES {item.cnes}</option>)}
-          </select>
-        </label>
-        <button type="button" className="rl-botao" onClick={() => void carregarOperacional(operacional.busca)} disabled={operacional.carregando}>Buscar</button>
-        <button type="button" className="rl-botao-primario" onClick={registrarInputOperacional} disabled={!operacional.selecionado}>Conversar com a Clara</button>
-      </div>
-      <details>
-        <summary style={{ cursor: 'pointer', fontSize: 'var(--fs-sm)', color: 'var(--ink-700)' }}>Formatos aceitos neste piloto</summary>
-        <ul style={{ color: 'var(--ink-500)', fontSize: 'var(--fs-xs)', lineHeight: 1.6 }}>
-          <li>Entrada de 500 doses da vacina COVID-19</li>
-          <li>Saída de 2 embalagens de Paracetamol; concentração 500 mg; forma comprimido; embalagem caixa; 20 unidades por embalagem</li>
-          <li>UTI: 19 leitos ocupados e 1 disponível</li>
-        </ul>
-      </details>
-      {operacional.erro && <p role="alert" className="rl-aviso rl-aviso--erro">{operacional.erro}</p>}
-      {operacional.rascunhos.length > 0 && <div style={{ marginTop: 16 }}>
-        <h3 style={{ fontSize: 'var(--fs-sm)', margin: '0 0 8px' }}>Aguardando sua confirmação</h3>
-        <ul className="rl-versoes">
-          {operacional.rascunhos.map(item => <li key={item.id}>
-            <strong>{item.tipo} · {item.estabelecimento?.no_fantasia}</strong>
-            <span style={{ display: 'block', margin: '4px 0 8px' }}>
-              {Object.entries(item.payload_proposto || {}).map(([chave, valor]) => `${chave.replaceAll('_', ' ')}: ${valor}`).join(' · ')}
-            </span>
-            <div className="rl-acoes">
-              <button type="button" className="rl-botao-primario" disabled={operacional.salvando === item.id} onClick={() => void resolverInput(item, 'confirmar')}>Confirmar atualização</button>
-              <button type="button" className="rl-botao" disabled={operacional.salvando === item.id} onClick={() => void resolverInput(item, 'rejeitar')}>Rejeitar rascunho</button>
-            </div>
-          </li>)}
-        </ul>
-      </div>}
-    </section>
-  );
-
   // ─── Render ────────────────────────────────────────────────────────────────
   const cabecalho = (
     <header className={`rl-header${registroId ? ' rl-header--revisao' : ''}`}>
       <div>
-        <h1>Registros da unidade</h1>
+        <h1>Atividades locais anteriores</h1>
         <p>{registroId ? 'Confira o relato e confirme os dados da unidade. Estes registros são separados do DataSUS.' : 'Informações declaradas pelos profissionais das unidades. Não são dados oficiais do DataSUS e não alteram indicadores ou previsões.'}</p>
       </div>
       {!registroId && unidade && podeRegistrar(unidade) && (
@@ -336,14 +240,14 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
     </header>
   );
 
-  if (unidades.carregando) return <div className="rise rl-page">{cabecalho}{painelOperacional}<SkeletonRegistros /></div>;
+  if (unidades.carregando) return <div className="rise rl-page">{cabecalho}<SkeletonRegistros /></div>;
 
   if (unidades.erro) {
     const indisponivel = unidades.tipo === 'indisponivel';
     return (
       <div className="rise rl-page">
         {cabecalho}
-        {painelOperacional}
+
         <EstadoLocal
           tom="erro"
           titulo={indisponivel ? 'Os registros da unidade ainda não estão disponíveis.' : 'Não foi possível carregar os registros.'}
@@ -360,7 +264,7 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
     return (
       <div className="rise rl-page">
         {cabecalho}
-        {painelOperacional}
+
         <EstadoLocal
           titulo="Nenhuma unidade vinculada ao seu acesso."
           descricao="As atualizações operacionais acima usam os estabelecimentos SUS do seu município. Para consultar o piloto de atividades locais, solicite um vínculo ao administrador."
@@ -482,9 +386,19 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
               </div>
             </>
           )}
-          {painelOperacional}
+
         </>
       )}
     </div>
   );
+}
+
+export default function RegistrosUnidade(props) {
+  const [legado, setLegado] = useState(false);
+  const mostrarLegado = legado || Boolean(props.rota.registroId) || Boolean(props.rota.registrosParams?.unidade) || modoDemonstracaoAtivo();
+  if (mostrarLegado) return <>
+    <button className="rl-botao" onClick={() => { setLegado(false); props.onNavegar({ page: 'registros-unidade', registroId: null, registrosParams: {} }); }}>Voltar a estoques e leitos</button>
+    <RegistrosLegados {...props} />
+  </>;
+  return <RegistrosEstabelecimento onOpenClara={props.onOpenClara} onLegado={() => setLegado(true)} />;
 }

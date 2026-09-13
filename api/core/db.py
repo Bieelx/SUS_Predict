@@ -502,7 +502,35 @@ def upsert_estoque(rows: list[dict]) -> None:
         _sync_row("estoque", row)
 
 
+def get_estoque_estabelecimentos(ibge6: str) -> list[dict]:
+    """Adapta saldos do time sem inventar consumo ou misturar apresentações."""
+    from api.core.local_records_store import configured_store
+    result = []
+    with configured_store().transaction() as tx:
+        for kind in ("vacinacao", "medicamento"):
+            rows = tx.all(f"SELECT s.*,e.cnes,e.no_fantasia,e.municipio_ibge6 "
+                          f"FROM {kind}_estabelecimento s JOIN estabelecimentos e ON e.id=s.id_estabelecimento "
+                          "WHERE e.municipio_ibge6=? AND e.atende_sus=true ORDER BY e.id,s.id", (str(ibge6)[:6],))
+            for row in rows:
+                vaccine = kind == "vacinacao"
+                name = row["nome_vacina"] if vaccine else (
+                    f"{row['nome_medicamento']} {row['concentracao']} · {row['forma_farmaceutica']} · "
+                    f"{row['tipo_embalagem']} com {row['quantidade_por_embalagem']} unidades")
+                result.append({
+                    "ibge6": row["municipio_ibge6"], "item": name,
+                    "quantidade_atual": row["qtd_doses"] if vaccine else row["qtd_embalagens"],
+                    "unidade_medida": "doses" if vaccine else "embalagens",
+                    "consumo_medio_dia": None, "atualizado_em": row["data_atualizacao"],
+                    "id_estabelecimento": row["id_estabelecimento"], "cnes": row["cnes"],
+                    "estabelecimento": row["no_fantasia"], "tabela_origem": f"{kind}_estabelecimento",
+                })
+    return result
+
+
 def get_estoque(ibge6: str, item: str | None = None) -> list[dict]:
+    if os.getenv("CLARA_REGISTROS_LOCAIS_ENABLED", "").lower() in {"1", "true"}:
+        rows = get_estoque_estabelecimentos(ibge6)
+        return [row for row in rows if row["item"] == item] if item else rows
     with _conn() as con:
         if item:
             rows = con.execute("""
