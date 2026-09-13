@@ -4,8 +4,11 @@ import json
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
+from fastapi import HTTPException
+
 from api.core.local_records_service import decode, fail
 from api.core.operational_inputs_interpreter import interpret_operational_input
+from api.core.gemini_input_interpreter import interpretar_com_gemini
 
 
 def _now():
@@ -72,8 +75,21 @@ class OperationalInputs:
                           + " AND ".join(clauses) + " ORDER BY e.no_fantasia LIMIT ?", tuple(values))
             return {"itens": rows, "origem": "estabelecimentos"}
 
-    def create_draft(self, actor, establishment_id, text, event_id):
-        interpreted = interpret_operational_input(text)
+    def create_draft(self, actor, establishment_id, text, event_id, interpreted=None):
+        if interpreted is None:
+            try:
+                interpreted = interpret_operational_input(text)
+            except HTTPException as exc:
+                # Gemini só ajuda quando o parser local não entendeu a forma de
+                # escrever. Ambiguidade, hipótese e aproximação nunca saem do servidor.
+                if exc.status_code != 422 or exc.detail.get("codigo") != "input_operacional_nao_reconhecido":
+                    raise
+                interpreted = interpretar_com_gemini(text)
+                if interpreted is None:
+                    raise
+        if not isinstance(interpreted, dict) or not isinstance(interpreted.get("tipo"), str):
+            fail(422, "campos_invalidos", "Não consegui estruturar este relato operacional.")
+        self._validated(interpreted["tipo"], interpreted.get("payload"))
         fingerprint = _hash({"estabelecimento": establishment_id, "texto": text})
         with self.store.transaction() as tx:
             establishment = self._establishment(tx, actor, establishment_id)

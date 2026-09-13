@@ -131,9 +131,7 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
             choices = units
         else:
             from api.core.operational_inputs_router import service
-            from api.core.operational_inputs_interpreter import interpret_operational_input
             svc = service()
-            interpret_operational_input(state['texto'])
             target = operational.id_estabelecimento if operational and not continuing else None
             if not target and not continuing and isinstance(context.get('estabelecimento'), dict):
                 target = context['estabelecimento'].get('id')

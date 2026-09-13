@@ -99,6 +99,33 @@ def test_rascunho_nao_altera_saldo_e_confirmacao_aciona_trigger(svc):
     assert svc.confirm(ACTOR, draft["id"], 1, "confirm-001")["replay"] is True
 
 
+def test_gemini_so_estrutura_relato_complexo_e_o_servico_ainda_valida(svc, monkeypatch):
+    from api.core import operational_inputs_service
+    monkeypatch.setattr(operational_inputs_service, "interpretar_com_gemini", lambda _: {
+        "tipo": "vacinacao",
+        "payload": {"nome_vacina": "dengue", "qtd_doses": 25, "tipo_movimentacao": "entrada"},
+    })
+
+    draft = svc.create_draft(ACTOR, ESTABLISHMENT, "Chegaram 25 doses para dengue na unidade", "gemini-001")
+
+    assert draft["status"] == "rascunho"
+    assert draft["texto_original"] == "Chegaram 25 doses para dengue na unidade"
+    assert draft["payload_proposto"]["qtd_doses"] == 25
+    with svc.store.transaction() as tx:
+        assert tx.one("SELECT count(*) total FROM vacinacao_usuario")["total"] == 0
+
+
+def test_gemini_com_payload_invalido_nao_cria_rascunho(svc, monkeypatch):
+    from api.core import operational_inputs_service
+    monkeypatch.setattr(operational_inputs_service, "interpretar_com_gemini", lambda _: {
+        "tipo": "vacinacao", "payload": {"qtd_doses": 25},
+    })
+
+    with pytest.raises(HTTPException) as exc:
+        svc.create_draft(ACTOR, ESTABLISHMENT, "Chegaram doses", "gemini-invalid-001")
+    assert exc.value.detail["codigo"] == "campos_invalidos"
+
+
 def test_leitos_substituem_e_municipio_limita_estabelecimento(svc):
     for occupied, available in ((18, 2), (19, 1)):
         draft = svc.create_draft(ACTOR, ESTABLISHMENT,
