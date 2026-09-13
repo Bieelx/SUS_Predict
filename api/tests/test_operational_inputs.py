@@ -47,6 +47,16 @@ def svc(tmp_path):
           CREATE TABLE internacao_estabelecimento(id INTEGER PRIMARY KEY AUTOINCREMENT,id_estabelecimento TEXT,
             tipo_leito TEXT,qtd_leitos_ocupados INTEGER,qtd_leitos_disponiveis INTEGER,data_atualizacao TEXT,
             UNIQUE(id_estabelecimento,tipo_leito));
+          CREATE TABLE internacao_dengue_usuario(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT,id_estabelecimento TEXT,
+            qtd_internacoes INTEGER,data_atualizacao TEXT);
+          CREATE TABLE internacao_dengue_estabelecimento(id INTEGER PRIMARY KEY AUTOINCREMENT,id_estabelecimento TEXT UNIQUE,
+            qtd_internacoes INTEGER,data_atualizacao TEXT);
+          CREATE TRIGGER internacao_dengue_consolidar AFTER INSERT ON internacao_dengue_usuario BEGIN
+            INSERT INTO internacao_dengue_estabelecimento(id_estabelecimento,qtd_internacoes,data_atualizacao)
+            VALUES(NEW.id_estabelecimento,NEW.qtd_internacoes,NEW.data_atualizacao)
+            ON CONFLICT(id_estabelecimento) DO UPDATE SET
+              qtd_internacoes=qtd_internacoes+excluded.qtd_internacoes,data_atualizacao=excluded.data_atualizacao;
+          END;
           CREATE TRIGGER vacinacao_consolidar AFTER INSERT ON vacinacao_usuario BEGIN
             INSERT INTO vacinacao_estabelecimento(id_estabelecimento,nome_vacina,qtd_doses,data_atualizacao)
             VALUES(NEW.id_estabelecimento,NEW.nome_vacina,
@@ -184,6 +194,7 @@ def test_overview_le_saldo_e_historico_original_e_isola_municipio(svc):
     assert result["vacinacao"]["historico"][0]["tipo_movimentacao"] == "saida"
     assert result["internacao"] == {"saldo": [], "historico": []}
     assert result["medicamento"] == {"saldo": [], "historico": []}
+    assert result["internacao_dengue"] == {"saldo": [], "historico": []}
     with pytest.raises(HTTPException) as exc:
         svc.overview(OTHER, ESTABLISHMENT)
     assert exc.value.status_code == 403
@@ -220,3 +231,29 @@ def test_clara_consulta_saldo_novo_sem_inventar_consumo(svc, monkeypatch):
     assert result["dados"][0]["id_estabelecimento"] == ESTABLISHMENT
     assert result["dados"][0]["dias_restantes"] is None
     assert tool(somente_risco=True)["risco_disponivel"] is False
+
+
+def test_audio_com_varios_itens_vira_rascunhos_nas_tabelas_do_time(svc):
+    from api.core.operational_inputs_interpreter import interpret_operational_items
+    text = ("Claro, hoje eu apliquei 30 doses da vacina da Dengue, também precisa internar 20 pessoas por conta "
+            "da Dengue também e tivemos uma entrada de 50 doses de influenza.")
+    items = interpret_operational_items(text)
+    assert [i["tipo"] for i in items] == ["vacinacao", "internacao_dengue", "vacinacao"]
+    assert items[0]["payload"] == {"nome_vacina": "dengue", "qtd_doses": 30, "tipo_movimentacao": "saida"}
+    assert items[1]["payload"] == {"qtd_internacoes": 20}
+    assert items[2]["payload"]["tipo_movimentacao"] == "entrada"
+    assert interpret_operational_items("internamos 3 pessoas") == []
+
+
+def test_saida_maior_que_saldo_e_recusada_e_internacao_dengue_acumula(svc):
+    applied = svc.create_draft(ACTOR, ESTABLISHMENT, "aplicamos 30 doses de dengue", "apply-1",
+                               {"tipo": "vacinacao", "payload": {"nome_vacina": "dengue", "qtd_doses": 30, "tipo_movimentacao": "saida"}})
+    with pytest.raises(HTTPException) as exc:
+        svc.confirm(ACTOR, applied["id"], 1, "confirm-apply-1")
+    assert exc.value.detail["codigo"] == "saldo_insuficiente"
+    for n in (20, 5):
+        draft = svc.create_draft(ACTOR, ESTABLISHMENT, f"internamos {n} por dengue", f"dengue-{n}",
+                                 {"tipo": "internacao_dengue", "payload": {"qtd_internacoes": n}})
+        assert svc.confirm(ACTOR, draft["id"], 1, f"confirm-dengue-{n}")["tabela_destino"] == "internacao_dengue_usuario"
+    with svc.store.transaction() as tx:
+        assert tx.one("SELECT qtd_internacoes FROM internacao_dengue_estabelecimento")["qtd_internacoes"] == 25

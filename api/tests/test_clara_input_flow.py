@@ -21,8 +21,10 @@ def flow(svc, monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize('text,kind', [
-    ('Clara, hoje apliquei 20 doses da vacina da dengue', 'registro_local'),
-    ('Hoje foram aplicadas 20 doses contra dengue', 'registro_local'),
+    ('Clara, hoje apliquei 20 doses da vacina da dengue', 'input_operacional'),
+    ('Hoje foram aplicadas 20 doses contra dengue', 'input_operacional'),
+    ('Precisamos internar 2 pessoas por dengue', 'input_operacional'),
+    ('Tivemos 3 encaminhamentos de dengue', 'registro_local'),
     ('Atendi hoje oito pessoas com suspeita de dengue', 'registro_local'),
     ('Recebemos 500 doses da vacina COVID-19', 'input_operacional'),
     ('UTI: 19 leitos ocupados e 1 disponível', 'input_operacional'),
@@ -39,7 +41,7 @@ def test_classifica_acontecimento_sem_confundir_consulta(text, kind):
 @pytest.mark.parametrize('channel', ['web', 'telegram', 'whatsapp'])
 def test_mesmo_relato_cria_rascunho_nos_tres_canais(flow, channel):
     svc, conversation = flow
-    text = 'Clara, hoje apliquei 20 doses da vacina da dengue'
+    text = 'Clara, hoje atendi 20 pessoas com suspeita de dengue'
     result = process_input('writer', text, conversation, '355030', channel=channel, event_id='evt-001')
     assert result['evento'] == 'rascunho_local_pronto'
     record = result['payload']['registros'][0]
@@ -57,7 +59,7 @@ def test_escolha_de_unidade_continua_relato_e_revalida_acesso(flow, monkeypatch)
     svc, conversation = flow
     original = svc.units
     monkeypatch.setattr(svc, 'units', lambda actor: {'itens': original(actor)['itens'] + [{'id': 'other', 'nome': 'UBS outra', 'ibge6': '355030'}]})
-    text = 'Hoje apliquei 20 doses contra dengue'
+    text = 'Hoje atendi 20 pessoas com suspeita de dengue'
     result = process_input('writer', text, conversation, '355030')
     assert result['artefato']['pendente']
     persist_input(result, conversation, 'web', text)
@@ -72,8 +74,8 @@ def test_escolha_de_unidade_continua_relato_e_revalida_acesso(flow, monkeypatch)
 def test_pergunta_e_cancelamento_nao_criam_registro(flow, monkeypatch):
     svc, conversation = flow
     monkeypatch.setattr(svc, 'units', lambda actor: {'itens': [{'id': 'a', 'nome': 'A', 'ibge6': '355030'}, {'id': 'b', 'nome': 'B', 'ibge6': '355030'}]})
-    result = process_input('writer', 'Hoje apliquei 20 doses contra dengue', conversation, '355030')
-    persist_input(result, conversation, 'web', 'Hoje apliquei 20 doses contra dengue')
+    result = process_input('writer', 'Hoje atendi 20 pessoas com suspeita de dengue', conversation, '355030')
+    persist_input(result, conversation, 'web', 'Hoje atendi 20 pessoas com suspeita de dengue')
     assert process_input('writer', 'Quantas doses temos?', conversation, '355030') is None
     canceled = process_input('writer', 'cancelar', conversation, '355030')
     assert canceled['artefato']['pendente'] is None
@@ -100,7 +102,7 @@ def test_canal_desvia_antes_do_agente(flow, monkeypatch, channel):
     monkeypatch.setattr(db, 'atualizar_conversa_canal', lambda *args: None)
     monkeypatch.setattr(channel_router, 'criar_susbot_agente', lambda *a, **k: pytest.fail('Relato caiu no agente de consultas'))
     connection = {'id': 'c1', 'usuario': 'writer', 'ibge6': '355030', 'provedor': channel, 'conversa_atual_id': conversation}
-    answer, formatted = channel_router._processar_pergunta_canal(connection, 'Hoje apliquei 20 doses contra dengue')
+    answer, formatted = channel_router._processar_pergunta_canal(connection, 'Hoje atendi 20 pessoas com suspeita de dengue')
     assert 'rascunhos' in answer
     assert '/registros-unidade/' in formatted
 
@@ -113,7 +115,7 @@ def test_web_sem_contexto_de_unidade_reconhece_input(flow, monkeypatch):
     app.dependency_overrides[susbot_router.require_user] = lambda: {'id': 'writer'}
     app.dependency_overrides[susbot_router.verificar_acesso_susbot] = lambda: 'test'
     with TestClient(app) as client:
-        result = client.post('/api/susbot/perguntar', json={'pergunta': 'Hoje apliquei 20 doses contra dengue', 'ibge6': '355030'})
+        result = client.post('/api/susbot/perguntar', json={'pergunta': 'Hoje atendi 20 pessoas com suspeita de dengue', 'ibge6': '355030'})
     assert result.status_code == 200
     assert 'event: rascunho_local_pronto' in result.text
     assert result.headers['x-conversa-id']
@@ -155,7 +157,7 @@ def test_inatividade_preserva_a_conversa_selecionada(flow, monkeypatch):
     monkeypatch.setattr(channel_router, 'criar_susbot_agente', lambda *a, **k: pytest.fail('Relato caiu no agente'))
     sent = []
     monkeypatch.setattr(channel_router, '_enviar', lambda *args: sent.append(args[-1]))
-    channel_router._processar_mensagem_canal('telegram', '42', '42', 'teste', 'Hoje apliquei 20 doses contra dengue', None, None, evento_id='tg-expired-1')
+    channel_router._processar_mensagem_canal('telegram', '42', '42', 'teste', 'Hoje atendi 20 pessoas com suspeita de dengue', None, None, evento_id='tg-expired-1')
     assert 'rascunhos' in sent[0]
     assert len(db.listar_mensagens(old_conversation)) == 1
 
@@ -163,7 +165,7 @@ def test_inatividade_preserva_a_conversa_selecionada(flow, monkeypatch):
 @pytest.mark.parametrize('channel', ['web', 'telegram', 'whatsapp'])
 def test_quantidade_exata_completa_relato_aproximado(flow, channel):
     svc, conversation = flow
-    original = 'Claro, hoje eu apliquei cerca de 20 doses da vacina da Dengue.'
+    original = 'Claro, hoje eu atendi cerca de 20 pessoas com suspeita de Dengue.'
     result = process_input('writer', original, conversation, '355030', channel=channel, input_type='audio')
     assert result['evento'] is None
     assert result['artefato']['pendente']['etapa'] == 'quantidade'
@@ -171,22 +173,22 @@ def test_quantidade_exata_completa_relato_aproximado(flow, channel):
     with svc.store.transaction() as tx:
         assert tx.one('SELECT count(*) total FROM local_registros')['total'] == 0
     persist_input(result, conversation, channel, original)
-    result = process_input('writer', 'foram 25 doses', conversation, '355030', channel=channel)
+    result = process_input('writer', 'foram 25 pessoas', conversation, '355030', channel=channel)
     assert result['evento'] == 'rascunho_local_pronto'
     record = result['payload']['registros'][0]
     assert int(record['atual']['valor']) == 25
-    assert record['atual']['dimensoes']['vacina'] == 'dengue'
+    assert record['atual']['dimensoes']['doenca'] == 'dengue'
     assert record['atual']['periodo_inicio'] == day
     detail = svc.detail('writer', record['id'])
     assert detail['confirmada_vigente'] is None
     assert original in detail['relato']['transcricao']
-    assert 'foram 25 doses' in detail['relato']['transcricao']
+    assert 'foram 25 pessoas' in detail['relato']['transcricao']
 
 
 @pytest.mark.parametrize('answer', ['cerca de 25', '25 ou 30', '25,5 doses', 'não sei', 'vinte e cinco'])
 def test_esclarecimento_ainda_ambiguo_nao_grava(flow, answer):
     svc, conversation = flow
-    text = 'Hoje apliquei cerca de 20 doses contra dengue'
+    text = 'Hoje atendi cerca de 20 pessoas com suspeita de dengue'
     result = process_input('writer', text, conversation, '355030')
     persist_input(result, conversation, 'web', text)
     result = process_input('writer', answer, conversation, '355030')
@@ -198,36 +200,36 @@ def test_esclarecimento_ainda_ambiguo_nao_grava(flow, answer):
 
 def test_numero_isolado_sem_relato_nao_vira_registro(flow):
     _, conversation = flow
-    assert process_input('writer', 'foram 25 doses', conversation, '355030') is None
+    assert process_input('writer', 'foram 25 pessoas', conversation, '355030') is None
 
 
 def test_quantidade_depois_unidade_preserva_contexto(flow, monkeypatch):
     svc, conversation = flow
     units = svc.units('writer')['itens']
     monkeypatch.setattr(svc, 'units', lambda actor: {'itens': units + [{'id': 'other', 'nome': 'Outra UBS', 'ibge6': '355030'}]})
-    text = 'Hoje apliquei cerca de 20 doses contra dengue'
+    text = 'Hoje atendi cerca de 20 pessoas com suspeita de dengue'
     first = process_input('writer', text, conversation, '355030')
     # Simula esclarecimento no dia seguinte, mantendo o dia do relato.
     first['artefato']['pendente']['dia'] = '2026-09-12'
     persist_input(first, conversation, 'whatsapp', text)
-    second = process_input('writer', 'foram 25 doses', conversation, '355030')
+    second = process_input('writer', 'foram 25 pessoas', conversation, '355030')
     assert second['evento'] is None
     assert 'qual unidade' in second['resposta']
-    persist_input(second, conversation, 'whatsapp', 'foram 25 doses')
+    persist_input(second, conversation, 'whatsapp', 'foram 25 pessoas')
     final = process_input('writer', 'UBS teste', conversation, '355030')
     version = final['payload']['registros'][0]['atual']
     assert int(version['valor']) == 25
     assert version['periodo_inicio'] == '2026-09-12'
-    assert version['dimensoes']['vacina'] == 'dengue'
+    assert version['dimensoes']['doenca'] == 'dengue'
 
 
 def test_correcao_de_quantidade_nao_contorna_acesso_revogado(flow, monkeypatch):
     svc, conversation = flow
-    text = 'Hoje apliquei cerca de 20 doses contra dengue'
+    text = 'Hoje atendi cerca de 20 pessoas com suspeita de dengue'
     first = process_input('writer', text, conversation, '355030')
     persist_input(first, conversation, 'web', text)
     monkeypatch.setattr(svc, 'units', lambda actor: {'itens': []})
-    result = process_input('writer', 'foram 25 doses', conversation, '355030')
+    result = process_input('writer', 'foram 25 pessoas', conversation, '355030')
     assert result['evento'] is None
     with svc.store.transaction() as tx:
         assert tx.one('SELECT count(*) total FROM local_registros')['total'] == 0
@@ -235,32 +237,31 @@ def test_correcao_de_quantidade_nao_contorna_acesso_revogado(flow, monkeypatch):
 
 def test_pendencia_sobrevive_a_consulta_intermediaria(flow):
     svc, conversation = flow
-    first = process_input('writer', 'Hoje apliquei cerca de 20 doses contra dengue', conversation, '355030')
-    persist_input(first, conversation, 'web', 'Hoje apliquei cerca de 20 doses contra dengue')
+    first = process_input('writer', 'Hoje atendi cerca de 20 pessoas com suspeita de dengue', conversation, '355030')
+    persist_input(first, conversation, 'web', 'Hoje atendi cerca de 20 pessoas com suspeita de dengue')
     assert process_input('writer', 'Qual o estoque de dipirona?', conversation, '355030') is None
     db.adicionar_mensagem(conversation, 'telegram', 'Qual o estoque de dipirona?', 'Estoque indisponível.', '/insumos')
-    final = process_input('writer', 'foram 25 doses', conversation, '355030', channel='whatsapp')
+    final = process_input('writer', 'foram 25 pessoas', conversation, '355030', channel='whatsapp')
     assert final['evento'] == 'rascunho_local_pronto'
     assert int(final['payload']['registros'][0]['atual']['valor']) == 25
 
 
 def test_relato_multiplo_separa_itens():
-    text = 'Hoje aplicamos vinte doses de vacina pra dengue, tivemos três encaminhamentos pra dengue e tivemos uma internação de dengue'
+    text = 'Hoje atendemos 8 pessoas com suspeita de dengue e tivemos três encaminhamentos pra dengue'
     items = interpret(text, date(2026, 9, 13))
     assert [(i['indicador'], i['valor']) for i in items] == [
-        ('doses_vacina_aplicadas', '20'), ('encaminhamentos_dengue', '3'), ('internacoes_dengue', '1')]
+        ('atendimentos_suspeita_dengue', '8'), ('encaminhamentos_dengue', '3')]
     assert all(i['periodo_inicio'] == '2026-09-13' for i in items)
     assert input_kind(text) == 'registro_local'
 
 
 @pytest.mark.parametrize('channel', ['telegram', 'whatsapp'])
 def test_confirmo_no_chat_grava_todos_os_itens(flow, monkeypatch, channel):
-    svc, conversation = flow
-    monkeypatch.setattr(svc, 'units', lambda actor: {'itens': [{'id': UNIT, 'nome': 'UBS teste', 'ibge6': '355030'}]})
+    svc, _ = flow
     conversation = db.criar_conversa('reviewer', 'Relato')['id']
-    text = 'Hoje aplicamos 20 doses contra dengue, tivemos 3 encaminhamentos de dengue e tivemos 1 internação de dengue'
+    text = 'Hoje atendemos 8 pessoas com suspeita de dengue e tivemos 3 encaminhamentos de dengue'
     draft = process_input('reviewer', text, conversation, '355030', channel=channel, input_type='audio')
-    assert len(draft['payload']['registros']) == 3
+    assert len(draft['payload']['registros']) == 2
     assert 'CONFIRMO' in draft['resposta']
     persist_input(draft, conversation, channel, text)
     done = process_input('reviewer', 'Confirmo.', conversation, '355030', channel=channel)
@@ -272,7 +273,7 @@ def test_confirmo_no_chat_grava_todos_os_itens(flow, monkeypatch, channel):
 
 def test_registrador_nao_contorna_papel_pelo_chat(flow):
     svc, conversation = flow
-    text = 'Hoje apliquei 20 doses contra dengue'
+    text = 'Hoje atendi 20 pessoas com suspeita de dengue'
     draft = process_input('writer', text, conversation, '355030', channel='whatsapp')
     persist_input(draft, conversation, 'whatsapp', text)
     done = process_input('writer', 'confirmo', conversation, '355030', channel='whatsapp')
@@ -281,11 +282,28 @@ def test_registrador_nao_contorna_papel_pelo_chat(flow):
     assert svc.detail('writer', draft['payload']['registros'][0]['id'])['confirmada_vigente'] is None
 
 
-def test_audio_misto_avisa_o_que_ficou_de_fora():
-    from api.core.local_records_interpreter import ignored_parts
+def test_audio_misto_vai_para_tabelas_operacionais_e_confirma(operational_svc, monkeypatch, tmp_path):
+    from api.core import operational_inputs_router
+    monkeypatch.setattr(db, '_SQLITE_PATH', tmp_path / 'chat.db')
+    monkeypatch.setattr(db, '_clara_remoto', lambda: False)
+    db.init_db()
+    monkeypatch.setattr(operational_inputs_router, 'service', lambda: operational_svc)
+    with operational_svc.store.transaction() as tx:
+        tx.execute("INSERT INTO vacinacao_usuario(user_id,nome_vacina,qtd_doses,tipo_movimentacao,id_estabelecimento,data_atualizacao) "
+                   "VALUES (?,?,?,?,?,?)", (ACTOR, 'Dengue', 100, 'entrada', ESTABLISHMENT, '2026-09-01'))
+    conversation = db.criar_conversa(ACTOR, 'Audio')['id']
     text = ('Claro, hoje eu apliquei 30 doses da vacina da Dengue, também precisa internar 20 pessoas por conta '
             'da Dengue também e tivemos uma entrada de 10 embalagens de pirona.')
-    items = interpret(text, date(2026, 9, 13))
-    assert [(i['indicador'], i['valor']) for i in items] == [('doses_vacina_aplicadas', '30'), ('internacoes_dengue', '20')]
-    notes = ignored_parts(text, items)
-    assert len(notes) == 1 and 'estoque' in notes[0]
+    ask = process_input(ACTOR, text, conversation, '355030', channel='whatsapp', input_type='audio')
+    assert 'qual unidade' in ask['resposta']
+    persist_input(ask, conversation, 'whatsapp', text)
+    draft = process_input(ACTOR, '2027275', conversation, '355030', channel='whatsapp')
+    assert 'Saída de 30 doses de dengue' in draft['resposta']
+    assert '20 internação(ões) por dengue' in draft['resposta']
+    assert 'medicamento' in draft['resposta'] and 'CONFIRMO' in draft['resposta']
+    persist_input(draft, conversation, 'whatsapp', '2027275')
+    done = process_input(ACTOR, 'confirmo', conversation, '355030', channel='whatsapp')
+    assert done['evento'] == 'registro_confirmado', done['resposta']
+    with operational_svc.store.transaction() as tx:
+        assert tx.one("SELECT qtd_doses FROM vacinacao_estabelecimento")['qtd_doses'] == 70
+        assert tx.one("SELECT qtd_internacoes FROM internacao_dengue_estabelecimento")['qtd_internacoes'] == 20

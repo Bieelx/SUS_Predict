@@ -80,7 +80,7 @@ class OperationalInputs:
         with self.store.transaction() as tx:
             establishment = self._establishment(tx, actor, establishment_id)
             result = {"estabelecimento": establishment, "origem": "estabelecimentos"}
-            for kind in ("vacinacao", "medicamento", "internacao"):
+            for kind in ("vacinacao", "medicamento", "internacao", "internacao_dengue"):
                 # Nomes vêm exclusivamente desta lista fixa, nunca da requisição.
                 result[kind] = {
                     "saldo": tx.all(f"SELECT * FROM {kind}_estabelecimento WHERE id_estabelecimento=? ORDER BY id",
@@ -189,13 +189,14 @@ class OperationalInputs:
     def _validated(self, kind, payload):
         if not isinstance(payload, dict):
             fail(422, "campos_invalidos", "Conteúdo operacional inválido.")
-        if kind not in {"vacinacao", "medicamento", "internacao"}:
+        if kind not in {"vacinacao", "medicamento", "internacao", "internacao_dengue"}:
             fail(422, "campos_invalidos", "Tipo de registro inválido.")
         expected = {
             "vacinacao": {"nome_vacina", "qtd_doses", "tipo_movimentacao"},
             "medicamento": {"nome_medicamento", "concentracao", "forma_farmaceutica", "tipo_embalagem",
                             "quantidade_por_embalagem", "qtd_embalagens", "tipo_movimentacao"},
             "internacao": {"tipo_leito", "qtd_leitos_ocupados", "qtd_leitos_disponiveis"},
+            "internacao_dengue": {"qtd_internacoes"},
         }[kind]
         if set(payload) != expected:
             fail(422, "campos_invalidos", "Revise todos os campos do input operacional.")
@@ -205,7 +206,7 @@ class OperationalInputs:
                     fail(422, "valor_invalido", "Quantidades operacionais inválidas.")
             elif not isinstance(value, str) or not value.strip() or len(value) > 200:
                 fail(422, "campos_invalidos", "Textos operacionais inválidos.")
-        if kind != "internacao" and payload["tipo_movimentacao"] not in {"entrada", "saida"}:
+        if kind in {"vacinacao", "medicamento"} and payload["tipo_movimentacao"] not in {"entrada", "saida"}:
             fail(422, "campos_invalidos", "Movimentação deve ser entrada ou saída.")
         return payload
 
@@ -231,15 +232,39 @@ class OperationalInputs:
                     result[field] = current[field]
             if not current:
                 result["nome_medicamento"] = result["nome_medicamento"].title()
-        else:
+        elif kind == "internacao":
             current = tx.one("SELECT tipo_leito FROM internacao_estabelecimento WHERE id_estabelecimento=? "
                              "AND lower(tipo_leito)=lower(?)", (establishment, payload["tipo_leito"]))
             result["tipo_leito"] = current["tipo_leito"] if current else (
                 "UTI" if payload["tipo_leito"].casefold() == "uti" else payload["tipo_leito"].title())
         return result
 
+    def _check_balance(self, tx, establishment, kind, payload):
+        """Saída maior que o saldo vira mensagem clara, não erro de CHECK do banco."""
+        if payload.get("tipo_movimentacao") != "saida":
+            return
+        if kind == "vacinacao":
+            row = tx.one("SELECT qtd_doses AS saldo FROM vacinacao_estabelecimento WHERE id_estabelecimento=? AND nome_vacina=?",
+                         (establishment, payload["nome_vacina"]))
+            wanted, unit = payload["qtd_doses"], "doses"
+        else:
+            row = tx.one("SELECT qtd_embalagens AS saldo FROM medicamento_estabelecimento WHERE id_estabelecimento=? "
+                         "AND nome_medicamento=? AND concentracao=? AND forma_farmaceutica=? AND tipo_embalagem=? "
+                         "AND quantidade_por_embalagem=?", (establishment, payload["nome_medicamento"], payload["concentracao"],
+                         payload["forma_farmaceutica"], payload["tipo_embalagem"], payload["quantidade_por_embalagem"]))
+            wanted, unit = payload["qtd_embalagens"], "embalagens"
+        balance = row["saldo"] if row else 0
+        if wanted > balance:
+            fail(409, "saldo_insuficiente", f"Saldo insuficiente: há {balance} {unit} registradas e a saída é de {wanted}.")
+
     def _insert_target(self, tx, actor, establishment, kind, payload):
         timestamp = _now()
+        if kind in {"vacinacao", "medicamento"}:
+            self._check_balance(tx, establishment, kind, payload)
+        if kind == "internacao_dengue":
+            row = tx.one("INSERT INTO internacao_dengue_usuario (user_id,id_estabelecimento,qtd_internacoes,data_atualizacao) "
+                         "VALUES (?,?,?,?) RETURNING id", (actor, establishment, payload["qtd_internacoes"], timestamp))
+            return "internacao_dengue_usuario", row["id"]
         if kind == "vacinacao":
             row = tx.one("INSERT INTO vacinacao_usuario (user_id,nome_vacina,qtd_doses,tipo_movimentacao,id_estabelecimento,data_atualizacao) "
                          "VALUES (?,?,?,?,?,?) RETURNING id", (actor, payload["nome_vacina"], payload["qtd_doses"],

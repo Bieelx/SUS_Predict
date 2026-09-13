@@ -8,7 +8,7 @@ import re
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from api.core import db, conversation_hub as hub
-from api.core.local_records_interpreter import fold, interpret, ignored_parts, report_summary, NUMBER, NUMBERS
+from api.core.local_records_interpreter import fold, interpret, report_summary, NUMBER, NUMBERS
 
 
 def input_kind(text):
@@ -16,9 +16,14 @@ def input_kind(text):
     # Perguntar sobre uma ação não declara que ela aconteceu.
     if '?' in text or re.search(r'\b(como|quanto|quantos|quantas|posso|devo|deveria|preciso|vou|vamos|amanha|se eu|se nos)\b', text):
         return None
-    if re.search(r'\b(apliquei|aplicamos|atendi|atendemos|encaminhei|encaminhamos|internei|internamos|foram aplicad[ao]s?|foram atendid[ao]s?|foram encaminhad[ao]s?|foram internad[ao]s?)\b', text):
+    # Aplicação de doses e internações vão para as tabelas operacionais do time de dados.
+    if re.search(r'\b(apliquei|aplicamos|aplicou|aplicaram|foram aplicad[ao]s?)\b', text) and re.search(r'\bdoses?\b', text):
+        return 'input_operacional'
+    if re.search(r'\b(internamos|internei|internaram|internar|foram internad[ao]s?|internac(ao|oes))\b', text):
+        return 'input_operacional'
+    if re.search(r'\b(atendi|atendemos|encaminhei|encaminhamos|foram atendid[ao]s?|foram encaminhad[ao]s?)\b', text):
         return 'registro_local'
-    if re.search(r'\b(tivemos|tive|teve|houve|registramos)\s+' + NUMBER + r'\s+(encaminhamentos?|internac(ao|oes)|atendimentos?)\b', text):
+    if re.search(r'\b(tivemos|tive|teve|houve|registramos)\s+' + NUMBER + r'\s+(encaminhamentos?|atendimentos?)\b', text):
         return 'registro_local'
     if re.search(r'\b(entrada|saida|recebi|recebemos|chegaram|retirei|retiramos|utilizei|utilizamos)\b', text) and re.search(r'\b(doses?|vacinas?|medicamentos?|embalagens?|estoque)\b', text):
         return 'input_operacional'
@@ -109,6 +114,31 @@ def _discard(actor, pending):
     return _result(text)
 
 
+def ignored_parts(text, found):
+    """Avisa sobre trechos que parecem relato mas não viraram item, em vez de sumir com eles."""
+    source = fold(text)
+    notes = []
+    if re.search(r"\b(embalagens?|medicamentos?|comprimidos?|frascos?|ampolas?)\b", source) and 'medicamento' not in found:
+        notes.append('medicamento — envie separado no formato: “Entrada de 10 embalagens de dipirona; concentração 500 mg; '
+                     'forma comprimido; embalagem caixa; 20 unidades por embalagem”')
+    if re.search(r"\bdoses?\b", source) and 'vacinacao' not in found:
+        notes.append('vacina — informe quantidade e vacina, ex.: “aplicamos 30 doses da vacina da dengue”')
+    if re.search(r"\bleitos?\b", source) and 'internacao' not in found:
+        notes.append('leitos — ex.: “UTI: 19 leitos ocupados e 1 disponível”')
+    if re.search(r"\bintern", source) and 'internacao_dengue' not in found:
+        notes.append('internação — informe a quantidade e que foi por dengue, ex.: “internamos 2 pessoas por dengue”')
+    if re.search(r"\bencaminh", source) and 'encaminhamentos_dengue' not in found:
+        notes.append('encaminhamento — envie em mensagem separada, ex.: “tivemos 3 encaminhamentos de dengue”')
+    if re.search(r"\batend", source) and 'atendimentos_suspeita_dengue' not in found:
+        notes.append('atendimento — envie em mensagem separada, ex.: “atendemos 8 pessoas com suspeita de dengue”')
+    return notes
+
+
+def _with_notes(footer, text, found):
+    notes = ignored_parts(text, found)
+    return ('⚠️ Não registrei nesta mensagem:\n' + '\n'.join('• ' + n for n in notes) + '\n' + footer) if notes else footer
+
+
 def _approximate_quantity(text, day):
     """Só esclarece uma quantidade aproximada em um único acontecimento válido."""
     source = fold(text)
@@ -162,6 +192,8 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
         if eh_continuacao(text) or rotear_intencao(text) is not None:
             return None
     explicit_kind = 'registro_local' if local else 'input_operacional' if operational else None
+    if kind and explicit_kind:
+        kind = explicit_kind  # Tela já escolheu o módulo; o texto não o troca.
     continuing = not kind and pending is not None
     kind = kind or explicit_kind
     if not kind and not pending:
@@ -203,7 +235,9 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
             choices = units
         else:
             from api.core.operational_inputs_router import service
+            from api.core.operational_inputs_interpreter import interpret_operational_items
             svc = service()
+            parsed_items = interpret_operational_items(state['texto'])
             target = operational.id_estabelecimento if operational and not continuing else None
             if not target and not continuing and isinstance(context.get('estabelecimento'), dict):
                 target = context['estabelecimento'].get('id')
@@ -240,10 +274,7 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
             footer = CONFIRM_FOOTER if ready else 'Faltam dados para enviar. Envie o relato completo novamente ou complete em Registros da unidade.'
             if ready and len(ready) < len(draft['registros']):
                 footer = 'Os itens com “Complete” precisam ser completados em Registros da unidade. ' + footer.replace('enviar', 'enviar os demais', 1)
-            notes = ignored_parts(state['texto'], proposals)
-            if notes:
-                footer = '⚠️ Não registrei nesta mensagem:\n' + '\n'.join('• ' + n for n in notes) + '\n' + footer
-            response = report_summary(draft, footer)
+            response = report_summary(draft, _with_notes(footer, state['texto'], {p['indicador'] for p in proposals}))
             items = [{'id': str(r['id']), 'versao': r['atual']['numero_versao'],
                       'rotulo': f"{r['indicador_nome']}: {r['atual']['valor']}"} for r in ready]
             route = '/registros-unidade/' + str(draft['registros'][0]['id']) if len(draft['registros']) == 1 else '/registros-unidade'
@@ -251,10 +282,16 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
             event = 'rascunho_local_pronto'
         else:
             from api.core.operational_inputs_interpreter import operational_summary
-            draft = svc.create_draft(actor, target, state['texto'], key)
-            ready = draft['status'] == 'rascunho'
-            response = operational_summary(draft) + ' Preparei um rascunho; nenhum saldo ou leito foi alterado ainda.\n' + CONFIRM_FOOTER
-            items = [{'id': str(draft['id']), 'versao': draft['versao'], 'rotulo': operational_summary(draft)}] if ready else []
+            # Sem padrão conhecido, mantém o caminho único (parser rígido + Gemini).
+            drafts = ([svc.create_draft(actor, target, state['texto'], f'{key}-{i}', item) for i, item in enumerate(parsed_items)]
+                      if parsed_items else [svc.create_draft(actor, target, state['texto'], key)])
+            draft = drafts[0]
+            lines = ['Preparei os rascunhos abaixo; nenhum saldo, estoque ou leito foi alterado ainda.']
+            lines += [f"{i}. {operational_summary(d)}" for i, d in enumerate(drafts, 1)]
+            lines.append(_with_notes(CONFIRM_FOOTER, state['texto'], {d['tipo'] for d in drafts}))
+            response = '\n'.join(lines)
+            items = [{'id': str(d['id']), 'versao': d['versao'], 'rotulo': operational_summary(d)}
+                     for d in drafts if d['status'] == 'rascunho']
             route, event = '/registros-unidade', 'rascunho_operacional_pronto'
         confirmation = {'etapa': 'confirmacao', 'tipo': kind, 'itens': items} if items else None
         return _result(response, confirmation, event=event, payload=jsonable_encoder(draft), route=route)
