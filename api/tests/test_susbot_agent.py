@@ -703,6 +703,23 @@ def test_etp_sem_item_nao_pede_confirmacao_nem_interrompe_stream(db, monkeypatch
     assert "informe qual medicamento ou insumo" in fim["resposta"]
 
 
+def test_etp_e_revisado_pelo_modelo_avancado_sem_alterar_item_deterministico(db):
+    from api.core.susbot_agent import criar_susbot_agente
+
+    class Avancado:
+        def planejar(self, *args):
+            return {"acao": "chamar_ferramenta", "ferramenta": "gerar_etp",
+                    "argumentos": {"item": "item incorreto"}}
+
+    agente = criar_susbot_agente("3550308", llm=LLMMock(), llm_avancado=Avancado())
+    eventos = list(agente.stream_eventos("Prepare um ETP para a compra de dipirona"))
+    pendente = next(evento["data"] for evento in eventos if evento["event"] == "confirmacao_pendente")
+
+    assert pendente["argumentos"]["item"] == "dipirona"
+    fim = next(evento["data"] for evento in eventos if evento["event"] == "fim")
+    assert fim["execucao"]["modelo_planejamento"] == "gemini"
+
+
 def test_quem_sou_eu_sem_nome_mostra_perfil_e_como_ensinar(db):
     from api.core.susbot_agent import criar_susbot_agente
 

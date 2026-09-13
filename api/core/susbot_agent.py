@@ -34,6 +34,7 @@ from api.core.prompts import (
     system_prompt_planejador,
 )
 from api.core.permissoes import mensagem_ferramenta_negada
+from api.core.clara_model_policy import RACIOCINIO_AVANCADO, perfil_para_plano
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
 from api.core.susbot_intents import normalizar_texto, rotear_intencao, rotear_com_contexto
 from api.core.susbot_metrics import registrar_execucao
@@ -498,7 +499,7 @@ def _prompt_resposta(
 class GeminiClaraLLM:
     """Adapter opcional para Gemini via langchain-google-genai."""
 
-    def __init__(self, api_key: str | None = None, model: str = "gemini-flash-latest"):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         chave = (api_key or os.getenv("GEMINI_API_KEY") or "").strip()
         if not chave:
             raise RuntimeError("GEMINI_API_KEY ausente")
@@ -511,6 +512,7 @@ class GeminiClaraLLM:
         # max_retries=0: o SDK do google-genai reteta 503 ("high demand") com backoff
         # por ~1min antes de propagar o erro — isso atrasava o fallback pro Groq.
         # Falha rápido e deixa o FallbackClaraLLM decidir.
+        model = model or os.getenv("GEMINI_MODEL") or "gemini-flash-latest"
         self._client = ChatGoogleGenerativeAI(
             model=model, google_api_key=chave, temperature=0.2,
             max_retries=0, timeout=20,
@@ -711,6 +713,32 @@ def _montar_llm_cloud() -> Any:
     return FallbackClaraLLM(primario, fallback)
 
 
+def _montar_llm_avancado() -> Any | None:
+    """Gemini para planejamento complexo; ausência de chave mantém fluxo local.
+
+    Não há queda silenciosa para outro serviço pago. Se o Gemini falhar durante
+    uma tarefa avançada, o Ollama local recebe o mesmo plano como reserva.
+    """
+
+    provedor = (os.getenv("SUSBOT_COMPLEX_LLM_PROVIDER") or "gemini").strip().lower()
+    if provedor in {"", "off", "local"}:
+        return None
+    if provedor != "gemini":
+        raise RuntimeError(f"SUSBOT_COMPLEX_LLM_PROVIDER desconhecido: {provedor}")
+    model = (os.getenv("SUSBOT_COMPLEX_GEMINI_MODEL") or "gemini-2.5-flash").strip()
+    try:
+        gemini = GeminiClaraLLM(model=model)
+    except Exception as exc:
+        log.info("Gemini avançado indisponível; ETP seguirá com plano determinístico (%s)", exc)
+        return None
+    try:
+        from api.core.local_llm import LocalClaraLLM
+        return FallbackClaraLLM(gemini, LocalClaraLLM())
+    except Exception as exc:
+        log.warning("Gemini avançado sem reserva local (%s)", exc)
+        return gemini
+
+
 @dataclass
 class ClaraAgent:
     ibge6: str
@@ -719,6 +747,7 @@ class ClaraAgent:
     historico: list[dict[str, str]] = field(default_factory=list)
     memoria_usuario: dict[str, Any] = field(default_factory=dict)
     llm: Any | None = None
+    llm_avancado: Any | None = None
     tools: dict[str, Callable] = field(default_factory=dict)
     # Ferramentas do perfil (docs/09). None = todas as planejaveis: so para uso interno
     # e testes; os routers sempre passam acesso.ferramentas.
@@ -745,6 +774,11 @@ class ClaraAgent:
         if self.llm is None:
             self.llm = _montar_llm_com_fallback()
         return self.llm
+
+    def _obter_llm_avancado(self) -> Any | None:
+        if self.llm_avancado is None:
+            self.llm_avancado = _montar_llm_avancado()
+        return self.llm_avancado
 
     def _montar_grafo(self):  # pragma: no cover - só valida integração quando disponível
         builder = StateGraph(dict)
@@ -888,6 +922,31 @@ class ClaraAgent:
         ferramentas = [f for f in FERRAMENTAS_PLANEJAVEIS if f in self.permitidas]
         plano = llm.planejar(pergunta, self._contexto(), ferramentas)
         return validar_plano(plano, origem=type(llm).__name__, tem_historico=bool(self.historico), permitidas=self.permitidas)
+
+    def _revisar_etp_com_gemini(self, pergunta: str, plano: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """Pede uma segunda leitura só para o ETP e aceita apenas o mesmo tool call."""
+
+        if perfil_para_plano(plano) != RACIOCINIO_AVANCADO:
+            return plano, False
+        llm = self._obter_llm_avancado()
+        if llm is None:
+            return plano, False
+        try:
+            candidato = llm.planejar(pergunta, self._contexto(), ["gerar_etp"])
+            candidato = validar_plano(candidato, origem=type(llm).__name__,
+                                      tem_historico=bool(self.historico), permitidas=self.permitidas)
+        except Exception as exc:
+            log.warning("Gemini não revisou o plano de ETP (%s); mantendo rota segura", exc)
+            return plano, False
+        if candidato.get("acao") != "ferramenta" or candidato.get("ferramenta") != "gerar_etp":
+            log.warning("Gemini devolveu plano incompatível para ETP; mantendo rota segura")
+            return plano, False
+        # A rota determinística já extraiu o item quando ele veio explicitamente.
+        # Preservá-lo evita que uma reformulação do modelo altere a compra proposta.
+        argumentos = dict(candidato.get("argumentos") or {})
+        argumentos.update({k: v for k, v in (plano.get("argumentos") or {}).items() if v})
+        candidato["argumentos"] = argumentos
+        return candidato, True
 
     def _node_consultar(self, state: dict[str, Any]) -> dict[str, Any]:
         plano = state.get("plano") or {}
@@ -1060,6 +1119,13 @@ class ClaraAgent:
             }
         ferramenta = str(plano.get("ferramenta") or "").strip()
 
+        if plano.get("acao") == "ferramenta" and ferramenta == "gerar_etp":
+            plano, revisado_com_gemini = self._revisar_etp_com_gemini(pergunta, plano)
+            ferramenta = str(plano.get("ferramenta") or "").strip()
+            if revisado_com_gemini:
+                execucao.update({"llm_planejamento": True, "sem_llm": False,
+                                 "modelo_planejamento": "gemini"})
+
         if plano.get("acao") == "sem_permissao":
             # Recusa gerada em codigo, distinta de fora_do_escopo. Nada e executado.
             mensagem = mensagem_ferramenta_negada(ferramenta, self.perfil)
@@ -1195,6 +1261,7 @@ def criar_susbot_agente(
     historico: list[dict[str, str]] | None = None,
     memoria_usuario: dict[str, Any] | None = None,
     llm: Any | None = None,
+    llm_avancado: Any | None = None,
     tools: dict[str, Callable] | None = None,
     permitidas=None,
     perfil: str | None = None,
@@ -1210,6 +1277,7 @@ def criar_susbot_agente(
         historico=historico or [],
         memoria_usuario=memoria_usuario or {},
         llm=llm,
+        llm_avancado=llm_avancado,
         tools=tools or {},
         permitidas=permitidas,
         perfil=perfil,
