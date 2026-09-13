@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import html
@@ -10,6 +11,7 @@ import logging
 import os
 import re
 import secrets
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -205,6 +207,33 @@ def _telegram_send(chat_id: str, texto: str, reply_markup: dict | None = None) -
             log.warning("Falha ao enviar mensagem ao Telegram: %s", exc)
             return False
     return True
+
+
+def _telegram_send_document(chat_id: str, conteudo: bytes, nome: str, legenda: str = "") -> bool:
+    token = _telegram_bot_token()
+    if not token:
+        log.info("TELEGRAM_BOT_TOKEN ausente; documento para chat %s nao enviado", chat_id)
+        return False
+    fronteira = uuid.uuid4().hex
+    partes = []
+    for campo, valor in (("chat_id", chat_id), ("caption", legenda[:1024])):
+        partes.append(f'--{fronteira}\r\nContent-Disposition: form-data; name="{campo}"\r\n\r\n{valor}\r\n'.encode("utf-8"))
+    partes.append((
+        f'--{fronteira}\r\nContent-Disposition: form-data; name="document"; filename="{nome}"\r\n'
+        "Content-Type: application/pdf\r\n\r\n"
+    ).encode("utf-8") + conteudo + f"\r\n--{fronteira}--\r\n".encode("utf-8"))
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendDocument",
+        data=b"".join(partes),
+        headers={"Content-Type": f"multipart/form-data; boundary={fronteira}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30):
+            return True
+    except (urllib.error.URLError, TimeoutError) as exc:
+        log.warning("Falha ao enviar documento ao Telegram: %s", exc)
+        return False
 
 
 def _transcrever_audio_telegram(mensagem: dict[str, Any]) -> ResultadoTranscricao:
@@ -473,7 +502,7 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
     db.atualizar_conversa_canal(conexao["id"], conversa["id"])
     resposta_canal = _formatar_resposta_telegram(resposta_base, dados_fim)
     if confirmacao_pendente:
-        resposta_canal += "\n\n⚠️ Esta ação precisa ser confirmada no SusPredict."
+        resposta_canal += "\n\n⚠️ Esta ação precisa ser confirmada no SusPredict. Se for um ETP, o PDF chega aqui depois da confirmação."
     return resposta, resposta_canal
 
 
@@ -500,9 +529,9 @@ def _menu_inicial(conexao: dict) -> None:
     saudacao = _saudacao(conexao)
     if not db.listar_conversas(conexao["usuario"], page_size=1):
         db.atualizar_conversa_canal(conexao["id"], None)
-        _enviar(provedor, chat_id, f"{saudacao} Sou a Clara. Qual decisão você precisa tomar hoje?")
+        _enviar(provedor, chat_id, f"{saudacao} Eu sou a Clara, tô por aqui pra te ajudar com os dados de saúde do município. Pode perguntar do seu jeito, como perguntaria pra alguém da equipe. Por onde a gente começa?")
         return
-    pergunta = f"{saudacao} Como quer seguir?"
+    pergunta = f"{saudacao} Aqui é a Clara. Quer começar um assunto novo ou continuar de onde a gente parou?"
     if provedor == "whatsapp":
         if not _whatsapp_poll(chat_id, pergunta, [MENU_NOVA, MENU_CONTINUAR]):
             _enviar(provedor, chat_id, f"{pergunta}\n\nEnvie /nova para começar um assunto ou /conversas para continuar um anterior.")
@@ -570,14 +599,14 @@ def _selecionar_conversa(conexao: dict, conversa_id: str | None) -> None:
         carregar_acesso(conexao["usuario"])
         if conversa_id is None:
             db.atualizar_conversa_canal(conexao["id"], None)
-            _enviar(provedor, chat_id, "Nova conversa pronta. Qual assunto você quer começar?")
+            _enviar(provedor, chat_id, "Beleza, começamos do zero. Me conta, o que você quer ver?")
             return
         conversa = hub.verificar_dono(conversa_id, conexao["usuario"])
         if not hub.obter_contexto(conversa_id):
             _enviar(provedor, chat_id, "Esta conversa antiga ainda não tem município e período registrados. Abra-a no SusPredict para definir o contexto antes de continuar aqui.")
             return
         db.atualizar_conversa_canal(conexao["id"], conversa_id)
-        _enviar(provedor, chat_id, "⏳ Um instante, estou relembrando essa conversa…")
+        _enviar(provedor, chat_id, "⏳ Só um instante, deixa eu lembrar do que a gente falou…")
         _enviar(provedor, chat_id, hub.resumo_conversa(conversa, _llm_resumo()))
     except (HTTPException, AcessoNegado):
         _enviar(provedor, chat_id, "Esta conversa não está disponível para seu acesso. Use /conversas para atualizar a lista.")
@@ -661,7 +690,7 @@ def _processar_mensagem_canal(
         return
     if comando in {"/nova", "/new", "/clear"}:
         db.atualizar_conversa_canal(conexao["id"], None)
-        enviar("Nova conversa pronta. Qual decisao voce precisa tomar agora?")
+        enviar("Beleza, começamos do zero. Me conta, o que você quer ver?")
         return
     if transcrever is not None:
         enviar("🎙️ Recebi seu áudio. Estou transcrevendo com processamento local…")
@@ -681,7 +710,7 @@ def _processar_mensagem_canal(
         _resposta_historico, resposta_canal = _processar_pergunta_canal(conexao, texto)
     except Exception as exc:  # pragma: no cover - defesa para webhook externo
         log.exception("Falha ao processar mensagem do %s: %s", nome, exc)
-        resposta_canal = "Nao consegui consultar a Clara agora. Tente novamente em instantes."
+        resposta_canal = "Opa, tive um problema pra responder agora. Me manda de novo daqui a pouquinho?"
     enviar(resposta_canal)
 
 
@@ -781,6 +810,37 @@ def _whatsapp_send(chat_id: str, texto: str) -> bool:
 
 def _whatsapp_poll(chat_id: str, titulo: str, opcoes: list[str]) -> bool:
     return _openwa_post("send-poll", {"chatId": chat_id, "name": titulo[:255], "options": [o[:100] for o in opcoes]})
+
+
+def _whatsapp_send_document(chat_id: str, conteudo: bytes, nome: str, legenda: str = "") -> bool:
+    return _openwa_post("send-document", {
+        "chatId": chat_id,
+        "base64": base64.b64encode(conteudo).decode("ascii"),
+        "mimetype": "application/pdf",
+        "filename": nome[:255],
+        "caption": legenda[:1024],
+    })
+
+
+def enviar_etp_aos_canais(usuario: str, conversa_id: str, etp_id: str) -> int:
+    """Manda o PDF do ETP para os canais cuja conversa atual é a que confirmou a ação.
+
+    A confirmação acontece na web; quem começou pelo Telegram/WhatsApp recebe o
+    arquivo lá. Retorna quantos envios deram certo.
+    """
+    from api.core.etp_pdf import gerar_pdf_etp, nome_arquivo_etp
+
+    conexoes = [c for c in db.listar_conexoes_canal(usuario) if c.get("conversa_atual_id") == conversa_id]
+    etp = db.get_etp(etp_id) if conexoes else None
+    if not etp:
+        return 0
+    conteudo, nome = gerar_pdf_etp(etp), nome_arquivo_etp(etp)
+    legenda = f"Rascunho de ETP: {etp['item']}. Sem validade jurídica; revise antes de usar."
+    enviados = 0
+    for conexao in conexoes:
+        envio = _whatsapp_send_document if conexao["provedor"] == "whatsapp" else _telegram_send_document
+        enviados += bool(envio(conexao["external_chat_id"], conteudo, nome, legenda))
+    return enviados
 
 
 def _enviar(provedor: str, chat_id: str, texto: str) -> bool:

@@ -29,6 +29,7 @@ from api.core.prompts import (
     limpar_vazios,
     MENSAGEM_FORA_DO_ESCOPO,
     MENSAGEM_IDENTIDADE,
+    resposta_social,
     SYSTEM_PROMPT_RESPOSTA,
     montar_mensagem_resposta,
     system_prompt_planejador,
@@ -36,7 +37,7 @@ from api.core.prompts import (
 from api.core.permissoes import mensagem_ferramenta_negada
 from api.core.clara_model_policy import RACIOCINIO_AVANCADO, perfil_para_plano
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
-from api.core.susbot_intents import normalizar_texto, rotear_intencao, rotear_com_contexto
+from api.core.susbot_intents import normalizar_texto, rotear_intencao, rotear_com_contexto, tipo_conversa_social
 from api.core.susbot_metrics import registrar_execucao
 
 log = logging.getLogger("sus_predict.susbot_agent")
@@ -826,7 +827,26 @@ class ClaraAgent:
             contexto["dados_tela"] = self.dados_tela
         return contexto
 
+    def _resposta_social(self, pergunta: str) -> str | None:
+        tipo = tipo_conversa_social(pergunta)
+        if tipo is None:
+            return None
+        ultima = str((self.historico[-1] if self.historico else {}).get("resposta") or "").rstrip()
+        # "ok"/"beleza" logo depois de uma oferta ("Quer que eu compare?") é resposta a ela.
+        if tipo == "confirmacao" and ultima.endswith("?"):
+            return None
+        if tipo == "saudacao" and not self.historico:
+            # Visitante só tem sobre_o_projeto: o texto institucional já é a apresentação certa.
+            if self.permitidas <= {"sobre_o_projeto"}:
+                return None
+            tipo = "apresentacao"
+        nome = str((self.memoria_usuario.get("fatos") or {}).get("nome") or "")
+        return resposta_social(tipo, nome)
+
     def _resposta_contextual(self, pergunta: str) -> str | None:
+        social = self._resposta_social(pergunta)
+        if social is not None:
+            return social
         texto = _normalizar_intencao(pergunta)
         fatos = self.memoria_usuario.get("fatos") or {}
         resumo_usuario = str(self.memoria_usuario.get("resumo") or "")
@@ -1054,7 +1074,8 @@ class ClaraAgent:
     def stream_eventos(self, pergunta: str) -> Iterable[dict[str, Any]]:
         yield {"event": "status", "data": {"mensagem": "Planejando resposta"}}
 
-        rota_local = None if self.dados_tela else rotear_com_contexto(pergunta, self.historico)
+        # Conversa social ("oi", "obrigado") responde antes do roteador, que mandaria "oi" ao texto institucional.
+        rota_local = None if self.dados_tela or self._resposta_social(pergunta) else rotear_com_contexto(pergunta, self.historico)
         plano_obrigatorio = rota_local.plano if rota_local else None
         # Perguntas operacionais sobre saúde/estoque precisam chegar à ferramenta
         # antes das heurísticas de perfil. Expressões como "fale sobre a situação"

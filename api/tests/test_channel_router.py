@@ -109,7 +109,7 @@ def test_pareamento_tem_token_unico_confirmacao_bilateral_e_revogacao(canais):
     assert conexao["provedor"] == "telegram"
     assert any(texto.startswith("Telegram conectado") for _, texto in mensagens)
     # Sem conversas ainda: saudação convida a começar, sem oferecer "continuar".
-    assert "Sou a Clara" in mensagens[-1][1]
+    assert "sou a Clara" in mensagens[-1][1]
 
     itens = router_module.listar_canais(user=_user())["itens"]
     assert len(itens) == 1
@@ -222,7 +222,7 @@ def test_clear_inicia_nova_conversa(canais):
     router_module.processar_update_telegram(_update(31, "/clear"))
     router_module.processar_update_telegram(_update(32, "Pergunta depois do clear"))
 
-    assert "Nova conversa pronta" in mensagens[-2][1]
+    assert "começamos do zero" in mensagens[-2][1]
     assert len(db_module.listar_conversas("user-abc")) == 2
 
 
@@ -451,7 +451,7 @@ def test_whatsapp_pareia_por_link_wa_me_e_conversa_no_mesmo_historico(canais):
     assert conexao["provedor"] == "whatsapp"
     assert conexao["external_username"] == "Marcia"
     assert any(texto.startswith("WhatsApp conectado") for _, texto in mensagens)
-    assert mensagens[-1][1].endswith(", Marcia! Sou a Clara. Qual decisão você precisa tomar hoje?")
+    assert mensagens[-1][1].endswith("Por onde a gente começa?")
 
     router_module.processar_evento_whatsapp(_wa_evento("m-1", "Qual e o alerta mais urgente?"))
     conversa = db_module.listar_conversas("user-abc", canal="whatsapp")[0]
@@ -459,7 +459,7 @@ def test_whatsapp_pareia_por_link_wa_me_e_conversa_no_mesmo_historico(canais):
     assert mensagens[-1] == (WA_CHAT, "Leitura municipal: Qual e o alerta mais urgente?")
 
     router_module.processar_evento_whatsapp(_wa_evento("m-2", "0"))
-    assert "Nova conversa pronta" in mensagens[-1][1]
+    assert "começamos do zero" in mensagens[-1][1]
     assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] is None
 
 
@@ -509,7 +509,7 @@ def test_saudacao_por_horario_de_brasilia_e_menu_inicial(canais, monkeypatch):
     router_module.processar_evento_whatsapp(_wa_evento("s-1", "Estoque de dipirona"))
     router_module.processar_evento_whatsapp(_wa_evento("s-2", "/start"))
     assert enquetes[-1][1] == [router_module.MENU_NOVA, router_module.MENU_CONTINUAR]
-    assert enquetes[-1][0].endswith("Como quer seguir?")
+    assert enquetes[-1][0].endswith("de onde a gente parou?")
 
     router_module.processar_evento_whatsapp(_wa_voto("s-v1", router_module.MENU_CONTINUAR))
     assert enquetes[-1][1][-1] == "0. Nova conversa"

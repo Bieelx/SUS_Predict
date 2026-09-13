@@ -126,7 +126,10 @@ REGRA CENTRAL — ANCORAGEM NOS DADOS
 
 IDENTIDADE E TOM
 - Seu nome é Clara. SusBot foi um nome antigo; não o adote.
-- Simpática e prestativa, mas direta: fale como uma colega experiente que respeita o tempo de quem pergunta.
+- Converse como uma pessoa da equipe falando com o gestor pelo WhatsApp: calorosa, natural e direta. Português falado do dia a dia ("tá", "dá pra", "a gente") é bem-vindo, sem gíria forçada nem emoji em excesso.
+- Se a MEMORIA DO USUARIO trouxer o nome, use o primeiro nome de vez em quando, não em toda resposta.
+- Evite frases de robô: "Segue abaixo", "Conforme solicitado", "Não foram encontrados registros", "Prezado". Diga como uma pessoa diria ("Olhei aqui e não achei nada de alerta aberto").
+- Quando o dado for preocupante, demonstre que entendeu o peso da situação em poucas palavras antes de sugerir o próximo passo.
 - Comece pelo que importa: o que o dado significa e o que fazer com isso. Sem "Claro", "Com certeza", elogios ou introduções vazias.
 - Nunca reformule a pergunta nem repita município, período, datas, modelo ou números que o usuário acabou de citar ou já vê na tela. Ele sabe do que perguntou; entregue o que ele ainda não sabe.
 - Cada frase precisa acrescentar algo. Se uma frase só reafirma o que veio antes, corte.
@@ -162,17 +165,59 @@ FORMATO
 
 # Recusa padronizada. Gerada em codigo, nunca pelo LLM.
 MENSAGEM_FORA_DO_ESCOPO = (
-    f"Isso foge do que a {NOME_ASSISTENTE} consegue responder. Eu trabalho só com os dados de "
-    "saúde do seu município no SUS Predict: estoque de insumos, alertas abertos, casos, "
-    "internações e óbitos. Quer consultar algum desses?"
+    "Ah, essa eu vou ficar devendo. Meu forte são os dados de saúde do seu município: "
+    "estoque de insumos, alertas, casos, internações e óbitos. Quer que eu olhe algum desses?"
 )
 
 # Resposta fixa para "quem é você" — vem do codigo, o modelo nunca decide o nome.
 MENSAGEM_IDENTIDADE = (
-    f"Sou a {NOME_ASSISTENTE}, assistente do SUS Predict — acompanho os dados de saúde do seu "
-    "município por aqui. Posso te mostrar estoque de insumos, alertas abertos ou a "
-    "evolução dos casos. O que você precisa?"
+    f"Eu sou a {NOME_ASSISTENTE}! Trabalho junto com você no SUS Predict, acompanhando os dados "
+    "de saúde do município. Dá pra me perguntar sobre estoque, alertas, casos ou internações, "
+    "do jeito que você perguntaria pra alguém da equipe. Em que posso ajudar?"
 )
+
+# Conversa social curta: código escolhe o texto (sem LLM, sem abrir escopo), mas com
+# variação para não soar gravado. `{nome}` vira ", Gabriel" ou some.
+_RESPOSTAS_SOCIAIS = {
+    "apresentacao": (
+        f"Oi{{nome}}! Eu sou a {NOME_ASSISTENTE}, tô por aqui pra te ajudar com os dados de saúde do município. "
+        "Pode perguntar do seu jeito: como tá o estoque, se tem alerta, como andam os casos de dengue… Por onde a gente começa?",
+        f"Olá{{nome}}! Aqui é a {NOME_ASSISTENTE}. Acompanho estoque, alertas, casos e internações do município "
+        "pra te ajudar a decidir. Me conta, o que você precisa hoje?",
+    ),
+    "saudacao": (
+        "Oi{nome}! Que bom te ver de novo. No que eu posso ajudar agora?",
+        "Olá{nome}! Tô por aqui. O que você quer ver?",
+        "Oi{nome}! Seguimos de onde paramos ou tem assunto novo?",
+    ),
+    "como_vai": (
+        "Tudo ótimo por aqui{nome}, obrigada por perguntar! E com você? Se precisar de algum dado, é só falar.",
+        "Tudo certo{nome}! E aí, como tá o dia? Me diz se quer que eu olhe alguma coisa.",
+    ),
+    "agradecimento": (
+        "Imagina{nome}! Qualquer coisa, é só chamar.",
+        "Por nada{nome}! Tô por aqui se precisar.",
+        "Disponha{nome}! Se quiser aprofundar em algo, me fala.",
+    ),
+    "despedida": (
+        "Até mais{nome}! Bom trabalho por aí.",
+        "Tchau{nome}! Quando precisar, é só me chamar.",
+    ),
+    "confirmacao": (
+        "Combinado{nome}! Se precisar de mais alguma coisa, tô aqui.",
+        "Fechado! Qualquer dúvida, me chama.",
+    ),
+}
+
+
+def resposta_social(tipo: str, nome: str | None = None, escolher=None) -> str:
+    """Texto curto e humano para saudação, agradecimento, despedida etc."""
+
+    import random
+
+    primeiro = (nome or "").split()[0] if (nome or "").split() else ""
+    opcoes = _RESPOSTAS_SOCIAIS[tipo]
+    return (escolher or random.choice)(opcoes).format(nome=f", {primeiro}" if primeiro else "")
 
 # ---------------------------------------------------------------------------
 # TEXTO CURADO À MÃO. Não deve ser gerado nem reescrito pelo modelo em runtime.

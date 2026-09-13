@@ -154,22 +154,35 @@ def test_sessao_nova_com_pergunta_de_dominio_nao_e_rebaixada(db):  # noqa: F811
     assert fim["data"]["resposta"] != MENSAGEM_FORA_DO_ESCOPO
 
 
-@pytest.mark.parametrize("pergunta", [
-    "oi", "Olá!", "bom dia", "Boa tarde.", "boa noite", "tudo bem?", "E aí?", "Oi Clara, tudo bem?",
-    "Olá, bom dia!", "oi, tudo bom", "opa", "beleza?",
+@pytest.mark.parametrize("pergunta, tipo", [
+    ("oi", "saudacao"), ("Olá!", "saudacao"), ("bom dia", "saudacao"), ("Boa tarde.", "saudacao"),
+    ("E aí?", "saudacao"), ("opa", "saudacao"), ("tudo bem?", "como_vai"), ("Oi Clara, tudo bem?", "como_vai"),
+    ("oi, tudo bom", "como_vai"), ("beleza?", "como_vai"), ("obrigado!", "agradecimento"),
+    ("valeu Clara", "agradecimento"), ("tchau", "despedida"), ("até mais!", "despedida"), ("ok", "confirmacao"),
 ])
-def test_saudacao_pura_resolve_em_sobre_o_projeto_sem_llm(db, pergunta):  # noqa: F811
-    from api.core.susbot_intents import rotear_intencao
+def test_conversa_social_responde_humano_sem_llm(db, pergunta, tipo):  # noqa: F811
+    from api.core.susbot_intents import tipo_conversa_social
 
-    rota = rotear_intencao(pergunta)
-    assert rota is not None and rota.plano["ferramenta"] == "sobre_o_projeto"
-
+    assert tipo_conversa_social(pergunta) == tipo
     llm = LLMPlanoFixo({"acao": "fora_do_escopo"})
-    agente = criar_susbot_agente("3550308", llm=llm, historico=[])
+    agente = criar_susbot_agente("3550308", llm=llm, historico=[], memoria_usuario={"fatos": {"nome": "Gabriel Araujo"}})
     fim = next(e for e in agente.stream_eventos(pergunta) if e["event"] == "fim")
-    assert fim["data"]["resposta"] == TEXTO_SOBRE_O_PROJETO
+    resposta = fim["data"]["resposta"]
+    assert resposta not in (TEXTO_SOBRE_O_PROJETO, MENSAGEM_FORA_DO_ESCOPO)
     assert fim["data"]["execucao"]["sem_llm"] is True
     assert not llm.stream_chamadas
+    if tipo == "saudacao":
+        assert "Clara" in resposta and "Gabriel" in resposta and "Araujo" not in resposta
+
+
+def test_saudacao_com_historico_nao_se_reapresenta_e_ok_apos_oferta_segue_fluxo(db):  # noqa: F811
+    historico = [{"pergunta": "estoque", "resposta": "Tudo certo. Quer que eu compare com o mês passado?"}]
+    llm = LLMPlanoFixo({"acao": "responder"})
+    agente = criar_susbot_agente("3550308", llm=llm, historico=historico)
+    fim = next(e for e in agente.stream_eventos("oi") if e["event"] == "fim")
+    assert "Eu sou a Clara" not in fim["data"]["resposta"]
+    fim = next(e for e in agente.stream_eventos("ok") if e["event"] == "fim")
+    assert fim["data"]["execucao"]["modo"] != "contextual_local"
 
 
 @pytest.mark.parametrize("pergunta, ferramenta", [

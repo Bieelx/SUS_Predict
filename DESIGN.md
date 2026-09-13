@@ -1,544 +1,228 @@
 # Design — SusPredict
 
-> **Status: descreve o protótipo visual atual do `App.jsx` (dados mock), que o grupo
-> decidiu não reaproveitar.** A seção [Pages](#pages) abaixo (Visão Geral com 4 KPIs +
-> gráfico + gauge + mapa hexagonal + donut; Epidemiologia; Internações) está **superada**
-> pelo redesenho documentado em [docs/telas/](./docs/telas/README.md) — a Visão Geral em
-> particular é exatamente o padrão de BI descritivo que o redesenho corrige. Os tokens de
-> cor/tipografia/motion abaixo (`Color Strategy`, `Typography`, `Elevation`, `Motion`) podem
-> servir de ponto de partida visual para as telas novas, mas a estrutura de página não deve
-> ser seguida. Ver também a nota no topo do `CLAUDE.md`.
+Descreve a interface **como está implementada** em `frontend/src` (atualizado em
+13/09/2026). Princípios e tom: [PRODUCT.md](./PRODUCT.md). Regras de produto por tela:
+`docs/01-produto.md`.
 
-## Visão geral
-
-Plataforma analítica de saúde pública para gestores municipais. Mood: painel de inteligência operacional — denso em informação, mas sem ruído visual. Não é um relatório PDF interativo; é uma ferramenta de trabalho que o gestor olha várias vezes por dia.
+Mood: ferramenta de trabalho do gestor municipal — densa em informação, sem ruído, cada
+número com fonte e competência visíveis.
 
 ---
 
-## Layout Shell
+## Onde vive o sistema visual
 
-```
-┌─────────────────────────────────────────────┐
-│  Sidebar 220px fixo  │  Topbar 60px          │
-│                      ├───────────────────────┤
-│  nav + branding      │  Page content         │
-│                      │  padding 28px 36px    │
-│  footer: user info   │                       │
-└─────────────────────────────────────────────┘
-```
+| O quê | Arquivo |
+|---|---|
+| Tokens base, escala tipográfica, dimensões do shell, foco, animações | `frontend/src/index.css` |
+| Ajustes do shell mobile | `frontend/src/mobile.css` |
+| Tokens semânticos aplicados no root do app | `SEMANTIC_TOKENS` em `frontend/src/App.jsx` |
+| Temas (sidebar + primária) | `THEMES` em `frontend/src/shared/ui.jsx` |
+| Componentes base (`Card`, `SectionTitle`, `Badge`, `MIcon`, `LogoIcon`) | `frontend/src/shared/ui.jsx` |
+| Componentes de dados (`Kpi`, `FonteReal`, `EstadoConsulta`, `SeletorPeriodo`, skeletons, `botao`) | `frontend/src/shared/dataUi.jsx` |
+| Fontes locais (`@font-face`) + licenças | `frontend/public/fonts/` |
+| Interface beta (3 variantes, escopo `.beta-app`) | `frontend/src/beta/` |
 
-- Sidebar: `220px` fixa, dark teal escuro, não colapsa no MVP
-- Topbar: `60px`, fundo `--canvas`, sticky
-- Content: `max-width: 1280px`, `padding: 28px 36px`
-- Gap entre seções: `28px`
-- Grid KPI: `repeat(4, 1fr)` na Visão Geral; `repeat(4, 1fr)` nas páginas de análise
-
-### Shell mobile
-
-Em telas de até `768px`, o produto deixa de simular o shell desktop e assume uma
-estrutura própria para toque:
-
-- Cabeçalho fixo de `64px`: marca, nome da página, município ativo e acesso a alertas.
-- Navegação inferior de `72px` mais a safe area do aparelho.
-- Destinos primários ao alcance do polegar: Visão, Alertas, Insumos e Clara.
-- O quinto destino, Mais, abre uma folha inferior com Análises, Documentos,
-  Configurações e Perfil. Nenhuma função é removida no celular.
-- Clara ocupa a tela inteira quando aberto, como uma tarefa focada, e esconde seu
-  FAB porque o acesso já existe na navegação inferior.
-- O azul do shell continua como canvas. O conteúdo ocupa um grande card claro,
-  com calha curta e cantos generosos, em vez de tocar as bordas da tela.
-- A navegação inferior é um segundo card em `--primary`, destacado do canvas e
-  separado do conteúdo. O conjunto preserva a identidade de superfícies do desktop.
-- O layout usa uma coluna e respeita `env(safe-area-inset-bottom)`.
-- Alvos de toque têm no mínimo `44px`; interações essenciais não dependem de hover.
-
-Entre `769px` e `1024px`, permanece o comportamento híbrido de tablet: conteúdo
-amplo, menu lateral temporário e suporte simultâneo a toque e ponteiro.
+Estilo é CSS com variáveis + estilos inline que leem `var(--token)`. Tailwind está
+instalado mas é residual (utilitários soltos em `Card` e afins); não usar para telas novas.
 
 ---
 
-## Color Strategy
+## Layout shell
 
-Superfícies claras quentes + sidebar escura teal. Acentos semânticos por tipo de dado.
+```text
+┌──────────────┬───────────────────────────────────┬────────────┐
+│ Sidebar      │ Topbar 60px (--topbar-h)          │ Clara      │
+│ 220px        ├───────────────────────────────────┤ 420px      │
+│ (--sb-w)     │ Card de conteúdo (margem --gap)   │ (--chat-w) │
+│              │                                   │ opcional   │
+└──────────────┴───────────────────────────────────┴────────────┘
+```
 
-### Tokens
+- Sidebar recolhível (preferência em `localStorage` `sus_predict_sidebar`).
+- Navegação:
+  - **Operacional:** Visão Geral, Alertas, Insumos, Registros da unidade
+  - **Análises:** Epidemiologia, Internações, Vacinação
+  - Documentos; Configurações e Perfil no rodapé da sidebar
+- Clara não é item de menu: abre como painel lateral; com o painel aberto o `main` recua
+  `--chat-inset`.
+- Seletor de município na topbar (lista de `/api/dados/municipios`; inicial São Paulo
+  `355030`, último escolhido salvo em `sus_predict_municipio`).
+- Rotas por caminho: `/visao-geral`, `/alertas[/<id>]`, `/insumos`, `/registros-unidade`,
+  `/documentos`, `/epidemiologia`, `/internacoes`, `/vacinacao`, `/configuracoes`,
+  `/perfil`; prefixo `/beta` para a interface beta. `/privacidade`, `/termos`, `/cookies`
+  são páginas legais.
 
-**Surfaces (warm off-whites)**
+### Mobile (≤ 768px)
+
+- Cabeçalho fixo com marca, página e município.
+- Navegação inferior: Visão, Alertas, Insumos, Clara e **Mais** (folha com Registros,
+  Análises, Documentos, Configurações, Perfil). Nenhuma função some no celular.
+- Clara em tela cheia.
+- Canvas na cor do shell; conteúdo num card claro com cantos generosos.
+- Uma coluna, `env(safe-area-inset-bottom)`, alvos ≥ 44px, nada essencial em hover.
+- 769–1024px: comportamento híbrido (menu lateral temporário).
+
+---
+
+## Cor
+
+### Superfícies e tinta (fixas, independentes de tema)
+
 ```css
---canvas:  #F6F5F2   /* background principal */
---content: #F1F4F3   /* painel de conteúdo (cool-neutral, harmoniza c/ sidebar teal sem verde forte) */
+--canvas:  #F6F5F2   /* fundo da página */
+--content: #F1F4F3   /* painel de conteúdo */
 --elev:    #FFFFFF   /* cards, modais */
---subtle:  #F0EDE6   /* callouts, zebra rows */
---tint:    #E9E5DC   /* hover chips, tag bg */
-```
+--subtle:  #F0EDE6   /* callouts, zebra */
+--tint:    #E9E5DC   /* hover de chip, fundo de tag */
 
-**Ink (warm near-blacks)**
-```css
---ink-900: #1A1814   /* texto principal */
---ink-700: #3D3A33   /* texto secundário importante */
---ink-500: #6B665D   /* labels, auxiliar */
---ink-400: #6F6B63   /* placeholders e metadados, WCAG AA em superfícies claras */
---ink-300: #6F6B63   /* metadados discretos que ainda precisam de contraste textual */
+--ink-900: #1A1814   --ink-700: #3D3A33   --ink-500: #6B665D
+--ink-400: #6F6B63   --ink-300: #6F6B63   /* ambos AA sobre superfícies claras */
 --ink-200: #C9C4BA   /* divisores */
---ink-100: #E5E1D6   /* bordas de card */
---ink-50:  #EFEBE0   /* bg muito sutil */
+--ink-100: #E5E1D6   /* borda de card */
+--ink-50:  #EFEBE0
 ```
 
-**Sidebar (azul)**
+### Semânticas
+
 ```css
---sidebar-bg:          #6FADD2   /* fundo da sidebar */
---sidebar-text:        #1B3F5C   /* texto nav inativo */
---sidebar-text-active: #FFFFFF   /* texto nav ativo */
---sidebar-active-bg:   #336FA1   /* bg item ativo */
---sidebar-active-bar:  #336FA1   /* barra 3px esquerda item ativo */
---sidebar-section:     #336FA1   /* eyebrow de seção */
---sidebar-icon:        #4E8BB8   /* ícones inativos */
+--good: #2A6B40   --bad: #8A2A38   --warn: #A6580F   --info: #1B5E6E
+--risk-alto: #D94F4F   --risk-medio: #E8903A   --risk-baixo: #4A9B6F
 ```
 
-**Primary (ações, links, focus)**
+Faixas de risco de aquisição mapeiam `ALTO → --risk-alto`, `MODERADO → --risk-medio`,
+`BAIXO`/`SEM_ALERTA → --risk-baixo`, desconhecido → `--ink-500`.
+
+### Acentos por sistema de dados (`index.css`)
+
 ```css
---primary:     #336FA1   /* CTAs, nav active */
---primary-700: #2A5980   /* hover (derivado, +escuro) */
---primary-100: #9ECAE3   /* badge bg */
---primary-50:  #EAF3FA   /* tint (derivado, +claro) */
+--sim: #B85C6E  --sih: #4A7FBF  --sinasc: #4A9B72  --sia: #7B6BBF
+--sinan: #D4883A  --cnes: #5B8A9E  --vacina: #4A9B72  --insumo: #B85C6E
 ```
 
-**Semantic — métricas e alertas**
-```css
---good:  #2A6B40   /* positivo, crescimento saudável */
---bad:   #8A2A38   /* crítico, surto, risco alto */
---warn:  #A6580F   /* alerta, atenção */
---info:  #336FA1   /* informativo neutro */
-```
+### Temas (Configurações)
 
-**Risk levels (gauge + badges)**
-```css
---risk-alto:   #D94F4F
---risk-medio:  #E8903A
---risk-baixo:  #4A9B6F
-```
+Cada tema define juntos a sidebar (`--sb`, `--sb-text`, `--sb-section`, `--sb-strong`,
+`--sb-icon-*`, `--sb-accent-bar`, `--sb-hover`, `--sb-active-text`, `--sb-border`) e a
+primária (`--primary`, `--primary-dark`, `--accent`, `--primary-soft`,
+`--primary-soft-border`, `--primary-field`, `--primary-label`, `--primary-on-dark`).
 
-**Sistema accents (ícones de KPI card)**
-```css
---sim:    #B85C6E   /* SIM · mortalidade */
---sih:    #4A7FBF   /* SIH · internações */
---sinasc: #4A9B72   /* SINASC · nascimentos */
---sia:    #7B6BBF   /* SIA · ambulatorial */
---sinan:  #D4883A   /* SINAN · vigilância epidemiológica */
---cnes:   #5B8A9E   /* CNES · estabelecimentos */
---vacina: #4A9B72   /* Cobertura Vacinal */
---lotacao:#D4883A   /* Superlotação */
---insumo: #B85C6E   /* Ruptura de Insumos */
-```
+| id | Nome | `--primary` | Sidebar |
+|---|---|---|---|
+| `teal` (padrão) | Azul SusPredict | `#336FA1` | azul profundo `#1E4A6B`, texto claro |
+| `verde` | Verde-saúde | `#2A6B40` | verde claro `#A6C2A0`, texto escuro |
+| `ambar` | Âmbar | `#A6580F` | areia `#D8C4A0` |
+| `grafite` | Grafite | `#3D3A33` | cinza `#B6BABF` |
+
+O tema escolhido vale para a sessão (não persiste ao recarregar). Toda cor nova deve sair
+de um token; contraste foi conferido nos 4 temas.
 
 ---
 
-## Typography
+## Tipografia
 
-```
-Display KPI:   Inter Tight 700–900, tracking -2% a -3.5%
-UI Body:       Inter 400–600
-Acento títulos: Instrument Serif italic (só em page titles)
-Mono:          JetBrains Mono (CID codes, timestamps, %)
-```
+Fontes servidas localmente (sem Google Fonts em runtime):
 
-**Scale**
-```
-display/48–64 800   KPI hero (número principal)
-display/32    700   Page title
-heading/22    700   Section title (Inter Tight)
-body/14       400   Corpo (lh 1.6, max 65ch)
-label/13      600   Item labels, table headers
-eyebrow/10.5  700   Uppercase tracking 0.13em (seções)
-mono/10–11          Timestamps, CID, percentuais
-```
+| Família | Uso |
+|---|---|
+| Inter (`--ff-body`) | UI e corpo |
+| Inter Tight (`--ff-tight`) | títulos, números de KPI |
+| JetBrains Mono (`--ff-mono`) | códigos, timestamps, percentuais técnicos |
+| Instrument Serif | acento pontual em títulos; nunca em corpo |
+| Material Symbols Rounded | ícones via `<MIcon m="nome" />` (sempre `aria-hidden`) |
 
-*Instrument Serif* apenas em títulos de página como acento — nunca em corpo ou UI funcional.
-
----
-
-## Elevation
-
-Sem sombras pesadas. Elevação via borda + sombra mínima:
+Escala única, razão ~1,25 — tamanho novo deve cair num destes:
 
 ```css
-/* card padrão */
-box-shadow: 0 0 0 1px var(--ink-100);
-
-/* card elevado */
-box-shadow: 0 1px 3px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.05);
-
-/* overlay / modal */
-box-shadow: 0 12px 28px rgba(20,16,8,.10), 0 0 0 1px var(--ink-100);
+--fs-xs: 11px   /* eyebrow, meta, legenda */
+--fs-sm: 13px   /* rótulo, item de lista */
+--fs-md: 15px   /* corpo */
+--fs-lg: 20px   /* título de bloco */
+--fs-xl: 26px   /* título de página */
 ```
+
+Eyebrow: uppercase, peso 700, tracking largo. Números sempre em pt-BR
+(`shared/formatters.js`: `inteiro`, `decimal`, `moeda`, `percentual`, `dias`).
 
 ---
 
-## Border Radius
+## Elevação e raio
 
+```css
+/* card padrão */   box-shadow: 0 0 0 1px var(--ink-100);
+/* card elevado */  box-shadow: 0 1px 3px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.05);
+/* overlay */       box-shadow: 0 12px 28px rgba(20,16,8,.10), 0 0 0 1px var(--ink-100);
 ```
-4px   inputs, badges pequenos
-6px   botões compactos, chips
-8–10px botões padrão, dropdowns
-12–14px cards principais
-99px   pills, dots, avatares
-```
+
+Raio: 4px badges/inputs · 6px chips · 8–10px botões · 12–14px cards · 99px pills/avatares.
 
 ---
 
-## Components
+## Padrões de tela
 
-### Sidebar
+Toda tela de dados segue o mesmo esqueleto:
 
-```
-width: 220px
-background: var(--sidebar-bg)
-padding: 0
+1. **Cabeçalho:** eyebrow + `h1` com território (`— Município, UF`) + frase de propósito.
+2. **`FonteReal`:** fonte, competência/janela e detalhe da consulta. Nenhum número sem
+   origem. Na demo o texto deixa explícito que é replay/fictício.
+3. **`EstadoConsulta`:** carregando (skeleton), erro com "tentar de novo", ou vazio. Consulta
+   vazia mostra estado vazio — nunca número inventado.
+4. **`SeletorPeriodo`** quando a tela aceita janela (`Trimestre`, `Semestre`, `12 Meses`,
+   `3 Anos`, `5 Anos`).
+5. **Linha de `Kpi`** (rótulo, valor, detalhe, tom) seguida de gráficos Recharts.
+6. **Tabela acessível** equivalente a cada gráfico (`ChartData`).
 
-Logo: 56px de altura, padding 16px 20px
-  - ícone quadrado arredondado 28px + wordmark Inter Tight 700
+| Tela | Arquivo | Dados |
+|---|---|---|
+| Visão Geral | `shared/RupturaReal.jsx` (`VisaoGeralReal`) | `/api/dados/visao-geral` (município ou estadual) |
+| Alertas | `pages/Alertas.jsx` | `/api/dados/ruptura` — filtros por faixa + busca, deep link `/alertas/<id>` |
+| Insumos | `shared/RupturaReal.jsx` (`InsumosReais`) | `/api/dados/ruptura` + histórico de aquisições |
+| Registros da unidade | `pages/RegistrosUnidade.jsx`, `features/registros-locais/` | `/api/local/*`, `/api/clara/inputs-operacionais/*` |
+| Epidemiologia | `pages/Epidemiologia.jsx` | `/api/dados/epidemiologia` |
+| Internações | `pages/Internacoes.jsx` | `/api/dados/internacoes` |
+| Vacinação | `pages/Vacinacao.jsx` (usa `MapaSP`) | `/api/dados/vacinacao` |
+| Documentos | `pages/Documentos.jsx`, `shared/etp.js` | ETPs (PDF) |
+| Configurações | `pages/Configuracoes.jsx` (+ `AdminUsuarios` para admin) | tema, demo, links legais |
+| Perfil | `pages/Perfil.jsx` | dados da conta (`/api/auth/me`) |
+| Clara | `pages/ClaraPanel.jsx` | SSE `/api/susbot/perguntar`; conversas, cartões de artefato/confirmação/rascunho, pareamento de canais, "O que a Clara sabe" |
+| Legais | `pages/Legal.jsx` | `/privacidade`, `/termos`, `/cookies` |
 
-Nav section label (ANÁLISES / SISTEMA):
-  font: eyebrow/10.5 700
-  color: var(--sidebar-section)
-  padding: 20px 20px 6px
-
-Nav item:
-  height: 40px, padding: 0 16px
-  display: flex, align-items: center, gap: 10px
-  color: var(--sidebar-text)
-  border-radius: 0 (full width)
-  icon: 18px, color: var(--sidebar-icon)
-
-  &.active:
-    background: var(--sidebar-active-bg)
-    color: var(--sidebar-text-active)
-    icon color: white
-    border-left: 3px solid var(--sidebar-active-bar)
-
-  &:hover (não ativo):
-    background: rgba(255,255,255,.06)
-
-Badge de alerta (número vermelho):
-  position: absolute right, 16px
-  background: var(--bad), color: white
-  border-radius: 99px, font: mono/11 700
-  padding: 2px 6px
-
-Footer:
-  margin-top: auto, padding: 16px 20px
-  sync indicator: dot verde pulsando + texto "Dados em sincronia · há Xmin"
-  user row: avatar 30px + nome + cargo, padding-top: 12px
-```
-
-### Topbar
-
-```
-height: 60px
-background: var(--canvas)
-border-bottom: 1px solid var(--ink-100)
-padding: 0 36px
-display: flex, align-items: center, justify-content: space-between
-
-Left: breadcrumb (eyebrow/10.5 > label/14 700)
-Right: SearchBar + IconButton calendar + IconButton bell
-```
-
-**SearchBar**:
-```
-width: 260px, height: 34px
-background: var(--elev)
-border: 1px solid var(--ink-200)
-border-radius: 8px
-placeholder: "Buscar UBS, CID, medicamento, alerta..."
-right slot: kbd shortcut badge (⌘K)
-```
-
-### KPI Card
-
-```
-background: var(--elev)
-border: 1px solid var(--ink-100)
-border-radius: 12px
-padding: 18px 20px
-min-height: 110px
-
-Layout:
-  header: eyebrow label + icon 32px (cor do sistema)
-  value:  display/48 Inter Tight 800, color ink-900
-  delta:  badge delta (↑/↓ X% vs. mês ant.)
-  sparkline: 48px altura, linha fina, sem eixos, bottom da card
-
-Delta badge colors:
-  positivo bom: background #E8F5EE, color #2A6B40
-  negativo ruim: background #FBE8EA, color #8A2A38
-  neutro: background var(--subtle), color ink-500
-```
-
-### Greeting Banner
-
-```
-background: linear-gradient(135deg, #1E3C3C 0%, #2A5050 100%)
-border-radius: 14px
-padding: 20px 24px
-color: white
-
-Left: avatar 44px (iniciais) + saudação h2 + frase contextual
-  highlight inline: badge translúcido com dado crítico (ex: "72%", "4 alertas críticos")
-Right: botões "Ver alertas" (outline branco) + "Gerar ETP" (filled teal claro)
-
-Frase gerada dinamicamente com dado do dia mais crítico.
-```
-
-### Filter Bar (páginas de análise)
-
-```
-background: #1E3C3C (mesmo tom sidebar)
-border-radius: 12px
-padding: 14px 20px
-display: flex, gap: 16px, align-items: center
-
-Campos: Agravo/CID · Período · Cidade/Região (ou Hospital)
-Estilo dos inputs: fundo rgba(255,255,255,.12), borda rgba(255,255,255,.2)
-  texto: white, placeholder: rgba(255,255,255,.5)
-  border-radius: 8px, padding: 10px 14px
-
-Botões right: "Recalcular" (teal claro filled) + "Exportar" (outline branco)
-```
-
-### Forecast LineChart
-
-```
-Biblioteca: Recharts (LineChart + ComposedChart)
-Altura: 220px
-
-Linha real:     stroke #1B5E6E, strokeWidth 2, tipo "monotone"
-Linha previsão: stroke #4DB8A0, strokeWidth 2, strokeDasharray "5 4"
-Banda de IC:    Area com opacity 0.08, fill #4DB8A0
-Annotation "Previsão →": texto + seta no início do forecast
-
-Legenda: row no bottom, ícones customizados (linha sólida / tracejada / área)
-Sem gridlines verticais. Grid horizontal opacity 0.3, color ink-200.
-Tooltip: fundo var(--elev), borda ink-100, sombra elevação card, formato pt-BR.
-```
-
-### RiskGauge (Risco Agregado)
-
-```
-SVG semicírculo (180°)
-Track: arco cinza ink-100, strokeWidth 18
-Fill: arco colorido baseado em --risk-*, strokeWidth 18
-  0–40%: --risk-baixo
-  40–70%: --risk-medio
-  70–100%: --risk-alto
-
-Centro: valor % em display/36 Inter Tight 800 + label "PROBABILIDADE DE SURTO · PRÓXIMOS 60D"
-
-Abaixo: tabela de sub-scores com label + valor + badge nível
-  Epidemiológico / Capacidade leitos / Estoque crítico / Vacinação
-```
-
-### HexMap (Mapa SP por região de saúde)
-
-```
-SVG com hexágonos regulares dispostos geograficamente (17 regiões de SP)
-Cada hex: fill baseado em nível de risco (--risk-baixo/medio/alto)
-  + label nome região (font 10px) + valor casos (font 11px 700)
-
-Hover: hex ilumina + tooltip com dados da região
-Click: drill-down para região específica (fase futura)
-
-Legenda horizontal: RISCO · baixo ← gradiente → alto
-
-Sem uso de biblioteca de mapa. SVG puro posicionado manualmente.
-```
-
-### BarRow (rankings e causas)
-
-```
-display: flex, align-items: center, gap: 8px, padding: 6px 0
-border-bottom: 1px solid var(--ink-50)
-
-Left: código CID em JetBrains Mono 10px ink-400 (40px fixo) + nome causa
-Middle: barra de progresso, height 4px, border-radius 99px
-  fill: var(--sistema-accent) com opacity .7
-Right: valor numérico label/13 600 + (R$ se custo)
-```
-
-### Stacked BarChart (Desfecho clínico)
-
-```
-Recharts BarChart com stacking
-Cores: verde (#4A9B72) casos leves · âmbar (#E8903A) hospitalizações · vermelho (#D94F4F) óbitos
-borderRadius: [4,4,0,0] no topo da barra composta
-Legenda: row abaixo do gráfico, dots coloridos
-```
-
-### DonutChart (distribuição)
-
-```
-Recharts PieChart, innerRadius 60%, outerRadius 85%
-Centro: valor total + label "pessoas" ou "categorias"
-Tooltip padrão customizado
-Legenda: lista à direita com dot + label + percentual right-aligned
-```
-
-### AlertItem
-
-```
-display: flex, align-items: center, gap: 12px, padding: 14px 0
-border-bottom: 1px solid var(--ink-50)
-
-Left: dot colorido 10px (cor = tipo de alerta)
-Center: título 14 600 + fonte + tempo em mono
-Right: badge tipo (Surto / Insumo / Lotação)
-
-Badge tipos:
-  Surto:   background rgba(217,79,79,.1), color --risk-alto, border 1px
-  Insumo:  background rgba(184,92,110,.1), color --sim
-  Lotação: background rgba(232,144,58,.1), color --warn
-```
-
-### FloatingChatBot
-
-```
-position: fixed, bottom: 24px, right: 24px
-button: 48px × 48px, border-radius: 99px
-background: #1E3C3C, color: white
-icon: robô/bot 22px
-box-shadow: 0 4px 16px rgba(0,0,0,.2)
-
-Hover: scale(1.05), shadow aumenta
-```
+Dado local (registros da unidade) sempre rotulado como informado pela unidade e nunca
+misturado a totais oficiais.
 
 ---
 
-## Pages
-
-### Visão Geral
-
-```
-Header: GreetingBanner (full width)
-
-KPI row: 4 cards iguais
-  · Casos Notificados 30D (--sinan laranja)
-  · Índice de Risco Regional (--bad vermelho)
-  · UBS em Ruptura ou Alerta (--warn âmbar)
-  · Cobertura Vacinal Média (--good verde)
-
-Grid 2col (1.4fr 1fr):
-  Left: ForecastLineChart (Dengue por default, filtrável)
-  Right: RiskGauge + tabela sub-scores
-
-Grid 2col (1.2fr 1fr):
-  Left: HexMap SP regiões de saúde
-  Right: DonutChart ruptura por categoria + lista top itens
-
-AlertsRecent: lista 3 itens recentes + link "Ver todos (N)"
-```
-
-### Epidemiologia SINAN
-
-```
-FilterBar: Agravo/CID · Período · Cidade/Região
-
-KPI row: 4 cards
-  · Total Casos Notificados
-  · Taxa Hospitalização (%)
-  · Taxa Óbito (%)
-  · Incidência /100mil hab.
-
-Grid 2col:
-  Left: LineChart sazonalidade (3 linhas: ano atual, anterior, média 5 anos)
-  Right: DonutChart distribuição por cidade (top 6)
-
-Grid 2col:
-  Left: BarChart horizontal faixa etária (distribuição absoluta)
-  Right: DonutChart distribuição por gênero
-
-Stacked BarChart: Desfecho clínico por ano (cura/hosp/óbito)
-```
-
-### Internações SIH
-
-```
-FilterBar: Agravo/CID · Período · Hospital
-
-KPI row: 4 cards
-  · Internações no Período
-  · Permanência Média (dias)
-  · Reinternações em 30D (%)
-  · Custo Total SIH (R$ mil)
-
-Grid 2col:
-  Left: ComposedChart barras internações + linha custo mensal (eixo Y duplo)
-  Right: tabela Principais Grupos de Causa (CID + QTD + custo médio)
-
-Grid 2col:
-  Left: BarChart horizontal Permanência média por grupo diagnóstico
-  Right: DonutChart Origem das AIH (PS / Eletivo / UBS / Transferência)
-```
-
-### Cobertura Vacinal (placeholder)
-
-```
-FilterBar: Vacina · Período · Cidade/Região
-KPI: Cobertura % · Meta atingida · Faltosos · Doses aplicadas
-Gráficos: evolução cobertura + heatmap por UBS
-```
-
-### Superlotação (placeholder)
-
-```
-FilterBar: Hospital · Período
-KPI: Ocupação UTI % · Ocupação leitos · Tempo espera médio · Altas pendentes
-Gráficos: linha ocupação ao longo do tempo + ranking hospitais
-```
-
-### Ruptura de Insumos (placeholder)
-
-```
-FilterBar: Categoria · UBS · Período
-KPI: Itens em ruptura · UBS afetadas · Pedidos pendentes · Cobertura dias
-Gráficos: lista itens + mapa UBS afetadas
-```
-
----
-
-## Motion
+## Movimento
 
 Mínimo e funcional:
 
-```
-KPI value rise:   translateY(8px)→0 + opacity 0→1, 0.5s cubic-bezier(.2,.7,.3,1)
-Card hover:       box-shadow + translateY(-1px), 0.15s ease
-Gauge fill:       stroke-dashoffset animado, 0.8s ease-out, delay 0.2s
-HexMap hover:     fill brightness + scale 1.05, 0.12s ease
-Alert dot pulse:  scale 1→1.3→1, 1.8s ease-in-out infinite (apenas dots críticos)
-Skeleton shimmer: translateX(-100%→100%), 1.8s ease-in-out infinite
-Nav transitions:  background + color, 0.1s ease
+- Entrada de página/bloco: `.rise` — `translateY(8px)→0` + opacity, 0,4s `cubic-bezier(.2,.7,.3,1)`.
+- Skeleton shimmer em carregamento; pulso só em dot crítico.
+- Transições de navegação: cor/fundo ~0,1s.
+- `prefers-reduced-motion: reduce` desliga animações.
 
-Sem: bounce, elastic, layout animation, parallax
-```
+Sem bounce, elastic, parallax nem animação em dado que atualiza.
 
 ---
 
-## Accessibility
+## Acessibilidade
 
-- Contraste mínimo 4.5:1 para texto corpo, 3:1 para texto grande
-- Focus ring: `outline: 2px solid var(--primary), outline-offset: 2px`
-- Todos os gráficos com `aria-label` descritivo
-- Ícones sem texto: `aria-hidden`, ação descrita no botão pai
-- Sidebar active item: `aria-current="page"`
+- Contraste AA (4,5:1 corpo, 3:1 texto grande) nos 4 temas.
+- Foco único via `:focus-visible` (anel na cor primária), link de salto para o conteúdo.
+- Gráficos com tabela equivalente; ícones decorativos `aria-hidden`.
+- Item ativo da navegação com `aria-current="page"`; filtros com `aria-pressed`.
+- Não comunicar estado só por cor (faixa de risco sempre com texto).
+
+Não é auditoria WCAG completa (falta VoiceOver/NVDA e zoom 200%).
 
 ---
 
 ## Não fazer
 
-- Não usar branco puro `#FFFFFF` como background de página
-- Não usar o verde `#BACDC7` do protótipo no painel de conteúdo (saturado demais, briga c/ charts) — usar `--content`
-- Não usar gradientes decorativos em cards de dados
-- Não adicionar animações de entrada em dados que atualizam em tempo real (distrai)
-- Não usar mais de 3 cores num mesmo gráfico sem necessidade semântica clara
-- Não colocar bordas coloridas em cards (exceto callouts de alerta com border-left)
-- Não usar fonte diferente de Inter/Inter Tight/Instrument Serif/JetBrains Mono
+- Branco puro como fundo de página (usar `--canvas`/`--content`).
+- Hex solto em componente novo — criar ou reutilizar token.
+- Gradiente decorativo em card de dados; borda colorida em card (exceto callout com
+  `border-left`).
+- Mais de 3 cores num gráfico sem motivo semântico.
+- Fonte fora de Inter / Inter Tight / JetBrains Mono / Instrument Serif; carregar fonte de CDN.
+- Número sem `FonteReal`, ou valor fictício fora da demo rotulada.
+- Estética de SaaS genérico, gov.br denso, BI de widgets ou dashboard clínico (ver PRODUCT.md).

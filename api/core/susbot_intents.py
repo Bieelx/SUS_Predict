@@ -86,6 +86,36 @@ def eh_saudacao(texto_normalizado: str) -> bool:
     return bool(texto_normalizado) and bool(_RE_SO_SAUDACAO.match(texto_normalizado))
 
 
+# Conversa social curta (mensagem inteira). Respondida em código, com tom humano,
+# sem abrir a porta para conversa de uso geral: "me conta uma piada" não casa.
+_SOCIAL = {
+    "agradecimento": r"(?:(?:muito )?obrigad[oa]s?|valeu+|vlw|brigad[oa]|agradeco|show|perfeito|otimo|massa)",
+    "despedida": r"(?:tchau+|ate (?:mais|logo|amanha|breve|depois)|falou|flw|boa (?:noite|semana) e ate mais|abraco)",
+    "confirmacao": r"(?:ok+|okay|certo|entendi|blz|beleza|combinado|joia|legal|ta bom|uhum)",
+}
+_SEP = r"[\s,.!?;:]*"
+_RE_SOCIAL = {
+    tipo: re.compile(rf"^(?:(?:{_SAUDACAO}|clara){_SEP})*(?:{padrao}{_SEP})+(?:clara{_SEP})?$")
+    for tipo, padrao in _SOCIAL.items()
+}
+
+
+def tipo_conversa_social(pergunta: str) -> str | None:
+    """'saudacao', 'como_vai', 'agradecimento', 'despedida', 'confirmacao' ou None."""
+
+    texto = normalizar_texto(pergunta)
+    if not texto:
+        return None
+    for tipo in ("agradecimento", "despedida"):
+        if _RE_SOCIAL[tipo].match(texto):
+            return tipo
+    if eh_saudacao(texto):
+        return "como_vai" if re.search(r"tudo (?:bem|bom|certo|joia)|como (?:vai|esta)|beleza\?", texto) else "saudacao"
+    if _RE_SOCIAL["confirmacao"].match(texto):
+        return "confirmacao"
+    return None
+
+
 def rotear_intencao(pergunta: str) -> IntentRoute | None:
     """Retorna uma rota somente quando a intenção operacional é inequívoca."""
 

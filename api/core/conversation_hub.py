@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from api.core import db
+
+log = logging.getLogger(__name__)
 
 
 SCHEMA = """
@@ -180,10 +184,29 @@ def executar_acao(acao_id: str, conversa_id: str, usuario: str, agente):
         eventos = list(agente.stream_eventos_confirmado(ferramenta, acao["dados"].get("argumentos") or {}))
         falhou = any(e["event"] == "erro" for e in eventos)
         transicionar(acao_id, "executando", "falhou" if falhou else "concluida", eventos)
+        if not falhou and ferramenta == "gerar_etp":
+            _enviar_etp_aos_canais(conversa_id, usuario, eventos)
     except Exception:
         transicionar(acao_id, "executando", "verificar_resultado")
         raise
     yield from eventos
+
+
+def _enviar_etp_aos_canais(conversa_id: str, usuario: str, eventos: list[dict]) -> None:
+    """PDF segue para Telegram/WhatsApp em thread: a resposta da web não espera a rede externa."""
+    etp_id = next((e["data"].get("etp_id") for e in eventos
+                   if e["event"] == "artefato" and e["data"].get("tipo") == "etp"), None)
+    if not etp_id:
+        return
+    from api.core.channel_router import enviar_etp_aos_canais
+
+    def enviar():
+        try:
+            enviar_etp_aos_canais(usuario, conversa_id, etp_id)
+        except Exception:  # pragma: no cover - canal externo não pode derrubar a confirmação
+            log.exception("Falha ao enviar PDF do ETP aos canais")
+
+    threading.Thread(target=enviar, daemon=True).start()
 
 
 PROMPT_RESUMO = (

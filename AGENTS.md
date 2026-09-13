@@ -1,4 +1,4 @@
-# CLAUDE.md — SUS Predict
+# AGENTS.md — SUS Predict
 
 Projeto acadêmico de startup de um grupo de 5 pessoas da FIAP (TCC 2026). Gabriel é o
 cientista de dados do grupo. Banca em 17/09/2026; final em 24/10/2026.

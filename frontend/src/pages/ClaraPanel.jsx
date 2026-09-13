@@ -398,6 +398,20 @@ function TabelaCampos({ colunas, linhas }) {
   );
 }
 
+async function baixarPdfEtp(etpId) {
+  const resp = await fetch(`${API_BASE}/api/etp/${encodeURIComponent(etpId)}/pdf`, { headers: getAuthHeaders() });
+  if (!resp.ok) {
+    window.alert('Não foi possível gerar o PDF deste ETP agora.');
+    return;
+  }
+  const url = URL.createObjectURL(await resp.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `ETP-rascunho-${etpId.slice(0, 8)}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function ArtefatoView({ artefato }) {
   if (!artefato) return null;
 
@@ -468,6 +482,14 @@ function ArtefatoView({ artefato }) {
       }}>
         <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--good)' }}>{artefato.titulo}</p>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-700)', lineHeight: 1.5 }}>{artefato.justificativa}</p>
+        {artefato.etp_id && (
+          <button type="button" onClick={() => baixarPdfEtp(artefato.etp_id)} style={{
+            marginTop: 8, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--good)',
+            background: 'white', color: 'var(--good)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}>
+            Baixar PDF do rascunho
+          </button>
+        )}
         {!!Object.keys(artefato.detalhes || {}).length && (
           <Detalhes>
             <GradeCampos entradas={Object.entries(artefato.detalhes).filter(([, v]) => temValor(v))} />
