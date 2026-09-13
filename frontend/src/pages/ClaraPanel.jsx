@@ -2,6 +2,7 @@ import { Fragment, useState, useRef, useEffect } from 'react';
 import { briefingDemo } from '../demo/adapter.js';
 import QRCode from 'react-qr-code';
 import { API_BASE, MIcon } from '../shared/ui.jsx';
+import { dataBr } from '../shared/formatters.js';
 import {
   apagarConversaSusbot,
   consultarHubSusbot,
@@ -270,15 +271,14 @@ function criarThreadVazia() {
 
 // ─── Subcomponentes ─────────────────────────────────────────────────────────
 
-// Marca do bot: monograma tipográfico, não avatar de robô. O produto fala em
-// vozes editoriais (mono para meta, Inter Tight para título) — o assistente segue a
-// mesma gramática em vez do vocabulário genérico de chatbot.
+// Avatar da Clara; se a imagem falhar, cai no monograma.
 function ClaraMark({ size = 30, ativa = false }) {
+  const [falhou, setFalhou] = useState(false);
   return (
     <span className={`susbot-mark${ativa ? ' susbot-mark--ativa' : ''}`} style={{
-      width: size, height: size, borderRadius: Math.round(size * 0.32), fontSize: Math.round(size * 0.46),
+      width: size, height: size, borderRadius: '50%', fontSize: Math.round(size * 0.46), overflow: 'hidden',
     }} aria-hidden="true">
-      C
+      {falhou ? 'C' : <img src="/clara-avatar.jpg" alt="" onError={() => setFalhou(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
     </span>
   );
 }
@@ -349,16 +349,24 @@ function Detalhes({ children }) {
   );
 }
 
+// Valor cru da ferramenta vira leitura humana: data ISO em DD/MM/AAAA e número em pt-BR.
+function formatarCampo(valor) {
+  const texto = String(valor).trim();
+  if (/^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(texto)) return dataBr(texto.slice(0, 10));
+  if (/^-?\d+(\.\d+)?$/.test(texto)) return Number(texto).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+  return texto;
+}
+
 function GradeCampos({ entradas }) {
   return (
-    <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(entradas.length, 3)}, 1fr)`, gap: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(120px, 100%), 1fr))', gap: 8 }}>
       {entradas.map(([chave, valor]) => (
         <div key={chave} className="susbot-resumo-card">
           <p style={{ margin: 0, fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-400)' }}>
             {chave.replace(/_/g, ' ')}
           </p>
-          <p style={{ margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: 'var(--ink-900)' }}>
-            {String(valor)}
+          <p style={{ margin: '2px 0 0', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: 'var(--ink-900)', overflowWrap: 'anywhere' }}>
+            {formatarCampo(valor)}
           </p>
         </div>
       ))}
@@ -387,7 +395,7 @@ function TabelaCampos({ colunas, linhas }) {
             <tr key={i}>
               {colunas.map(col => (
                 <td key={col} style={{ padding: '6px 10px', borderTop: '1px solid var(--ink-50)', color: 'var(--ink-700)', whiteSpace: 'nowrap' }}>
-                  {temValor(linha[col]) ? String(linha[col]) : '—'}
+                  {temValor(linha[col]) ? formatarCampo(linha[col]) : '—'}
                 </td>
               ))}
             </tr>
@@ -1715,7 +1723,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId 
           font-size: 13px; line-height: 1.55; overflow-wrap: anywhere;
           box-shadow: 0 6px 16px -10px color-mix(in srgb, var(--primary) 70%, transparent);
         }
-        .susbot-bot { display: flex; flex-direction: column; align-items: flex-start; }
+        .susbot-bot { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; max-width: 100%; }
         .susbot-bot > .susbot-bot__texto, .susbot-bot > div:not([class]) { align-self: stretch; }
         .susbot-bot__quem {
           margin: 0 0 6px; display: flex; align-items: center; gap: 7px;
@@ -1729,7 +1737,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId 
         }
         .susbot-bot--erro .susbot-bot__texto { border-color: color-mix(in srgb, var(--bad) 30%, transparent); background: color-mix(in srgb, var(--bad) 5%, var(--elev)); }
         .susbot-resumo-card {
-          padding: 8px 10px; border-radius: 10px; background: var(--elev);
+          min-width: 0; padding: 8px 10px; border-radius: 10px; background: var(--elev);
           border: 1px solid color-mix(in srgb, var(--ink-100) 80%, transparent);
           box-shadow: 0 4px 12px -10px rgba(20,50,74,.3);
         }

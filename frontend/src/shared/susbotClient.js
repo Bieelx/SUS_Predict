@@ -265,7 +265,8 @@ export async function lerEventosSseSusbot(response, handlers = {}) {
     }
 
     if (evento.event === SUSBOT_SSE_EVENTS.token) {
-      const token = normalizarTexto(evento.data?.texto ?? evento.data);
+      // Token não leva trim: o espaço entre palavras chega na borda do pedaço.
+      const token = String(evento.data?.texto ?? evento.data ?? '');
       if (token) {
         respostaFinal += token;
         handlers.onToken?.(token, evento.data);
