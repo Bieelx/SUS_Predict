@@ -115,6 +115,7 @@ frontend/tests/*
 !frontend/tests/mobile-interface.spec.js
 !frontend/tests/mobile-rework.spec.js
 evidencias
+.claude-flow
 
 # estado dos hooks do plugin ruflo (regravado a cada comando)
 .claude-flow/

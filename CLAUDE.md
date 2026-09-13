@@ -5,28 +5,19 @@ Gabriel é o cientista de dados do grupo.
 
 ---
 
-## Redesenho de telas em andamento — leia antes de mexer no frontend
+## Documentação — leia antes de mexer
 
-O frontend (`frontend/src/App.jsx`) está passando por um redesenho completo de produto.
-**A fonte de verdade para qualquer tela nova ou alterada é `docs/telas/`**, não o código
-atual do `App.jsx` nem a seção "Frontend React" mais abaixo neste arquivo (que descreve a
-versão anterior, hoje obsoleta).
+A documentação foi consolidada em 12/09/2026 em três arquivos, que são a fonte de verdade
+e **prevalecem sobre as seções históricas mais abaixo neste arquivo** (backend no "servidor
+Ubuntu", protótipo mock no `App.jsx`, `docs/telas/` — tudo isso está superado):
 
-Contexto: o `App.jsx` atual (~1860 linhas) é um protótipo visual de alta fidelidade com
-**dados 100% mockados** (arrays estáticos no topo do arquivo, sem nenhuma chamada à API) —
-inclui Visão Geral, Epidemiologia SINAN e Internações SIH já com layout e gráficos, mais
-Ruptura de Insumos/Alertas/Superlotação como placeholders "Em desenvolvimento". Decisão do
-grupo: **esse protótipo não será reaproveitado.** A Visão Geral em particular reproduz o
-padrão de BI descritivo (4 KPIs soltos + gráfico + gauge + mapa hexagonal + donut) que o
-redesenho existe para corrigir — o produto deve responder "eu preciso agir hoje, e em quê",
-não só mostrar dado.
+- [docs/01-produto.md](./docs/01-produto.md) — tese, personas, telas atuais e regras de produto
+- [docs/02-arquitetura.md](./docs/02-arquitetura.md) — infra Azure, dados, auth/perfis, Clara,
+  registros locais, inputs operacionais, endpoints
+- [docs/03-status.md](./docs/03-status.md) — feito, pendente e decisões que mudaram
 
-O redesenho está documentado tela por tela em `docs/telas/` (ver
-[docs/telas/README.md](./docs/telas/README.md)), com casos de uso, wireframes textuais e
-uma auditoria de consistência entre telas já validada com o grupo. `DESIGN.md` na raiz
-descreve o design system do protótipo antigo — os tokens visuais podem servir de ponto de
-partida, mas a estrutura de páginas ali (seção "Pages") está superada pelas telas em
-`docs/telas/`.
+Os originais ficam em `docs/_arquivo/` só como histórico. O frontend já foi reescrito em
+`frontend/src/pages/*` e consome a API real.
 
 ---
 
@@ -217,7 +208,7 @@ Cascade Holt → OLS em `api/core/prediction.py` (`gerar_predicao()`). **Prophet
 removido do cascade** — em séries epidemiológicas com surtos dominantes (dengue 2024, por
 exemplo) ele superajusta os picos e distorce a previsão. Detalhe completo do pipeline
 (detecção de surto via MAD, limpeza da série, restauração dos valores reais) em
-[docs/03-arquitetura.md](./docs/03-arquitetura.md).
+[docs/02-arquitetura.md](./docs/02-arquitetura.md).
 
 1. **Holt** (primário, ≥ 4 pontos limpos): suavização exponencial dupla em `log1p`, grid
    search de α/β, IC 80% via margem proporcional ao horizonte
@@ -256,7 +247,7 @@ simples (`authed` em `useState`, sem JWT real). **Todos os dados são mock** —
 página faz `fetch`/`axios` para a API.
 
 Isso **não é a especificação do produto** — é o protótipo visual que está sendo
-substituído. A especificação atual, tela por tela, está em `docs/telas/`. Ao implementar
+substituído. A especificação atual, tela por tela, está em `docs/01-produto.md`. Ao implementar
 qualquer tela, seguir a estrutura e as regras documentadas lá (camadas, fluxo de estados,
 regras de dependência entre telas), não a estrutura do `App.jsx` hoje.
 
@@ -288,16 +279,16 @@ regras de dependência entre telas), não a estrutura do `App.jsx` hoje.
 ## Próximos passos do projeto
 
 Lista viva — o detalhamento e a priorização atuais estão em
-[docs/README.md](./docs/README.md) (status por camada) e em `docs/telas/` (telas por
+[docs/03-status.md](./docs/03-status.md) (status por camada) e em `docs/01-produto.md` (telas por
 tela). Resumo de alto nível:
 
 1. ✅ Conectar PySUS real ao `api/main.py` — implementado com detecção automática
 2. ✅ Cascade Holt → OLS com detecção de surto (MAD) — implementado, Prophet removido
 3. ✅ Persistência SQLite + Supabase opcional (`api/core/db.py`) — implementado
 4. ✅ Redesenho de telas (Visão Geral, Insumos, Alertas, ETP, Análises nível 2) — desenhado
-   em `docs/telas/`, aguardando implementação
+   em `docs/01-produto.md`, aguardando implementação
 5. Implementar as telas do redesenho no `App.jsx` (o protótipo mock atual será
    descartado — ver seção de redesenho no topo deste arquivo)
 6. Integrar API do Gemini para geração de insights textuais automáticos (Clara Fase 1,
-   Camada 2 de [docs/telas/01-visao-geral.md](./docs/telas/01-visao-geral.md))
+   Camada 2 de [docs/01-produto.md](./docs/01-produto.md))
 7. Autenticação simples para o grupo conseguir usar sem expor a API publicamente
