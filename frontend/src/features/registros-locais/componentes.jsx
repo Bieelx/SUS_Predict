@@ -6,7 +6,7 @@ import { MIcon } from '../../shared/ui.jsx';
 import { dataBr, decimal, inteiro } from '../../shared/formatters.js';
 import {
   ABAS, ATALHOS_PERIODO, ESTADOS_RELATO, estadoDaVersao, intervaloDoAtalho,
-  rotuloPendencia, textoCobertura,
+  rotuloPendencia, textoCobertura, ehDataValida,
 } from './regras.js';
 
 // ─── Estados de página ───────────────────────────────────────────────────────
@@ -278,9 +278,10 @@ export function ListaRegistros({ itens, aba, onAbrir, carregandoMais, proximaPag
 
 export function DetalheRegistro({
   registro, catalogo, onVoltar, onConfirmar, onSalvarRascunho, onRejeitar, onCorrigir,
-  onCancelar, onAbrirConversa, salvando, aviso, erroAcao,
+  onCancelar, onAbrirConversa, onRecarregar, unidade, salvando, aviso, erroAcao,
 }) {
   const [valor, setValor] = useState(registro?.valor ?? '');
+  const [data, setData] = useState(registro?.periodo_inicio || '');
   const [dimensoes, setDimensoes] = useState(registro?.dimensoes || {});
   const [motivo, setMotivo] = useState('');
   const [modo, setModo] = useState(null); // 'corrigir' | 'cancelar' | 'rejeitar'
@@ -289,6 +290,7 @@ export function DetalheRegistro({
 
   useEffect(() => {
     setValor(registro?.valor ?? '');
+    setData(registro?.periodo_inicio || '');
     setDimensoes(registro?.dimensoes || {});
     setModo(null);
     setMotivo('');
@@ -303,10 +305,23 @@ export function DetalheRegistro({
   const rascunho = registro.status === 'rascunho';
   const valoresEditados = () => ({
     valor: valor === '' ? null : String(valor),
-    dimensoes,
-    periodo_inicio: registro.periodo_inicio,
-    periodo_fim: registro.periodo_fim,
+    dimensoes: Object.fromEntries(Object.entries(dimensoes).filter(([, v]) => String(v).trim() !== '')),
+    periodo_inicio: data || null,
+    periodo_fim: data || null,
   });
+
+  function confirmarRevisao() {
+    const faltantes = [];
+    if (valor === '' || !Number.isSafeInteger(Number(valor)) || Number(valor) < 0) faltantes.push('Informe uma quantidade inteira igual ou maior que zero.');
+    if (!ehDataValida(data)) faltantes.push('Informe a data do fechamento.');
+    for (const dimensao of definicao?.dimensoes || []) {
+      if (dimensao.obrigatoria && !String(dimensoes[dimensao.codigo] || '').trim()) faltantes.push(`Informe ${dimensao.nome.toLocaleLowerCase('pt-BR')}.`);
+    }
+    if (!definicao) faltantes.push('Aguarde o catálogo de campos antes de confirmar.');
+    if (faltantes.length) { setErroCampo(faltantes.join(' ')); return; }
+    setErroCampo('');
+    onConfirmar(valoresEditados());
+  }
 
   function comMotivo(acao) {
     if (!motivo.trim()) {
@@ -323,13 +338,17 @@ export function DetalheRegistro({
         <MIcon m="arrow_back" size={16} /> Voltar aos registros
       </button>
 
-      <h1 style={{ fontFamily: 'var(--ff-tight)', fontSize: 'var(--fs-lg)', margin: '0 0 6px' }}>
+      <div className="rl-revisao-cabecalho">
+      <span className="eyebrow">{rascunho ? 'Revisar e confirmar' : 'Registro da unidade'}</span>
+      <h2 style={{ fontFamily: 'var(--ff-tight)', fontSize: 'var(--fs-lg)', margin: '0 0 6px' }}>
         {registro.indicador?.nome || 'Indicador não informado'}
-      </h1>
+      </h2>
       <p style={{ fontFamily: 'var(--ff-mono)', fontSize: 'var(--fs-lg)', margin: '0 0 4px', color: 'var(--ink-900)', fontVariantNumeric: 'tabular-nums' }}>
         {registro.valor == null ? 'Valor não informado' : `${inteiro(registro.valor)} ${registro.indicador?.unidade_medida || ''}`}
       </p>
       <p style={{ margin: '0 0 18px' }}><EstadoDaVersao status={registro.status} /></p>
+      </div>
+      <div className="rl-revisao-layout"><div className="rl-revisao-principal">
 
       {registro.correcao_em_elaboracao && (
         <p className="rl-aviso">
@@ -338,18 +357,23 @@ export function DetalheRegistro({
         </p>
       )}
       {aviso && <p className="rl-aviso">{aviso}</p>}
-      {erroAcao && <p className="rl-aviso rl-aviso--erro" role="alert">{erroAcao}</p>}
+      {erroAcao && <div className="rl-aviso rl-aviso--erro" role="alert"><p>{erroAcao}</p>{onRecarregar && <button type="button" className="rl-botao" disabled={salvando} onClick={onRecarregar}>Recarregar registro</button>}</div>}
 
       <dl>
-        <dt>Unidade</dt><dd>{registro.unidade_id}</dd>
-        <dt>Data operacional</dt><dd>{dataOperacional(registro)}</dd>
-        <dt>Dimensões</dt><dd>{dimensoesTexto(registro.dimensoes)}</dd>
-        <dt>Versão exibida</dt><dd>{registro.numero_versao ?? 'Não informada'}</dd>
+        <dt>Unidade</dt><dd>{unidade?.nome || 'Unidade do registro'}{unidade?.cnes && <small className="rl-cnes">CNES {unidade.cnes}</small>}</dd>
+        {!rascunho && <>
+          <dt>Data operacional</dt><dd>{dataOperacional(registro)}</dd>
+          <dt>Detalhes</dt><dd>{dimensoesTexto(registro.dimensoes)}</dd>
+          <dt>Versão exibida</dt><dd>{registro.numero_versao ?? 'Não informada'}</dd>
+        </>}
       </dl>
 
       {rascunho && (capacidades.editar_rascunho || capacidades.confirmar) && (
-        <section aria-labelledby="rl-revisao">
-          <h2 id="rl-revisao">Revisão do rascunho</h2>
+        <section className="rl-formulario" aria-labelledby="rl-revisao">
+          <h2 id="rl-revisao">Revise os dados</h2>
+          <p className="rl-ajuda">Confira o que aconteceu na unidade. Ao confirmar, os dados passam a compor apenas os registros locais.</p>
+          {erroCampo && !modo && <p role="alert" className="rl-campo-erro" ref={erroRef} tabIndex={-1}>{erroCampo}</p>}
+          {!definicao && <p className="rl-aviso">Carregando os campos do indicador. Se não aparecerem, <button type="button" className="rl-botao" onClick={() => window.location.reload()}>Tentar novamente</button></p>}
           {registro.pendencias.length > 0 && (
             <ul style={{ margin: '0 0 12px', paddingLeft: 18, color: 'var(--warn)', fontSize: 'var(--fs-sm)' }}>
               {registro.pendencias.map(pendencia => (
@@ -357,6 +381,12 @@ export function DetalheRegistro({
               ))}
             </ul>
           )}
+          <fieldset disabled={salvando}>
+          <legend className="sr-only">Dados do rascunho</legend>
+          <label className="rl-campo">
+            <span className="eyebrow">Data do fechamento</span>
+            <input type="date" value={data} onChange={evento => setData(evento.target.value)} />
+          </label>
           <label style={{ display: 'block', marginBottom: 12 }}>
             <span className="eyebrow">Quantidade ({registro.indicador?.unidade_medida})</span>
             <input type="number" min="0" step="1" value={valor} onChange={evento => setValor(evento.target.value)} aria-describedby="rl-valor-ajuda" />
@@ -375,15 +405,16 @@ export function DetalheRegistro({
                 : <input type="text" value={dimensoes[dimensao.codigo] || ''} onChange={evento => setDimensoes({ ...dimensoes, [dimensao.codigo]: evento.target.value })} />}
             </label>
           ))}
-          <div className="rl-acoes">
+          </fieldset>
+          <div className="rl-acoes rl-confirmacao">
             {capacidades.editar_rascunho && (
               <button type="button" className="rl-botao" disabled={salvando} onClick={() => onSalvarRascunho(valoresEditados())}>
                 Salvar rascunho
               </button>
             )}
             {capacidades.confirmar
-              ? <button type="button" className="rl-botao-primario" disabled={salvando} onClick={() => onConfirmar(valoresEditados())}>
-                  {salvando ? 'Enviando…' : 'Confirmar registro'}
+              ? <button type="button" className="rl-botao-primario" disabled={salvando} onClick={confirmarRevisao}>
+                  {salvando ? 'Salvando e confirmando…' : 'Confirmar registro'}
                 </button>
               : <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-500)', margin: 0, alignSelf: 'center' }}>
                   A confirmação será feita por uma pessoa autorizada da unidade.
@@ -446,6 +477,9 @@ export function DetalheRegistro({
         </section>
       )}
 
+      {rascunho && !capacidades.editar_rascunho && !capacidades.confirmar && <p className="rl-aviso">Seu acesso permite consultar este registro. A confirmação precisa ser feita por um revisor ou gestor vinculado à unidade.</p>}
+      </div><aside className="rl-revisao-origem">
+      {registro.relato?.texto && <div className="rl-relato"><span className="eyebrow">Relato recebido pela Clara</span><blockquote>{registro.relato.texto}</blockquote><p>Compare o relato com os campos da revisão antes de confirmar.</p></div>}
       <section aria-labelledby="rl-origem">
         <h2 id="rl-origem">Origem</h2>
         <dl>
@@ -456,12 +490,7 @@ export function DetalheRegistro({
           <dt>Confirmação</dt>
           <dd>{registro.confirmador ? `${registro.confirmador} em ${dataBr(registro.confirmado_em)}` : 'Ainda não confirmado'}</dd>
         </dl>
-        {registro.relato?.texto
-          ? <details>
-              <summary style={{ cursor: 'pointer', fontSize: 'var(--fs-sm)' }}>Relato original</summary>
-              <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-700)', marginTop: 8 }}>{registro.relato.texto}</p>
-            </details>
-          : <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-500)' }}>Relato de origem indisponível.</p>}
+        {!registro.relato?.texto && <p className="rl-ajuda">Relato de origem indisponível.</p>}
         {registro.relato?.conversa_id && onAbrirConversa && (
           <button type="button" className="rl-botao" style={{ marginTop: 10 }} onClick={() => onAbrirConversa(registro.relato.conversa_id)}>
             Abrir conversa de origem
@@ -469,8 +498,8 @@ export function DetalheRegistro({
         )}
       </section>
 
-      <section aria-labelledby="rl-historico">
-        <h2 id="rl-historico">Histórico de versões</h2>
+      <details className="rl-historico">
+        <summary id="rl-historico">Histórico de versões ({registro.versoes.length})</summary>
         <ul className="rl-versoes">
           {registro.versoes.map(versao => (
             <li key={versao.numero_versao}>
@@ -479,7 +508,8 @@ export function DetalheRegistro({
             </li>
           ))}
         </ul>
-      </section>
+      </details>
+      </aside></div>
     </div>
   );
 }

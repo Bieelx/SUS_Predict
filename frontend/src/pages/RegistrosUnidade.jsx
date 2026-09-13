@@ -15,7 +15,7 @@ import { chaveIdempotencia, criarClienteRegistrosLocais, mensagemDoErro } from '
 import { operationalInputsClient } from '../shared/operationalInputsClient.js';
 import {
   adaptarResumo, hojeOperacional, intervaloDoAtalho, normalizarCatalogo, normalizarRegistro,
-  normalizarUnidade, periodoValido, podeConsolidar, podeRegistrar,
+  normalizarUnidade, periodoValido, podeConsolidar, podeRegistrar, registroFoiEditado,
 } from '../features/registros-locais/regras.js';
 import { getCurrentUser } from '../shared/auth.js';
 
@@ -41,8 +41,9 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
   const [pagina, setPagina] = useState(1);
   const [operacional, setOperacional] = useState({ estabelecimentos: [], rascunhos: [], selecionado: '', busca: '', carregando: true, erro: null, salvando: null });
   const geracao = useRef(0);
+  const mutacaoEmCurso = useRef(false);
 
-  const unidadeId = params.unidade || null;
+  const unidadeId = (registroId ? detalhe.registro?.unidade_id : null) || params.unidade || null;
   const unidade = (unidades.lista || []).find(item => item.id === unidadeId) || null;
   const periodo = {
     inicio: params.inicio || intervaloDoAtalho('7dias').inicio,
@@ -68,7 +69,7 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
         if (!ativo) return;
         const lista = (payload?.itens || []).map(normalizarUnidade);
         setUnidades({ lista, carregando: false, erro: null, tipo: null });
-        if (!unidadeId && lista.length) {
+        if (!registroId && !unidadeId && lista.length) {
           // Uma unidade dispensa escolha. Com várias, a preferência anterior só
           // volta depois de ser revalidada contra a lista autorizada.
           const salva = (() => { try { return localStorage.getItem(CHAVE_UNIDADE); } catch { return null; } })();
@@ -91,6 +92,7 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
   useEffect(() => {
     if (!unidadeId) { setCatalogo(null); return undefined; }
     let ativo = true;
+    setCatalogo(null);
     api.obterCatalogo(unidadeId)
       .then(payload => { if (ativo) setCatalogo(normalizarCatalogo(payload)); })
       .catch(() => { if (ativo) setCatalogo(null); });
@@ -181,9 +183,11 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
   }, [api, registroId, usuario]);
 
   useEffect(() => { void carregarDetalhe(); }, [carregarDetalhe]);
+  useEffect(() => { setAcao({ salvando: false, erro: null, aviso: null }); setAnuncio(''); }, [registroId]);
 
   async function executar(nome, operacao, mensagemSucesso) {
-    if (acao.salvando) return; // Duplo clique não vira segunda gravação.
+    if (mutacaoEmCurso.current) return;
+    mutacaoEmCurso.current = true;
     setAcao({ salvando: true, erro: null, aviso: null });
     try {
       await operacao();
@@ -207,13 +211,25 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
       });
       if (tipo === 'nao_autorizado') setDetalhe({ registro: null, carregando: false, erro: mensagemDoErro(erro), tipo });
       void nome;
+    } finally {
+      mutacaoEmCurso.current = false;
     }
   }
 
   const registro = detalhe.registro;
   const mutacao = (acaoNome, metodo) => dados => executar(
     acaoNome,
-    () => api[metodo](registroId, dados, registro?.versao_esperada, chaveIdempotencia(acaoNome, registroId, registro?.versao_esperada)),
+    async () => {
+      let versao = registro?.versao_esperada;
+      if (metodo === 'confirmar' && registroFoiEditado(registro, dados)) {
+        const salvo = await api.salvarRascunho(registroId, dados, versao, chaveIdempotencia('editar', registroId, versao));
+        versao = salvo.atual.numero_versao;
+        // Mantém a versão salva para permitir nova tentativa se a confirmação falhar.
+        setDetalhe(estado => ({ ...estado, registro: { ...normalizarRegistro(salvo, { aba: 'historico', usuario }),
+          capacidades: registro.capacidades, relato: registro.relato } }));
+      }
+      return api[metodo](registroId, dados, versao, chaveIdempotencia(acaoNome, registroId, versao));
+    },
     {
       confirmar: 'Registro confirmado.',
       salvarRascunho: 'Rascunho salvo.',
@@ -259,7 +275,7 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
   }
 
   const painelOperacional = (
-    <section className="rl-resumo-item" aria-labelledby="rl-operacional-titulo" style={{ marginBottom: 18 }}>
+    <section className="rl-operacional" aria-labelledby="rl-operacional-titulo">
       <h2 id="rl-operacional-titulo" style={{ margin: '0 0 6px', fontSize: 'var(--fs-md)' }}>Atualização operacional com a Clara</h2>
       <p style={{ margin: '0 0 14px', color: 'var(--ink-500)', fontSize: 'var(--fs-sm)' }}>
         Registre movimentações de vacinas e medicamentos ou a situação atual dos leitos. A Clara cria um rascunho; nada muda antes da confirmação abaixo.
@@ -309,23 +325,23 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   const cabecalho = (
-    <header className="rl-header">
+    <header className={`rl-header${registroId ? ' rl-header--revisao' : ''}`}>
       <div>
         <h1>Registros da unidade</h1>
-        <p>Informações declaradas pelos profissionais das unidades. Não são dados oficiais do DataSUS e não alteram indicadores ou previsões.</p>
+        <p>{registroId ? 'Confira o relato e confirme os dados da unidade. Estes registros são separados do DataSUS.' : 'Informações declaradas pelos profissionais das unidades. Não são dados oficiais do DataSUS e não alteram indicadores ou previsões.'}</p>
       </div>
-      {unidade && podeRegistrar(unidade) && (
+      {!registroId && unidade && podeRegistrar(unidade) && (
         <button type="button" className="rl-botao" onClick={registrarComClara}>Registrar com a Clara</button>
       )}
     </header>
   );
 
-  if (unidades.carregando) return <div className="rise">{cabecalho}{painelOperacional}<SkeletonRegistros /></div>;
+  if (unidades.carregando) return <div className="rise rl-page">{cabecalho}{painelOperacional}<SkeletonRegistros /></div>;
 
   if (unidades.erro) {
     const indisponivel = unidades.tipo === 'indisponivel';
     return (
-      <div className="rise">
+      <div className="rise rl-page">
         {cabecalho}
         {painelOperacional}
         <EstadoLocal
@@ -342,7 +358,7 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
 
   if (!unidades.lista?.length) {
     return (
-      <div className="rise">
+      <div className="rise rl-page">
         {cabecalho}
         {painelOperacional}
         <EstadoLocal
@@ -354,11 +370,10 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
   }
 
   return (
-    <div className="rise">
+    <div className="rise rl-page">
       {demonstracao && <p className="rl-demo-flag"><span aria-hidden="true">●</span> Demonstração — dados fictícios, sem integração com o serviço</p>}
       {cabecalho}
-      <p aria-live="polite" className="sr-only">{anuncio}</p>
-      {!registroId && painelOperacional}
+      <p role="status" className={anuncio ? "rl-sucesso" : "sr-only"}>{anuncio}</p>
 
       {registroId ? (
         detalhe.carregando ? <SkeletonRegistros />
@@ -374,6 +389,8 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
             />
           ) : (
             <DetalheRegistro
+              unidade={(unidades.lista || []).find(item => item.id === registro?.unidade_id)}
+              onRecarregar={carregarDetalhe}
               registro={registro}
               catalogo={catalogo}
               salvando={acao.salvando}
@@ -389,6 +406,7 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
           )
       ) : (
         <>
+          <div className="rl-secao-intro"><span className="eyebrow">Atividades da unidade</span><p>Doses aplicadas, atendimentos e encaminhamentos. Revise os relatos antes de incluí-los nos totais locais.</p></div>
           <ContextoUnidade
             unidades={unidades.lista}
             unidadeId={unidadeId}
@@ -464,6 +482,7 @@ export default function RegistrosUnidade({ rota, onNavegar, onOpenClara }) {
               </div>
             </>
           )}
+          {painelOperacional}
         </>
       )}
     </div>

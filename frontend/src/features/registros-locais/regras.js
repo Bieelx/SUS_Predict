@@ -309,3 +309,12 @@ export function chaveCacheRegistros(usuario, estado) {
     estado?.aba || 'confirmados', estado?.indicador || '-', estado?.status || '-',
   ].join('|');
 }
+
+// Comparação sem depender da ordem das dimensões ou da representação decimal.
+export function registroFoiEditado(registro, dados) {
+  const dimensoes = valor => JSON.stringify(Object.entries(valor || {}).filter(([, v]) => v !== '').sort(([a], [b]) => a.localeCompare(b)));
+  return numero(dados.valor) !== registro.valor
+    || dados.periodo_inicio !== registro.periodo_inicio
+    || dados.periodo_fim !== registro.periodo_fim
+    || dimensoes(dados.dimensoes) !== dimensoes(registro.dimensoes);
+}

@@ -578,7 +578,12 @@ function RascunhoLocalView({ rascunho, onNavigate }) {
       </ul>
       <button
         type="button"
-        onClick={() => onNavigate?.('registros-unidade')}
+        onClick={() => onNavigate?.({
+          page: 'registros-unidade',
+          registroId: registros.length === 1 ? registros[0].id : null,
+          registrosParams: { unidade: rascunho.unidade_id || registros[0]?.unidade_id, aba: 'pendentes',
+            inicio: registros[0]?.atual?.periodo_inicio, fim: registros[0]?.atual?.periodo_fim },
+        })}
         style={{
           justifySelf: 'start', padding: '5px 11px', background: 'var(--primary-soft)',
           border: '1px solid var(--primary-soft-border)', borderRadius: 999, cursor: 'pointer',
@@ -2150,7 +2155,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId 
 
               {current.mensagens.map(m => (
                 <div key={m.id} className="susbot-msg">
-                  <Bolha msg={m} onNavigate={onNavigate} onConfirmar={confirmarAcao} onCancelar={cancelarConfirmacao} onAbrirMemoria={() => setViewMode('memory')} />
+                  <Bolha msg={m} onNavigate={destino => { setOpen(false); onNavigate?.(destino); }} onConfirmar={confirmarAcao} onCancelar={cancelarConfirmacao} onAbrirMemoria={() => setViewMode('memory')} />
                 </div>
               ))}
               <div ref={fimRef} />

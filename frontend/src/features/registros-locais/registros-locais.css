@@ -121,3 +121,63 @@
   .rl-fade { animation: rl-fade 180ms ease both; }
 }
 @keyframes rl-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* Revisão focada: formulário e relato dividem a superfície no desktop. */
+.rl-page { max-width: 1240px; margin-inline: auto; }
+.rl-page .rl-header { align-items: center; padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--ink-100); }
+.rl-page .rl-header p { line-height: 1.65; }
+.rl-secao-intro { margin-bottom: 18px; }
+.rl-secao-intro p, .rl-ajuda { font-size: var(--fs-sm); color: var(--ink-500); line-height: 1.65; max-width: 68ch; }
+.rl-operacional { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--ink-100); }
+.rl-operacional .rl-contexto { padding: 0; border: 0; background: transparent; }
+.rl-operacional .rl-versoes li { padding: 16px 0; border-bottom: 1px solid var(--ink-100); }
+.rl-revisao-cabecalho { padding: 8px 0 20px; }
+.rl-revisao-cabecalho > .eyebrow { display: block; color: var(--primary); margin-bottom: 10px; }
+.rl-revisao-cabecalho h2 { font-size: var(--fs-xl) !important; max-width: 34ch; }
+.rl-revisao-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); border: 1px solid var(--ink-100); border-radius: 18px; background: var(--elev); overflow: hidden; }
+.rl-revisao-principal { padding: 28px; min-width: 0; }
+.rl-revisao-principal > dl { padding-bottom: 22px; border-bottom: 1px solid var(--ink-100); }
+.rl-revisao-origem { padding: 28px; background: color-mix(in srgb, var(--content) 65%, var(--elev)); min-width: 0; }
+.rl-revisao-origem dl { grid-template-columns: 1fr; gap: 4px; }
+.rl-revisao-origem dd { margin-bottom: 12px; overflow-wrap: anywhere; }
+.rl-relato { padding-bottom: 20px; margin-bottom: 24px; border-bottom: 1px solid var(--ink-100); }
+.rl-relato blockquote { margin: 14px 0; font-size: var(--fs-md); line-height: 1.65; color: var(--ink-900); }
+.rl-relato p { font-size: var(--fs-xs); color: var(--ink-500); line-height: 1.6; }
+.rl-formulario fieldset { border: 0; padding: 0; margin: 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 20px 16px; min-width: 0; }
+.rl-formulario fieldset label { min-width: 0; margin-bottom: 0 !important; }
+.rl-formulario fieldset .eyebrow { display: block; margin-bottom: 8px; text-transform: none; letter-spacing: normal; font-size: var(--fs-sm); }
+.rl-formulario fieldset input, .rl-formulario fieldset select { box-sizing: border-box; }
+.rl-confirmacao { padding-top: 20px; border-top: 1px solid var(--ink-100); align-items: center; }
+.rl-confirmacao .rl-botao-primario { order: -1; }
+.rl-cnes { display: block; color: var(--ink-500); margin-top: 4px; }
+.rl-historico summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; padding-block: 12px; }
+.rl-historico .rl-versoes { margin-top: 12px; }
+.rl-versoes li { border-left: 0; padding: 12px 0; border-top: 1px solid var(--ink-100); line-height: 1.6; overflow-wrap: anywhere; }
+.rl-sucesso { color: var(--good); background: color-mix(in srgb, var(--good) 8%, var(--elev)); border: 1px solid color-mix(in srgb, var(--good) 30%, var(--ink-100)); padding: 14px 18px; border-radius: 10px; font-size: var(--fs-sm); }
+.rl-botao:hover:not(:disabled) { background: var(--subtle); border-color: var(--ink-200); }
+.rl-botao-primario:hover:not(:disabled) { background: var(--primary-700, var(--primary)); filter: brightness(.94); }
+.rl-page :is(button, input, select, textarea, summary):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.rl-page button { transition: background 160ms ease-out; }
+@media (max-width: 900px) {
+  .rl-revisao-layout { grid-template-columns: 1fr; }
+  .rl-revisao-origem { border-top: 1px solid var(--ink-100); }
+}
+@media (max-width: 540px) {
+  .rl-revisao-principal, .rl-revisao-origem { padding: 20px 16px; }
+  .rl-formulario fieldset { grid-template-columns: 1fr; }
+  .rl-confirmacao button { width: 100%; }
+  .rl-revisao-cabecalho h2 { font-size: var(--fs-lg) !important; }
+  .rl-page .rl-header { gap: 20px; }
+  .rl-page .rl-header > button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .rl-page button { transition: none; } }
+.rl-page .rl-header--revisao { padding-bottom: 16px; margin-bottom: 16px; }
+.rl-revisao-cabecalho { display: grid; grid-template-columns: 1fr auto; gap: 8px 20px; padding: 4px 0 20px; }
+.rl-revisao-cabecalho > .eyebrow { grid-column: 1 / -1; margin-bottom: 0; }
+.rl-revisao-cabecalho > h2 { margin: 0 !important; }
+.rl-revisao-cabecalho > p { margin: 0 !important; }
+.rl-revisao-cabecalho > p:last-child { grid-column: 1 / -1; }
+@media (max-width: 540px) {
+  .rl-revisao-cabecalho { grid-template-columns: 1fr; gap: 8px; }
+  .rl-revisao-principal > dl { grid-template-columns: 1fr; }
+}
