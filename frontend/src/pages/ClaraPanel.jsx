@@ -20,7 +20,7 @@ import {
   listarMensagensSusbot,
   revogarCanalSusbot,
 } from '../shared/susbotClient.js';
-import { getSusbotPageLabel } from '../shared/susbotContract.js';
+import { detalheLegivelSusbot, getSusbotPageLabel } from '../shared/susbotContract.js';
 
 // ─── Tela 08 — Painel de Conversa da Clara ────────────────────────────────────
 //
@@ -50,7 +50,7 @@ const ERRO_SUSBOT_PADRAO ='Não consegui consultar a Clara agora. Tente novament
 const SUSBOT_IBGE6_PADRAO = '351300';
 
 function mensagemErroSusbot(error) {
-  const detalhe = String(error?.detail || error?.responseText || error?.message || '');
+  const detalhe = detalheLegivelSusbot(error);
   if (/chave da clara inv[aá]lida/i.test(detalhe)) {
     if (error?.proxyApiKeyInjected === false) {
       return 'O proxy local não enviou a chave da Clara. Configure SUSBOT_API_KEY no .env.local e reinicie o frontend.';
@@ -69,6 +69,9 @@ function mensagemErroSusbot(error) {
   }
   if (/token ausente|token inv[aá]lido|token expirado|usu[aá]rio autenticado inv[aá]lido/i.test(detalhe)) {
     return 'Sua sessão expirou ou não é válida. Entre novamente com sua conta.';
+  }
+  if ([400, 403, 409, 422].includes(error?.status) && detalhe) {
+    return detalhe;
   }
   return ERRO_SUSBOT_PADRAO;
 }

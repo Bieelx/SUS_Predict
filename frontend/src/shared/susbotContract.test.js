@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SUSBOT_SSE_EVENTS, chaveIdempotenciaRelato, pareceRelatoLocal } from './susbotContract.js';
+import {
+  SUSBOT_SSE_EVENTS,
+  chaveIdempotenciaRelato,
+  detalheLegivelSusbot,
+  pareceRelatoLocal,
+} from './susbotContract.js';
 
 test('o evento do rascunho local existe no contrato', () => {
   // O backend emite este nome em /api/susbot/perguntar (susbot_router.py).
@@ -34,4 +39,13 @@ test('relato local em linguagem natural é enviado ao fluxo estruturado', () => 
   assert.equal(pareceRelatoLocal('Clara, hoje apliquei 20 doses da vacina da dengue'), true);
   assert.equal(pareceRelatoLocal('Hoje aplicamos 32 doses contra dengue'), true);
   assert.equal(pareceRelatoLocal('Quantas doses de dengue foram aplicadas?'), false);
+});
+
+test('mensagem de validação estruturada do backend permanece legível', () => {
+  assert.equal(detalheLegivelSusbot({
+    detail: { codigo: 'relato_ambiguo', mensagem: 'Informe um acontecimento realizado.' },
+  }), 'Informe um acontecimento realizado.');
+  assert.equal(detalheLegivelSusbot({
+    responseText: JSON.stringify({ detail: { mensagem: 'Selecione uma unidade.' } }),
+  }), 'Selecione uma unidade.');
 });

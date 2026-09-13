@@ -59,6 +59,23 @@ export function pareceRelatoLocal(texto) {
     || /\b(?:encaminhei|encaminhamos)\s+\d+\b/.test(normalizado);
 }
 
+export function detalheLegivelSusbot(error) {
+  const detalhe = error?.detail;
+  if (detalhe && typeof detalhe === 'object') {
+    return String(detalhe.mensagem || detalhe.message || detalhe.codigo || '').trim();
+  }
+  if (detalhe) return String(detalhe).trim();
+  try {
+    const parsed = JSON.parse(String(error?.responseText || ''));
+    const value = parsed?.detail;
+    return typeof value === 'object'
+      ? String(value?.mensagem || value?.message || value?.codigo || '').trim()
+      : String(value || '').trim();
+  } catch {
+    return String(error?.message || '').trim();
+  }
+}
+
 export const SUSBOT_PAGE_LABELS = {
   'visao-geral': 'Visão Geral',
   alertas: 'Alertas',
