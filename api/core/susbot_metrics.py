@@ -26,6 +26,13 @@ def registrar_execucao(execucao: dict[str, Any]) -> None:
         _por_intencao[str(execucao.get("intencao") or "nao_classificada")] += 1
 
 
+def registrar_falha_fidelidade() -> None:
+    """Conta descarte de resposta com número sem guardar seu conteúdo."""
+
+    with _lock:
+        _contadores["respostas_descartadas_fidelidade"] += 1
+
+
 def obter_metricas() -> dict[str, Any]:
     with _lock:
         total = _contadores["respostas_total"]

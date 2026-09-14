@@ -43,6 +43,10 @@ class LLMMock:
 
     def stream_resposta(self, pergunta, contexto, plano, resultado_ferramenta):
         self.stream_chamadas.append((pergunta, contexto, plano, resultado_ferramenta))
+        if resultado_ferramenta:
+            dias = resultado_ferramenta["dados"][0]["dias_restantes"]
+            yield f"Seu estoque dura {dias} dias."
+            return
         yield "Seu estoque "
         yield "dura 12 dias."
 
@@ -63,7 +67,8 @@ def test_stream_do_susbot_emite_tool_token_referencia_e_fim(db):
     assert any(evento["event"] == "referencia" and evento["data"]["rota"] == "/insumos" for evento in eventos)
 
     tokens = "".join(evento["data"]["texto"] for evento in eventos if evento["event"] == "token")
-    assert tokens == "Seu estoque dura 12 dias."
+    dias = _fim(eventos)["resultado_ferramenta"]["dados"][0]["dias_restantes"]
+    assert tokens == f"Seu estoque dura {dias} dias."
 
     tipos = [evento["event"] for evento in eventos]
     assert tipos.index("artefato") > max(i for i, tipo in enumerate(tipos) if tipo == "token")
@@ -105,6 +110,41 @@ def test_narrativa_de_reserva_entra_quando_o_llm_nao_devolve_texto(db):
     assert "cobertura estimada" in fim["resposta"]
     assert "não comprova a relação caso→insumo" in fim["resposta"]
     assert fim["execucao"]["resposta_reserva"] is True
+
+
+def test_resposta_llm_com_numero_inventado_cai_no_template(db):
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.susbot_metrics import obter_metricas, resetar_metricas
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
+
+    class LLMQueInventa(LLMMock):
+        def stream_resposta(self, pergunta, contexto, plano, resultado_ferramenta):
+            yield "Foram registrados 1.234 casos."
+
+    resetar_metricas()
+    seed_susbot_municipio("3550308")
+    agente = criar_susbot_agente("3550308", llm=LLMQueInventa())
+
+    fim = _fim(list(agente.stream_eventos("Quanto dura meu estoque de soro?")))
+
+    assert "1.234 casos" not in fim["resposta"]
+    assert "cobertura estimada" in fim["resposta"]
+    assert fim["execucao"]["falha_fidelidade_numerica"] is True
+    assert obter_metricas()["respostas_descartadas_fidelidade"] == 1
+
+
+def test_resposta_llm_com_numeros_corretos_e_mantida(db):
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.tests.susbot_seed_fixture import seed_susbot_municipio
+
+    seed_susbot_municipio("3550308")
+    agente = criar_susbot_agente("3550308", llm=LLMMock())
+
+    fim = _fim(list(agente.stream_eventos("Quanto dura meu estoque de soro?")))
+
+    dias = fim["resultado_ferramenta"]["dados"][0]["dias_restantes"]
+    assert fim["resposta"] == f"Seu estoque dura {dias} dias."
+    assert "falha_fidelidade_numerica" not in fim["execucao"]
 
 
 def test_stream_do_susbot_usa_llm_quando_nao_ha_ferramenta(db):

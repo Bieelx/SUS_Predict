@@ -22,6 +22,7 @@ from datetime import datetime
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable
 
 from api.core.prompts import (
@@ -38,7 +39,7 @@ from api.core.permissoes import mensagem_ferramenta_negada
 from api.core.clara_model_policy import RACIOCINIO_AVANCADO, perfil_para_plano
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
 from api.core.susbot_intents import normalizar_texto, rotear_intencao, rotear_com_contexto, tipo_conversa_social
-from api.core.susbot_metrics import registrar_execucao
+from api.core.susbot_metrics import registrar_execucao, registrar_falha_fidelidade
 
 log = logging.getLogger("sus_predict.susbot_agent")
 
@@ -99,6 +100,81 @@ def _jsonable(valor: Any) -> Any:
 
 def _sse(evento: str, dados: dict[str, Any]) -> str:
     return f"event: {evento}\ndata: {json.dumps(_jsonable(dados), ensure_ascii=False)}\n\n"
+
+
+_RE_DATA_NUMERICA = re.compile(
+    r"(?<!\d)(?:\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{2,4})(?!\d)"
+)
+_RE_NUMERO = re.compile(
+    r"(?<![\w])[-+]?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?%?(?![\w])"
+)
+
+
+def _normalizar_data_numerica(texto: str) -> str | None:
+    for formato in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(texto, formato).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _normalizar_numero_textual(texto: str) -> str | None:
+    bruto = texto.rstrip("%").replace(".", "").replace(",", ".")
+    try:
+        valor = Decimal(bruto)
+    except InvalidOperation:
+        return None
+    return format(valor.normalize(), "f")
+
+
+def _numeros_em_texto(texto: str) -> set[tuple[str, str]]:
+    """Extrai datas e números em notação pt-BR, normalizados para comparação."""
+
+    encontrados: set[tuple[str, str]] = set()
+    spans_datas = []
+    for match in _RE_DATA_NUMERICA.finditer(texto):
+        data = _normalizar_data_numerica(match.group())
+        if data:
+            encontrados.add(("data", data))
+            spans_datas.append(match.span())
+    for match in _RE_NUMERO.finditer(texto):
+        if any(inicio <= match.start() and match.end() <= fim for inicio, fim in spans_datas):
+            continue
+        numero = _normalizar_numero_textual(match.group())
+        if numero is not None:
+            encontrados.add(("numero", numero))
+    return encontrados
+
+
+def _numeros_na_fonte(valor: Any) -> set[tuple[str, str]]:
+    encontrados: set[tuple[str, str]] = set()
+    if isinstance(valor, dict):
+        for item in valor.values():
+            encontrados.update(_numeros_na_fonte(item))
+    elif isinstance(valor, (list, tuple, set)):
+        for item in valor:
+            encontrados.update(_numeros_na_fonte(item))
+    elif isinstance(valor, bool) or valor is None:
+        pass
+    elif isinstance(valor, (int, float, Decimal)):
+        try:
+            encontrados.add(("numero", format(Decimal(str(valor)).normalize(), "f")))
+        except InvalidOperation:
+            pass
+    else:
+        encontrados.update(_numeros_em_texto(str(valor)))
+    return encontrados
+
+
+def _resposta_numericamente_fiel(
+    resposta: str,
+    artefato: dict[str, Any] | None,
+    resultado_ferramenta: dict[str, Any] | None,
+) -> bool:
+    citados = _numeros_em_texto(resposta)
+    fonte = _numeros_na_fonte(artefato) | _numeros_na_fonte(resultado_ferramenta)
+    return citados <= fonte
 
 
 # Recusa e texto institucional continuam saindo em código, nunca pelo LLM: são a
@@ -1036,16 +1112,26 @@ class ClaraAgent:
                     if not token:
                         continue
                     resposta_final.append(token)
-                    yield {"event": "token", "data": {"texto": token}}
             except Exception as exc:  # provedor fora do ar, quota, timeout
                 log.warning("stream_resposta falhou (%s); usando narrativa de reserva", type(exc).__name__)
+
+            texto_llm = "".join(resposta_final).strip()
+            if texto_llm and ferramenta_executada and not _resposta_numericamente_fiel(
+                texto_llm, artefato, resultado_ferramenta
+            ):
+                log.warning("Resposta do LLM descartada por divergência numérica")
+                registrar_falha_fidelidade()
+                execucao_final["falha_fidelidade_numerica"] = True
+                resposta_final = []
 
             if not "".join(resposta_final).strip():
                 reserva = _narrativa_de_reserva(ferramenta_executada, resultado_ferramenta) if ferramenta_executada else None
                 if reserva:
                     execucao_final["resposta_reserva"] = True
                     resposta_final = [reserva]
-                    yield {"event": "token", "data": {"texto": reserva}}
+
+            for token in resposta_final:
+                yield {"event": "token", "data": {"texto": token}}
 
         # Card depois do texto: é evidência da fonte, não a resposta.
         if artefato:
