@@ -15,10 +15,26 @@ NUMBERS = {"zero": 0, "um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "quatr
            "onze": 11, "doze": 12, "treze": 13, "quatorze": 14, "quinze": 15,
            "dezesseis": 16, "dezessete": 17, "dezoito": 18, "dezenove": 19, "vinte": 20}
 NUMBER = r"(?:\d+(?:[.,]\d+)?|" + "|".join(NUMBERS) + r")"
+TENS = {"vinte": 20, "trinta": 30, "quarenta": 40, "cinquenta": 50, "sessenta": 60, "setenta": 70, "oitenta": 80, "noventa": 90}
+NUMBER = r"(?:\d+(?:[.,]\d+)?|(?:vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa)(?: e (?:um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove))?|" + "|".join(NUMBERS) + r")"
 
 
 def fold(text):
     return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if not unicodedata.combining(c))
+
+
+def parse_number(value):
+    """Converte algarismo ou número por extenso entre zero e noventa e nove."""
+
+    value = fold(str(value)).strip()
+    if value.isdigit():
+        return int(value)
+    if value in NUMBERS:
+        return NUMBERS[value]
+    parts = value.split(" e ")
+    if len(parts) == 2 and parts[0] in TENS and parts[1] in NUMBERS and 0 < NUMBERS[parts[1]] < 10:
+        return TENS[parts[0]] + NUMBERS[parts[1]]
+    raise ValueError(f"Número não reconhecido: {value}")
 
 
 def parse_report_date(text, today=None, max_age_days=None):
@@ -78,7 +94,7 @@ def interpret(text, today=None):
             fail(422, "quantidade_ambigua", "Informe a quantidade inteira sem separador de milhar ou decimal.")
         if re.match(r"\s*(?:a |ou |e (?:" + NUMBER + r")\b)", rest):
             fail(422, "quantidade_ambigua", "Informe uma quantidade única por indicador.")
-        amount = str(NUMBERS[number]) if number in NUMBERS else number.replace(",", ".")
+        amount = str(parse_number(number))
         dims = {}
         if verb in ("apliquei", "aplicamos"):
             if not re.match(r"\s+doses?\b", rest):

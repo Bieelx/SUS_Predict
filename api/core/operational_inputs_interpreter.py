@@ -3,6 +3,7 @@ import re
 import unicodedata
 
 from api.core.local_records_service import fail
+from api.core.local_records_interpreter import NUMBER, parse_number
 
 
 _AMBIGUOUS = re.compile(
@@ -99,6 +100,7 @@ def interpret_operational_input(text):
 
 
 _N = r"(\d+|zero|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte)"
+_N = "(" + NUMBER + ")"
 _VACCINE = (
     r"(covid-?19|influenza|hepatite b|febre amarela|dengue|bcg|hpv|triplice viral|"
     r"tetra viral|pentavalente|poliomielite|rotavirus|pneumococica(?: 10-valente)?|"
@@ -108,8 +110,7 @@ _CONNECT = r"(?:\s+(?:d[aoe]s?|contra|para|pra|a|vacinas?))*\s+"
 
 
 def _int(value):
-    from api.core.local_records_interpreter import NUMBERS
-    return NUMBERS[value] if value in NUMBERS else int(value)
+    return parse_number(value)
 
 
 def interpret_operational_items(text):

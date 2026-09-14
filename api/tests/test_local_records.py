@@ -164,6 +164,12 @@ def test_interpretation_does_not_invent_disease(svc):
     assert items[2]["dimensoes"] == {"destino": "hospital"}
 
 
+def test_interpretation_accepts_compound_number_in_words():
+    items = interpret("Hoje atendemos trinta e duas pessoas com suspeita de dengue", TODAY)
+
+    assert items[0]["valor"] == "32"
+
+
 @pytest.mark.parametrize("text", ["Hoje saíram 32 doses do estoque", "A dengue aumentou", "Internamos 2 pessoas", "Não aplicamos 32 doses", "Hoje aplicamos cerca de 32 doses", "Ontem e hoje aplicamos 32 doses", "Hoje aplicamos 20 ou 30 doses"])
 def test_ambiguous_or_unsupported_input_rejected(text):
     with pytest.raises(HTTPException):

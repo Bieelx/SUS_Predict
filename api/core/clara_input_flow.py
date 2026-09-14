@@ -8,7 +8,7 @@ import re
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from api.core import db, conversation_hub as hub
-from api.core.local_records_interpreter import fold, interpret, report_summary, NUMBER, NUMBERS
+from api.core.local_records_interpreter import fold, interpret, report_summary, NUMBER, parse_number
 
 
 def input_kind(text):
@@ -181,7 +181,10 @@ def _exact_quantity(text):
     if not match or '.' in match.group(1) or ',' in match.group(1):
         return None
     value = match.group(1)
-    return str(NUMBERS[value]) if value in NUMBERS else value
+    try:
+        return str(parse_number(value))
+    except ValueError:
+        return None
 
 
 def _operational_pending_question(item):

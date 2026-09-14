@@ -312,7 +312,7 @@ def test_quantidade_exata_completa_relato_aproximado(flow, channel):
     assert 'foram 25 pessoas' in detail['relato']['transcricao']
 
 
-@pytest.mark.parametrize('answer', ['cerca de 25', '25 ou 30', '25,5 doses', 'não sei', 'vinte e cinco'])
+@pytest.mark.parametrize('answer', ['cerca de 25', '25 ou 30', '25,5 doses', 'não sei'])
 def test_esclarecimento_ainda_ambiguo_nao_grava(flow, answer):
     svc, conversation = flow
     text = 'Hoje atendi cerca de 20 pessoas com suspeita de dengue'

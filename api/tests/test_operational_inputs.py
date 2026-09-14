@@ -383,6 +383,13 @@ def test_extrator_deterministico_aceita_vacinas_do_pni(text, vaccine):
     assert item["payload"]["nome_vacina"] == vaccine
 
 
+def test_numero_composto_por_extenso_funciona_em_relato_operacional():
+    from api.core.operational_inputs_interpreter import interpret_operational_items
+
+    item = interpret_operational_items("aplicamos trinta e duas doses de dengue")[0]
+    assert item["payload"]["qtd_doses"] == 32
+
+
 @pytest.mark.parametrize("text", [
     "não aplicamos 30 doses de dengue",
     "vou receber 100 doses amanhã",
