@@ -99,7 +99,11 @@ def interpret_operational_input(text):
 
 
 _N = r"(\d+|zero|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte)"
-_VACCINE = r"(covid-?19|influenza|hepatite b|febre amarela|dengue)"
+_VACCINE = (
+    r"(covid-?19|influenza|hepatite b|febre amarela|dengue|bcg|hpv|triplice viral|"
+    r"tetra viral|pentavalente|poliomielite|rotavirus|pneumococica(?: 10-valente)?|"
+    r"meningococica(?: c| acwy)?|dtpa|dupla adulto|varicela|hepatite a)"
+)
 _CONNECT = r"(?:\s+(?:d[aoe]s?|contra|para|pra|a|vacinas?))*\s+"
 
 

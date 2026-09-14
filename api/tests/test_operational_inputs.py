@@ -368,6 +368,21 @@ def test_negacao_ou_hipotese_descarta_so_a_oracao(text, expected_types):
     assert [item["tipo"] for item in interpret_operational_items(text)] == expected_types
 
 
+@pytest.mark.parametrize("text,vaccine", [
+    ("aplicamos 12 doses de BCG", "bcg"),
+    ("aplicamos 8 doses da tríplice viral", "triplice viral"),
+    ("recebemos 40 doses de HPV", "hpv"),
+    ("entrada de 25 doses de pentavalente", "pentavalente"),
+    ("aplicamos 6 doses de meningocócica ACWY", "meningococica acwy"),
+])
+def test_extrator_deterministico_aceita_vacinas_do_pni(text, vaccine):
+    from api.core.operational_inputs_interpreter import interpret_operational_items
+
+    item = interpret_operational_items(text)[0]
+    assert item["tipo"] == "vacinacao"
+    assert item["payload"]["nome_vacina"] == vaccine
+
+
 @pytest.mark.parametrize("text", [
     "não aplicamos 30 doses de dengue",
     "vou receber 100 doses amanhã",
