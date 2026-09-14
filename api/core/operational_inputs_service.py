@@ -1,7 +1,9 @@
 """Rascunho e confirmação dos inputs que alimentam os triggers do time de dados."""
 import hashlib
 import json
-from datetime import datetime, timezone
+import re
+import unicodedata
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
@@ -132,6 +134,58 @@ class OperationalInputs:
                         _canonical(interpreted["payload"]), event_id, fingerprint, _now(), _now()))
             row = tx.one("SELECT * FROM clara_inputs_operacionais WHERE id=?", (draft_id,))
             return self._present(row, establishment)
+
+    def create_correction_draft(self, actor, text, event_id):
+        """Cria movimento compensatório para registro próprio confirmado nas últimas 24 h."""
+
+        plain = "".join(
+            char for char in unicodedata.normalize("NFKD", str(text).casefold())
+            if not unicodedata.combining(char)
+        )
+        match = re.fullmatch(
+            r"\s*corrigir\s*:\s*(?:eram|era|foram|foi)\s+(\d+)\s+"
+            r"(doses?|embalagens?)\s*,?\s*nao\s+(\d+)\s*[.!]?\s*",
+            plain,
+        )
+        if not match:
+            fail(422, "correcao_invalida", "Use: Corrigir: eram 25 doses, não 30.")
+        corrected, unit, previous = int(match.group(1)), match.group(2), int(match.group(3))
+        if corrected <= 0 or corrected == previous:
+            fail(422, "correcao_invalida", "Informe valores positivos e diferentes para antes e depois.")
+        quantity_field = "qtd_doses" if unit.startswith("dose") else "qtd_embalagens"
+        allowed_kind = "vacinacao" if quantity_field == "qtd_doses" else "medicamento"
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        found = None
+        with self.store.transaction() as tx:
+            self._access(tx, actor)
+            rows = tx.all(
+                "SELECT * FROM clara_inputs_operacionais WHERE user_id=? AND status='confirmado' "
+                "AND confirmado_em>=? ORDER BY confirmado_em DESC,id DESC",
+                (actor, since),
+            )
+            for row in rows:
+                payload = decode(row.get("payload_confirmado")) or {}
+                if row.get("tipo") == allowed_kind and payload.get(quantity_field) == previous:
+                    found = (row, payload)
+                    break
+        if not found:
+            fail(404, "registro_corrigivel_nao_encontrado",
+                 "Não encontrei registro seu, confirmado nas últimas 24 horas, com esse valor anterior.")
+        original, payload = found
+        movement = payload["tipo_movimentacao"]
+        difference = corrected - previous
+        compensation = movement if difference > 0 else ("entrada" if movement == "saida" else "saida")
+        proposed = {key: value for key, value in payload.items() if key != "data_atualizacao"}
+        proposed[quantity_field] = abs(difference)
+        proposed["tipo_movimentacao"] = compensation
+        draft = self.create_draft(
+            actor, original["id_estabelecimento"], text, event_id,
+            {"tipo": allowed_kind, "payload": proposed},
+        )
+        return {
+            "rascunho": draft, "antes": previous, "depois": corrected,
+            "diferenca": difference, "unidade": unit,
+        }
 
     def _draft(self, tx, actor, draft_id, lock=False):
         suffix = " FOR UPDATE" if lock and tx.postgres else ""

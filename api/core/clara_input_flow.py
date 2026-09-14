@@ -204,6 +204,10 @@ def _operational_pending_question(item):
     }
     return questions.get(field, f'Qual informação falta para {field.replace("_", " ")}?')
 
+
+def _is_correction_request(text):
+    return bool(re.match(r'^\s*corrigir\s*:', fold(str(text or ''))))
+
 def process_input(actor, text, conversation, city, channel='web', context=None,
                   local=None, operational=None, event_id=None, input_type='texto'):
     """Retorna None para consulta; só seleciona IDs presentes no acesso atual."""
@@ -211,6 +215,30 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
     context = context or {}
     pending = _pending(conversation, actor)
     kind = input_kind(text)
+    if _is_correction_request(text):
+        from api.core.operational_inputs_router import service
+        svc = service()
+        key = 'clara-correcao-' + sha256(f"{actor}|{channel}|{event_id or text}".encode()).hexdigest()
+        try:
+            correction = svc.create_correction_draft(actor, text, key)
+        except HTTPException as exc:
+            return _result(_error(exc))
+        draft = correction['rascunho']
+        from api.core.operational_inputs_interpreter import operational_summary
+        label = operational_summary(draft)
+        response = (
+            'Preparei um movimento compensatório; o registro histórico original não foi alterado.\n'
+            f"Antes: {correction['antes']} {correction['unidade']}.\n"
+            f"Depois: {correction['depois']} {correction['unidade']}.\n"
+            f"Movimento compensatório: {label}\n{CONFIRM_FOOTER}"
+        )
+        confirmation = {
+            'etapa': 'confirmacao', 'tipo': 'input_operacional',
+            'itens': [{'id': str(draft['id']), 'versao': draft['versao'], 'rotulo': label}],
+            'criado_em': _now().isoformat(),
+        }
+        return _result(response, confirmation, event='rascunho_operacional_pronto',
+                       payload=jsonable_encoder(draft), route='/registros-unidade')
     if pending and pending.get('etapa') == 'confirmacao':
         answer = fold(text).strip(' .!')
         if answer in CONFIRM_WORDS:

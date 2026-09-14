@@ -125,6 +125,20 @@ def test_data_futura_ou_com_mais_de_30_dias_e_recusada(svc, offset, code):
     assert "data" in exc.value.detail["mensagem"].lower()
 
 
+def test_correcao_nao_aceita_registro_com_mais_de_24_horas(svc):
+    draft = svc.create_draft(ACTOR, ESTABLISHMENT, "Entrada de 30 doses da vacina dengue", "old-correction")
+    svc.confirm(ACTOR, draft["id"], 1, "confirm-old-correction")
+    with svc.store.transaction() as tx:
+        tx.execute(
+            "UPDATE clara_inputs_operacionais SET confirmado_em=? WHERE id=?",
+            ("2026-01-01T00:00:00+00:00", draft["id"]),
+        )
+
+    with pytest.raises(HTTPException) as exc:
+        svc.create_correction_draft(ACTOR, "Corrigir: eram 25 doses, não 30", "too-old")
+    assert exc.value.detail["codigo"] == "registro_corrigivel_nao_encontrado"
+
+
 def test_rascunho_nao_altera_saldo_e_confirmacao_aciona_trigger(svc):
     draft = svc.create_draft(ACTOR, ESTABLISHMENT, "Entrada de 500 doses da vacina COVID-19", "message-001")
     with svc.store.transaction() as tx:

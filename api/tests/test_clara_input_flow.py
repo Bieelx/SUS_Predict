@@ -1,6 +1,7 @@
 """Entrada comum com persistência isolada; nenhum provedor externo é chamado."""
 from datetime import date
 from types import SimpleNamespace
+import json
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -175,6 +176,53 @@ def test_confirmacao_operacional_expira_em_24_horas(
     else:
         assert result['evento'] is None
         assert 'expirou após 24 horas' in result['resposta']
+
+
+def test_correcao_confirmada_cria_movimento_compensatorio_sem_alterar_historico(
+    operational_svc, monkeypatch, tmp_path
+):
+    from api.core import operational_inputs_router
+
+    monkeypatch.setattr(db, '_SQLITE_PATH', tmp_path / 'chat.db')
+    monkeypatch.setattr(db, '_clara_remoto', lambda: False)
+    db.init_db()
+    monkeypatch.setattr(operational_inputs_router, 'service', lambda: operational_svc)
+    initial = operational_svc.create_draft(
+        ACTOR, ESTABLISHMENT, 'Entrada de 100 doses da vacina dengue', 'correction-balance'
+    )
+    operational_svc.confirm(ACTOR, initial['id'], 1, 'confirm-correction-balance')
+    conversation = db.criar_conversa(ACTOR, 'Correção')['id']
+    context = SimpleNamespace(id_estabelecimento=ESTABLISHMENT)
+
+    original = process_input(
+        ACTOR, 'Aplicamos 30 doses de dengue', conversation, '355030',
+        channel='whatsapp', operational=context,
+    )
+    original_id = original['payload']['id']
+    persist_input(original, conversation, 'whatsapp', 'Aplicamos 30 doses de dengue')
+    confirmed = process_input(ACTOR, 'CONFIRMO', conversation, '355030', channel='whatsapp')
+    persist_input(confirmed, conversation, 'whatsapp', 'CONFIRMO')
+
+    correction = process_input(
+        ACTOR, 'Corrigir: eram 25 doses, não 30', conversation, '355030',
+        channel='whatsapp', event_id='correction-event',
+    )
+    assert 'Antes: 30 doses' in correction['resposta']
+    assert 'Depois: 25 doses' in correction['resposta']
+    assert correction['payload']['payload_proposto']['qtd_doses'] == 5
+    assert correction['payload']['payload_proposto']['tipo_movimentacao'] == 'entrada'
+    persist_input(correction, conversation, 'whatsapp', 'Corrigir: eram 25 doses, não 30')
+    done = process_input(ACTOR, 'CONFIRMO', conversation, '355030', channel='whatsapp')
+    assert done['evento'] == 'registro_confirmado'
+
+    with operational_svc.store.transaction() as tx:
+        original_row = tx.one('SELECT * FROM clara_inputs_operacionais WHERE id=?', (original_id,))
+        balance = tx.one('SELECT qtd_doses FROM vacinacao_estabelecimento')["qtd_doses"]
+        history_count = tx.one('SELECT count(*) total FROM vacinacao_usuario')["total"]
+    assert original_row['status'] == 'confirmado'
+    assert json.loads(original_row['payload_confirmado'])['qtd_doses'] == 30
+    assert balance == 75
+    assert history_count == 3
 
 
 @pytest.mark.parametrize('word', ['cancelar', 'cancela', 'cancelo', 'descartar'])
