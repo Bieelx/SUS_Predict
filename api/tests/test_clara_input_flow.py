@@ -145,6 +145,40 @@ def test_estoque_pede_estabelecimento_e_nao_movimenta_saldo(operational_svc, mon
         assert tx.one('SELECT count(*) total FROM vacinacao_usuario')['total'] == 0
 
 
+def test_gemini_pergunta_pendencia_e_completa_com_resposta(operational_svc, monkeypatch, tmp_path):
+    from api.core import operational_inputs_router, gemini_input_interpreter
+
+    monkeypatch.setattr(db, '_SQLITE_PATH', tmp_path / 'chat.db')
+    monkeypatch.setattr(db, '_clara_remoto', lambda: False)
+    db.init_db()
+    monkeypatch.setattr(operational_inputs_router, 'service', lambda: operational_svc)
+
+    def fake_gemini(text):
+        base = {'nome_medicamento': 'paracetamol', 'forma_farmaceutica': 'comprimido',
+                'tipo_embalagem': 'caixa', 'quantidade_por_embalagem': 20,
+                'qtd_embalagens': 2, 'tipo_movimentacao': 'saida'}
+        if 'Esclarecimento posterior: 500 mg' not in text:
+            return [{'tipo': 'incompleto', 'payload': base, 'pendencias': ['concentracao']}]
+        return [{'tipo': 'medicamento', 'payload': {**base, 'concentracao': '500 mg'}, 'pendencias': []}]
+
+    monkeypatch.setattr(gemini_input_interpreter, 'interpretar_com_gemini', fake_gemini)
+    conversation = db.criar_conversa(ACTOR, 'Medicamento')['id']
+    original = ('Saída de 2 embalagens de paracetamol; forma comprimido; '
+                'embalagem caixa; 20 unidades por embalagem')
+    context = SimpleNamespace(id_estabelecimento=ESTABLISHMENT)
+
+    pending = process_input(ACTOR, original, conversation, '355030', operational=context)
+    assert pending['resposta'] == 'Qual a concentração do paracetamol?'
+    assert pending['artefato']['pendente']['etapa'] == 'campos_operacionais'
+    persist_input(pending, conversation, 'web', original)
+
+    draft = process_input(ACTOR, '500 mg', conversation, '355030')
+    assert draft['evento'] == 'rascunho_operacional_pronto'
+    assert draft['payload']['payload_proposto']['concentracao'] == '500 mg'
+    with operational_svc.store.transaction() as tx:
+        assert tx.one('SELECT count(*) total FROM medicamento_usuario')['total'] == 0
+
+
 def test_inatividade_preserva_a_conversa_selecionada(flow, monkeypatch):
     from datetime import datetime, timedelta, timezone
     _, old_conversation = flow

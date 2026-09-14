@@ -165,6 +165,27 @@ def _exact_quantity(text):
     value = match.group(1)
     return str(NUMBERS[value]) if value in NUMBERS else value
 
+
+def _operational_pending_question(item):
+    field = next(iter(item.get('pendencias') or []), '')
+    payload = item.get('payload') or {}
+    medicine = payload.get('nome_medicamento') or 'medicamento'
+    questions = {
+        'concentracao': f'Qual a concentração do {medicine}?',
+        'forma_farmaceutica': f'Qual a forma farmacêutica do {medicine}?',
+        'tipo_embalagem': f'Qual o tipo de embalagem do {medicine}?',
+        'quantidade_por_embalagem': 'Quantas unidades há por embalagem?',
+        'qtd_embalagens': 'Quantas embalagens foram movimentadas?',
+        'tipo_movimentacao': 'Foi entrada ou saída?',
+        'qtd_doses': 'Quantas doses foram movimentadas?',
+        'nome_vacina': 'Qual foi a vacina?',
+        'qtd_leitos_ocupados': 'Quantos leitos estavam ocupados?',
+        'qtd_leitos_disponiveis': 'Quantos leitos estavam disponíveis?',
+        'tipo_leito': 'Qual o tipo de leito?',
+        'qtd_internacoes': 'Quantas internações por dengue ocorreram?',
+    }
+    return questions.get(field, f'Qual informação falta para {field.replace("_", " ")}?')
+
 def process_input(actor, text, conversation, city, channel='web', context=None,
                   local=None, operational=None, event_id=None, input_type='texto'):
     """Retorna None para consulta; só seleciona IDs presentes no acesso atual."""
@@ -205,7 +226,7 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
     kind = state['tipo']
     if len(state['texto']) > (8000 if kind == 'registro_local' else 4000):
         return _result('O relato está muito longo. Envie um acontecimento por mensagem, com unidade, data e quantidade.')
-    selection = text.strip() if continuing and state.get('etapa') != 'quantidade' else ''
+    selection = text.strip() if continuing and state.get('etapa') not in {'quantidade', 'campos_operacionais'} else ''
     if continuing and state.get('etapa') == 'quantidade':
         quantity = _exact_quantity(text)
         if quantity is None:
@@ -213,6 +234,13 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
         parts = state['quantidade_aproximada']
         state['texto'] = parts['antes'] + quantity + parts['depois']
         state['esclarecimento'] = text
+        state['etapa'] = 'unidade'
+    if continuing and state.get('etapa') == 'campos_operacionais':
+        state.setdefault('texto_original', state['texto'])
+        state.setdefault('esclarecimentos_operacionais', []).append(text)
+        state['texto'] = state['texto_original'] + ''.join(
+            '\nEsclarecimento posterior: ' + answer for answer in state['esclarecimentos_operacionais']
+        )
         state['etapa'] = 'unidade'
     if not continuing and local:
         state['unidade_sugerida'] = str(local.unidade_id)
@@ -236,11 +264,25 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
         else:
             from api.core.operational_inputs_router import service
             from api.core.operational_inputs_interpreter import interpret_operational_items
+            from api.core.gemini_input_interpreter import interpretar_com_gemini
             svc = service()
-            parsed_items = interpret_operational_items(state['texto'])
-            target = operational.id_estabelecimento if operational and not continuing else None
+            target = state.get('estabelecimento_sugerido')
+            if not target and operational and not continuing:
+                target = operational.id_estabelecimento
             if not target and not continuing and isinstance(context.get('estabelecimento'), dict):
                 target = context['estabelecimento'].get('id')
+            if target:
+                state['estabelecimento_sugerido'] = str(target)
+            parsed_items = interpret_operational_items(state['texto'])
+            if not parsed_items:
+                gemini_items = interpretar_com_gemini(state['texto'])
+                if gemini_items:
+                    incomplete = [item for item in gemini_items if item['tipo'] == 'incompleto']
+                    if incomplete:
+                        state.update(etapa='campos_operacionais', texto_original=state.get('texto_original', state['texto']),
+                                     pendencias_operacionais=incomplete)
+                        return _result(_operational_pending_question(incomplete[0]), state)
+                    parsed_items = [item for item in gemini_items if item['tipo'] != 'nao_reconhecido']
             if target:
                 with svc.store.transaction() as tx:
                     choices = [svc._establishment(tx, actor, target)]

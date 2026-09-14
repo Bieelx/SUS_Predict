@@ -111,10 +111,11 @@ def test_rascunho_nao_altera_saldo_e_confirmacao_aciona_trigger(svc):
 
 def test_gemini_so_estrutura_relato_complexo_e_o_servico_ainda_valida(svc, monkeypatch):
     from api.core import operational_inputs_service
-    monkeypatch.setattr(operational_inputs_service, "interpretar_com_gemini", lambda _: {
+    monkeypatch.setattr(operational_inputs_service, "interpretar_com_gemini", lambda _: [{
         "tipo": "vacinacao",
         "payload": {"nome_vacina": "dengue", "qtd_doses": 25, "tipo_movimentacao": "entrada"},
-    })
+        "pendencias": [],
+    }])
 
     draft = svc.create_draft(ACTOR, ESTABLISHMENT, "Chegaram 25 doses para dengue na unidade", "gemini-001")
 
@@ -127,13 +128,55 @@ def test_gemini_so_estrutura_relato_complexo_e_o_servico_ainda_valida(svc, monke
 
 def test_gemini_com_payload_invalido_nao_cria_rascunho(svc, monkeypatch):
     from api.core import operational_inputs_service
-    monkeypatch.setattr(operational_inputs_service, "interpretar_com_gemini", lambda _: {
-        "tipo": "vacinacao", "payload": {"qtd_doses": 25},
-    })
+    monkeypatch.setattr(operational_inputs_service, "interpretar_com_gemini", lambda _: [{
+        "tipo": "vacinacao", "payload": {"qtd_doses": 25}, "pendencias": [],
+    }])
 
     with pytest.raises(HTTPException) as exc:
         svc.create_draft(ACTOR, ESTABLISHMENT, "Chegaram doses", "gemini-invalid-001")
     assert exc.value.detail["codigo"] == "campos_invalidos"
+
+
+def _mock_gemini_http(monkeypatch, proposta):
+    from api.core import gemini_input_interpreter
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            body = {"candidates": [{"content": {"parts": [{"text": json.dumps(proposta)}]}}]}
+            return json.dumps(body).encode()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    monkeypatch.setenv("SUSBOT_GEMINI_INPUT_ENABLED", "true")
+    monkeypatch.setattr(gemini_input_interpreter.urllib.request, "urlopen", lambda *a, **k: Response())
+    return gemini_input_interpreter
+
+
+def test_gemini_retorna_varios_itens_e_internacao_dengue_sem_rede(monkeypatch):
+    module = _mock_gemini_http(monkeypatch, {"itens": [
+        {"tipo": "vacinacao", "payload": {"nome_vacina": "dengue", "qtd_doses": 30,
+         "tipo_movimentacao": "saida"}, "pendencias": []},
+        {"tipo": "internacao_dengue", "payload": {"qtd_internacoes": 2}, "pendencias": []},
+    ]})
+
+    items = module.interpretar_com_gemini("Aplicamos 30 doses de dengue e internamos 2 pessoas por dengue")
+
+    assert [item["tipo"] for item in items] == ["vacinacao", "internacao_dengue"]
+    assert items[1]["payload"]["qtd_internacoes"] == 2
+
+
+def test_gemini_rejeita_numero_que_nao_aparece_no_relato(monkeypatch):
+    module = _mock_gemini_http(monkeypatch, {"itens": [{
+        "tipo": "vacinacao", "payload": {"nome_vacina": "dengue", "qtd_doses": 99,
+        "tipo_movimentacao": "entrada"}, "pendencias": [],
+    }]})
+
+    assert module.interpretar_com_gemini("Recebemos doses de dengue") is None
 
 
 def test_leitos_substituem_e_municipio_limita_estabelecimento(svc):

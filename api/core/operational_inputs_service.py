@@ -102,6 +102,11 @@ class OperationalInputs:
                 interpreted = interpretar_com_gemini(text)
                 if interpreted is None:
                     raise
+                if not isinstance(interpreted, list) or len(interpreted) != 1:
+                    fail(422, "campos_invalidos", "Envie um acontecimento por vez neste formulário.")
+                interpreted = interpreted[0]
+                if interpreted.get("tipo") in {"incompleto", "nao_reconhecido"}:
+                    raise exc
         if not isinstance(interpreted, dict) or not isinstance(interpreted.get("tipo"), str):
             fail(422, "campos_invalidos", "Não consegui estruturar este relato operacional.")
         self._validated(interpreted["tipo"], interpreted.get("payload"))
