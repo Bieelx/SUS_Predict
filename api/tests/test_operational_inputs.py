@@ -95,6 +95,36 @@ def test_interpreta_os_tres_contratos_sem_confundir_aplicacao_com_saida():
         interpret_operational_input("Aplicamos 32 doses contra dengue")
 
 
+def test_data_informada_vai_para_tabela_operacional(svc):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    yesterday = (datetime.now(ZoneInfo("America/Sao_Paulo")).date() - timedelta(days=1)).isoformat()
+    draft = svc.create_draft(
+        ACTOR, ESTABLISHMENT, "Ontem recebemos 200 doses da vacina dengue", "reported-date"
+    )
+    assert draft["payload_proposto"]["data_atualizacao"] == yesterday
+
+    confirmed = svc.confirm(ACTOR, draft["id"], 1, "confirm-reported-date")
+    assert confirmed["payload_confirmado"]["data_atualizacao"] == yesterday
+    with svc.store.transaction() as tx:
+        assert tx.one("SELECT data_atualizacao FROM vacinacao_usuario")["data_atualizacao"] == yesterday
+
+
+@pytest.mark.parametrize("offset,code", [(1, "periodo_futuro"), (-31, "periodo_muito_antigo")])
+def test_data_futura_ou_com_mais_de_30_dias_e_recusada(svc, offset, code):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    day = (datetime.now(ZoneInfo("America/Sao_Paulo")).date() + timedelta(days=offset)).isoformat()
+    with pytest.raises(HTTPException) as exc:
+        svc.create_draft(
+            ACTOR, ESTABLISHMENT, f"Em {day}, recebemos 10 doses da vacina dengue", f"date-{offset}"
+        )
+    assert exc.value.detail["codigo"] == code
+    assert "data" in exc.value.detail["mensagem"].lower()
+
+
 def test_rascunho_nao_altera_saldo_e_confirmacao_aciona_trigger(svc):
     draft = svc.create_draft(ACTOR, ESTABLISHMENT, "Entrada de 500 doses da vacina COVID-19", "message-001")
     with svc.store.transaction() as tx:

@@ -21,24 +21,40 @@ def fold(text):
     return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if not unicodedata.combining(c))
 
 
+def parse_report_date(text, today=None, max_age_days=None):
+    """Extrai uma data explícita do relato; ausência permanece desconhecida."""
+
+    today = today or datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+    source = fold(text)
+    if re.search(r"\bamanha\b", source):
+        fail(422, "periodo_futuro", "A data informada está no futuro. Informe quando o acontecimento realmente ocorreu.")
+    dates = re.findall(r"\b(\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})\b", source)
+    relative = re.findall(r"\b(hoje|ontem)\b", source)
+    if len(set(dates)) + len(set(relative)) > 1:
+        fail(422, "periodo_ambiguo", "Envie um dia de cada vez e informe a data do acontecimento.")
+    if dates:
+        try:
+            reported = date.fromisoformat(dates[0]) if "-" in dates[0] else datetime.strptime(dates[0], "%d/%m/%Y").date()
+        except ValueError:
+            fail(422, "periodo_invalido", "Informe uma data válida.")
+    elif relative:
+        reported = today - timedelta(days=1 if relative[0] == "ontem" else 0)
+    else:
+        return None
+    if reported > today:
+        fail(422, "periodo_futuro", "A data informada está no futuro. Informe quando o acontecimento realmente ocorreu.")
+    if max_age_days is not None and reported < today - timedelta(days=max_age_days):
+        fail(422, "periodo_muito_antigo", f"A data informada tem mais de {max_age_days} dias. Registre apenas acontecimentos recentes.")
+    return reported.isoformat()
+
+
 def interpret(text, today=None):
     today = today or datetime.now(ZoneInfo("America/Sao_Paulo")).date()
     source = fold(text)
     # Não interpretar instruções sobre exemplos, hipóteses ou quantidades aproximadas.
     if re.search(r"\b(se |talvez|exemplo|simul|aproximad|cerca de|entre \d|nao |nenhum|amanha)", source):
         fail(422, "relato_ambiguo", "Informe apenas o acontecimento realizado e a quantidade medida, sem hipóteses ou aproximações.")
-    dates = re.findall(r"\b(\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})\b", source)
-    relative = re.findall(r"\b(hoje|ontem)\b", source)
-    period = None
-    if len(set(dates)) + len(set(relative)) > 1:
-        fail(422, "periodo_ambiguo", "Envie um dia de cada vez e informe a data do fechamento.")
-    if dates:
-        try:
-            period = (date.fromisoformat(dates[0]) if "-" in dates[0] else datetime.strptime(dates[0], "%d/%m/%Y").date()).isoformat()
-        except ValueError:
-            fail(422, "periodo_invalido", "Informe uma data válida.")
-    elif relative:
-        period = (today - timedelta(days=1 if relative[0] == "ontem" else 0)).isoformat()
+    period = parse_report_date(source, today=today)
     # Voz passiva e data entre verbo/quantidade são relatos do mesmo acontecimento.
     source = re.sub(r"\bforam aplicad[ao]s?\b", "aplicamos", source)
     source = re.sub(r"\bforam atendid[ao]s?\b", "atendemos", source)

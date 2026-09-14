@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException
 
 from api.core.local_records_service import decode, fail
+from api.core.local_records_interpreter import parse_report_date
 from api.core.operational_inputs_interpreter import interpret_operational_input
 from api.core.gemini_input_interpreter import interpretar_com_gemini
 
@@ -91,6 +92,7 @@ class OperationalInputs:
             return result
 
     def create_draft(self, actor, establishment_id, text, event_id, interpreted=None):
+        reported_date = parse_report_date(text, max_age_days=30)
         if interpreted is None:
             try:
                 interpreted = interpret_operational_input(text)
@@ -109,6 +111,9 @@ class OperationalInputs:
                     raise exc
         if not isinstance(interpreted, dict) or not isinstance(interpreted.get("tipo"), str):
             fail(422, "campos_invalidos", "Não consegui estruturar este relato operacional.")
+        if reported_date:
+            interpreted = {**interpreted, "payload": {**(interpreted.get("payload") or {}),
+                                                        "data_atualizacao": reported_date}}
         self._validated(interpreted["tipo"], interpreted.get("payload"))
         fingerprint = _hash({"estabelecimento": establishment_id, "texto": text})
         with self.store.transaction() as tx:
@@ -203,10 +208,15 @@ class OperationalInputs:
             "internacao": {"tipo_leito", "qtd_leitos_ocupados", "qtd_leitos_disponiveis"},
             "internacao_dengue": {"qtd_internacoes"},
         }[kind]
-        if set(payload) != expected:
+        if set(payload) - {"data_atualizacao"} != expected:
             fail(422, "campos_invalidos", "Revise todos os campos do input operacional.")
         for key, value in payload.items():
-            if key.startswith("qtd_") or key == "quantidade_por_embalagem":
+            if key == "data_atualizacao":
+                try:
+                    datetime.fromisoformat(value)
+                except (TypeError, ValueError):
+                    fail(422, "periodo_invalido", "Data de atualização inválida.")
+            elif key.startswith("qtd_") or key == "quantidade_por_embalagem":
                 if not isinstance(value, int) or isinstance(value, bool) or value < 0 or (kind != "internacao" and value == 0):
                     fail(422, "valor_invalido", "Quantidades operacionais inválidas.")
             elif not isinstance(value, str) or not value.strip() or len(value) > 200:
@@ -263,7 +273,7 @@ class OperationalInputs:
             fail(409, "saldo_insuficiente", f"Saldo insuficiente: há {balance} {unit} registradas e a saída é de {wanted}.")
 
     def _insert_target(self, tx, actor, establishment, kind, payload):
-        timestamp = _now()
+        timestamp = payload.get("data_atualizacao") or _now()
         if kind in {"vacinacao", "medicamento"}:
             self._check_balance(tx, establishment, kind, payload)
         if kind == "internacao_dengue":

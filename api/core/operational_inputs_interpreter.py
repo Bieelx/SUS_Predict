@@ -40,14 +40,20 @@ def _without_ambiguous_clauses(text):
     return "".join(parts).strip(" ,.;!?"), rejected_event
 
 
+def _without_date_phrases(text):
+    text = re.sub(r"\b(?:em\s+)?(?:\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})\b[, :]?", " ", text)
+    return " ".join(text.split())
+
+
 def interpret_operational_input(text):
     source = " ".join(str(text or "").split()).strip()
     plain = _plain(source)
     plain, rejected_event = _without_ambiguous_clauses(plain)
+    plain = _without_date_phrases(plain)
     plain = re.sub(r"^(?:(?:clara|oi|ola|bom dia|boa tarde|boa noite)[,!:]?\s*)+", "", plain)
-    plain = re.sub(r"^(?:hoje[, :]*)\s*", "", plain).rstrip('.! ')
-    plain = re.sub(r"^(?:eu |nos )?(?:recebi|recebemos|chegaram)\s+(?:hoje\s+)?", "entrada de ", plain)
-    plain = re.sub(r"^(?:eu |nos )?(?:retirei|retiramos|utilizei|utilizamos)\s+(?:hoje\s+)?", "saida de ", plain)
+    plain = re.sub(r"^(?:(?:hoje|ontem)[, :]*)\s*", "", plain).rstrip('.! ')
+    plain = re.sub(r"^(?:eu |nos )?(?:recebi|recebemos|chegaram)\s+(?:(?:hoje|ontem)\s+)?", "entrada de ", plain)
+    plain = re.sub(r"^(?:eu |nos )?(?:retirei|retiramos|utilizei|utilizamos)\s+(?:(?:hoje|ontem)\s+)?", "saida de ", plain)
     plain = re.sub(r"^(?:estamos com|temos)\s+", "", plain)
 
     vaccine = re.fullmatch(
@@ -110,14 +116,15 @@ def interpret_operational_items(text):
     """
     plain = _plain(" ".join(str(text or "").split()))
     plain, rejected_event = _without_ambiguous_clauses(plain)
+    plain = _without_date_phrases(plain)
     items = []
     # Doses aplicadas saem do estoque de vacinas da unidade.
     for m in re.finditer(r"\b(?:apliquei|aplicamos|aplicou|aplicaram|foram aplicad[ao]s)\s+(?:hoje\s+)?" + _N +
                          r"\s+doses?" + _CONNECT + _VACCINE, plain):
         items.append((m.start(), {"tipo": "vacinacao", "payload": {
             "nome_vacina": m.group(2).replace("covid19", "covid-19"), "qtd_doses": _int(m.group(1)), "tipo_movimentacao": "saida"}}))
-    moves = re.sub(r"\b(?:recebi|recebemos|chegaram)\s+(?:hoje\s+)?", "entrada de ", plain)
-    moves = re.sub(r"\b(?:retirei|retiramos|utilizei|utilizamos)\s+(?:hoje\s+)?", "saida de ", moves)
+    moves = re.sub(r"\b(?:recebi|recebemos|chegaram)\s+(?:(?:hoje|ontem)\s+)?", "entrada de ", plain)
+    moves = re.sub(r"\b(?:retirei|retiramos|utilizei|utilizamos)\s+(?:(?:hoje|ontem)\s+)?", "saida de ", moves)
     for m in re.finditer(r"\b(entrada|saida)\s+(?:de\s+)?" + _N + r"\s+doses?" + _CONNECT + _VACCINE, moves):
         items.append((m.start(), {"tipo": "vacinacao", "payload": {
             "nome_vacina": m.group(3).replace("covid19", "covid-19"), "qtd_doses": _int(m.group(2)), "tipo_movimentacao": m.group(1)}}))
