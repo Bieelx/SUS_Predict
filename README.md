@@ -322,15 +322,15 @@ interpretador de relatos aceita formatos específicos.
 
 ## Time
 
-<!-- PREENCHER: fotos em assets/readme/time/, nome completo, RM e papel de cada integrante -->
+<!-- PREENCHER: fotos em assets/readme/time/; RM e papel de Nilton e Vinicius -->
 
 | Foto | Nome | RM | Papel |
 |---|---|---|---|
-| <!-- PREENCHER: foto --> | <!-- PREENCHER: nome --> | <!-- PREENCHER: RM --> | Cientista de dados |
-| <!-- PREENCHER: foto --> | <!-- PREENCHER: nome --> | <!-- PREENCHER: RM --> | <!-- PREENCHER: papel --> |
-| <!-- PREENCHER: foto --> | <!-- PREENCHER: nome --> | <!-- PREENCHER: RM --> | <!-- PREENCHER: papel --> |
-| <!-- PREENCHER: foto --> | <!-- PREENCHER: nome --> | <!-- PREENCHER: RM --> | <!-- PREENCHER: papel --> |
-| <!-- PREENCHER: foto --> | <!-- PREENCHER: nome --> | <!-- PREENCHER: RM --> | <!-- PREENCHER: papel --> |
+| <!-- PREENCHER: foto --> | Ariádine Veira Amaral | RM 552575 | Banco de dados e regras do DB · organização e limpeza dos dados · negócio e comercialização |
+| <!-- PREENCHER: foto --> | Gabriel Araujo | RM 550456 | UI/UX · treinamento da IA (Clara) · integrações WhatsApp e Telegram · infraestrutura do servidor |
+| <!-- PREENCHER: foto --> | Nilton Mikael | <!-- PREENCHER: RM --> | <!-- PREENCHER: papel --> |
+| <!-- PREENCHER: foto --> | Vinicius Mascarenhas | <!-- PREENCHER: RM --> | <!-- PREENCHER: papel --> |
+| <!-- PREENCHER: foto --> | Yasmin Miguez | RM 552273 | Banco de dados e regras do DB · organização e limpeza dos dados · negócio e comercialização |
 
 ---
 
