@@ -1,5 +1,5 @@
 """Entrada conversacional comum à web, Telegram e WhatsApp; só grava após CONFIRMO explícito."""
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, timezone
 from hashlib import sha256
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -40,7 +40,10 @@ def _pending(conversation, actor):
         for message in messages:
             artifact = evidence.get(message['id'], {})
             if artifact.get('tipo') == 'entrada_clara':
-                return artifact.get('pendente')
+                pending = artifact.get('pendente')
+                if pending and not pending.get('criado_em'):
+                    pending = {**pending, 'criado_em': message.get('criado_em')}
+                return pending
         if len(messages) < 100:
             return None
         page += 1
@@ -56,6 +59,21 @@ def _result(text, pending=None, event=None, payload=None, route=None):
 CONFIRM_WORDS = {'confirmo', 'confirmar', 'confirma', 'confirmado', 'sim confirmo', 'sim, confirmo'}
 CANCEL_WORDS = {'cancelar', 'cancela', 'cancelo', 'descartar', 'deixa pra la', 'deixe para la'}
 CONFIRM_FOOTER = 'Está correto? Responda CONFIRMO para enviar ou CANCELAR para descartar.'
+INPUT_CONFIRMATION_TTL = timedelta(hours=24)
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def _confirmation_expired(pending):
+    try:
+        created = datetime.fromisoformat(str(pending['criado_em']).replace('Z', '+00:00'))
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+    except (KeyError, TypeError, ValueError):
+        return True
+    return _now() > created + INPUT_CONFIRMATION_TTL
 
 
 def _services(kind):
@@ -196,6 +214,11 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
     if pending and pending.get('etapa') == 'confirmacao':
         answer = fold(text).strip(' .!')
         if answer in CONFIRM_WORDS:
+            if _confirmation_expired(pending):
+                return _result(
+                    'Esta confirmação expirou após 24 horas. Nenhum registro foi enviado; envie o relato novamente.',
+                    route='/registros-unidade',
+                )
             return _confirm(actor, pending)
         if answer in CANCEL_WORDS:
             return _discard(actor, pending)
@@ -204,7 +227,7 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
         pending = None  # Novo relato substitui a confirmação em aberto.
     if pending and fold(text).strip(' .!').lower() in {'obrigado', 'obrigada', 'ok', 'entendi'}:
         return None
-    if pending and fold(text).strip() in {'cancelar', 'deixa pra la', 'deixe para la'}:
+    if pending and fold(text).strip(' .!') in CANCEL_WORDS:
         return _result('Tudo bem. Interrompi este relato; nenhum registro foi confirmado.')
     if not kind and ('?' in text or re.search(r'\b(como|quanto|quantos|quantas|qual|quais|posso|devo|amanha|vou|vamos|me mostre|consulte)\b', fold(text))):
         return None
@@ -335,7 +358,9 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
             items = [{'id': str(d['id']), 'versao': d['versao'], 'rotulo': operational_summary(d)}
                      for d in drafts if d['status'] == 'rascunho']
             route, event = '/registros-unidade', 'rascunho_operacional_pronto'
-        confirmation = {'etapa': 'confirmacao', 'tipo': kind, 'itens': items} if items else None
+        confirmation = {
+            'etapa': 'confirmacao', 'tipo': kind, 'itens': items, 'criado_em': _now().isoformat(),
+        } if items else None
         return _result(response, confirmation, event=event, payload=jsonable_encoder(draft), route=route)
     except HTTPException as exc:
         detail = exc.detail

@@ -145,6 +145,51 @@ def test_estoque_pede_estabelecimento_e_nao_movimenta_saldo(operational_svc, mon
         assert tx.one('SELECT count(*) total FROM vacinacao_usuario')['total'] == 0
 
 
+@pytest.mark.parametrize('hours,confirmed', [(23, True), (25, False)])
+def test_confirmacao_operacional_expira_em_24_horas(
+    operational_svc, monkeypatch, tmp_path, hours, confirmed
+):
+    from datetime import datetime, timedelta, timezone
+    from api.core import operational_inputs_router, clara_input_flow
+
+    monkeypatch.setattr(db, '_SQLITE_PATH', tmp_path / 'chat.db')
+    monkeypatch.setattr(db, '_clara_remoto', lambda: False)
+    db.init_db()
+    monkeypatch.setattr(operational_inputs_router, 'service', lambda: operational_svc)
+    start = datetime(2026, 9, 14, 10, tzinfo=timezone.utc)
+    monkeypatch.setattr(clara_input_flow, '_now', lambda: start)
+    conversation = db.criar_conversa(ACTOR, 'Validade')['id']
+    context = SimpleNamespace(id_estabelecimento=ESTABLISHMENT)
+    text = 'Entrada de 5 doses da vacina dengue'
+    draft = process_input(ACTOR, text, conversation, '355030', channel='whatsapp', operational=context)
+    persist_input(draft, conversation, 'whatsapp', text)
+
+    monkeypatch.setattr(clara_input_flow, '_now', lambda: start + timedelta(hours=hours))
+    result = process_input(ACTOR, 'CONFIRMO', conversation, '355030', channel='whatsapp')
+
+    with operational_svc.store.transaction() as tx:
+        count = tx.one('SELECT count(*) total FROM vacinacao_usuario')['total']
+    assert count == (1 if confirmed else 0)
+    if confirmed:
+        assert result['evento'] == 'registro_confirmado'
+    else:
+        assert result['evento'] is None
+        assert 'expirou após 24 horas' in result['resposta']
+
+
+@pytest.mark.parametrize('word', ['cancelar', 'cancela', 'cancelo', 'descartar'])
+def test_sinonimos_de_cancelamento_usam_mesmo_fluxo(flow, word):
+    _, conversation = flow
+    text = 'Hoje atendi 20 pessoas com suspeita de dengue'
+    draft = process_input('writer', text, conversation, '355030')
+    persist_input(draft, conversation, 'web', text)
+
+    canceled = process_input('writer', word, conversation, '355030')
+
+    assert canceled['artefato']['pendente'] is None
+    assert 'nada foi enviado' in canceled['resposta']
+
+
 def test_gemini_pergunta_pendencia_e_completa_com_resposta(operational_svc, monkeypatch, tmp_path):
     from api.core import operational_inputs_router, gemini_input_interpreter
 
