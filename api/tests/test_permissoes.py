@@ -60,7 +60,7 @@ def test_mapa_de_perfis_segue_docs_09():
     for perfil in PERFIS:
         assert "sobre_o_projeto" in ferramentas_do_perfil(perfil)
         assert "executar_sql_fallback" not in ferramentas_do_perfil(perfil)
-    assert ferramentas_do_perfil("vigilancia") == {"consultar_epidemiologia", "consultar_alertas", "consultar_aquisicoes", "sobre_o_projeto"}
+    assert ferramentas_do_perfil("vigilancia") == {"consultar_epidemiologia", "consultar_alertas", "consultar_aquisicoes", "consultar_leitos_internacoes", "sobre_o_projeto"}
     assert ferramentas_do_perfil("farmacia") == {"consultar_estoque", "consultar_alertas", "consultar_aquisicoes", "gerar_etp", "sobre_o_projeto"}
     assert ferramentas_do_perfil("admin") == ferramentas_do_perfil("gestor")
     # perfil desconhecido (typo no seed) nao vira gestor por acidente
@@ -164,6 +164,12 @@ def test_barreira_3_dict_de_tools_so_tem_o_que_o_perfil_pode(db):
     assert "executar_sql_fallback" not in criar_susbot_tools("3550308", ferramentas_do_perfil("admin"))
     # sem argumento: todas (uso interno/testes)
     assert "executar_sql_fallback" in criar_susbot_tools("3550308")
+    assert "consultar_leitos_internacoes" not in criar_susbot_tools(
+        "3550308", ferramentas_do_perfil("visitante")
+    )
+    assert "consultar_leitos_internacoes" in criar_susbot_tools(
+        "3550308", ferramentas_do_perfil("gestor")
+    )
 
 
 def test_barreira_3_segura_mesmo_com_1_e_2_furadas(db):

@@ -57,6 +57,7 @@ _REFERENCIAS = {
     "consultar_estoque": {"rota": "/insumos", "label": "ver em Insumos →"},
     "consultar_alertas": {"rota": "/alertas", "label": "ver em Alertas →"},
     "consultar_epidemiologia": {"rota": "/epidemiologia", "label": "ver em Epidemiologia →"},
+    "consultar_leitos_internacoes": {"rota": "/internacoes", "label": "ver em Internações →"},
 }
 
 def _ibge6(valor: str) -> str:
@@ -201,6 +202,28 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
 
     if ferramenta == "sobre_o_projeto":
         return str(resultado.get("texto") or "")
+
+    if ferramenta == "consultar_leitos_internacoes":
+        linhas = []
+        for item in resultado.get("dados", []):
+            estabelecimento = item.get("estabelecimento") or "Estabelecimento não informado"
+            atualizacao = _data_br(item.get("data_ultima_atualizacao"))
+            if item.get("categoria") == "leitos":
+                linhas.append(
+                    f"- **{estabelecimento}** · {item.get('tipo_leito')}: "
+                    f"{item.get('qtd_leitos_ocupados')} ocupados e "
+                    f"{item.get('qtd_leitos_disponiveis')} disponíveis. "
+                    f"Última atualização: {atualizacao}."
+                )
+            else:
+                linhas.append(
+                    f"- **{estabelecimento}**: {item.get('qtd_internacoes')} internações por dengue. "
+                    f"Última atualização: {atualizacao}."
+                )
+        return (
+            "Dados informados pelas próprias unidades; **não são DATASUS**:\n"
+            + "\n".join(linhas)
+        )
 
     return None
 
@@ -423,6 +446,18 @@ def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> di
             "titulo": f"{resultado.get('sistema')} — {rotulo}" if rotulo else str(resultado.get("sistema") or "Epidemiologia"),
             "campos": campos,
             "detalhes": detalhes,
+        }
+
+    if ferramenta == "consultar_leitos_internacoes":
+        linhas = resultado.get("dados", [])
+        return {
+            "tipo": "tabela", "titulo": "Leitos e internações informados pelas unidades",
+            "colunas": _colunas_uteis(linhas, (
+                "estabelecimento", "tipo_leito", "qtd_leitos_ocupados",
+                "qtd_leitos_disponiveis", "qtd_internacoes", "data_ultima_atualizacao",
+            )),
+            "linhas": linhas,
+            "evidencia": {"fonte": "Dados informados pelas unidades; não é DATASUS."},
         }
 
     if ferramenta == "gerar_etp":

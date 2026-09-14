@@ -316,7 +316,7 @@ def test_metricas_contabilizam_rotas_com_e_sem_llm(db):
     assert metricas["dados_pessoais_coletados"] is False
 
 
-def test_internacoes_por_dengue_sao_roteadas_para_sih(db, monkeypatch):
+def test_internacoes_historicas_por_dengue_sao_roteadas_para_sih(db, monkeypatch):
     from api.core import susbot_tools
     from api.core.susbot_agent import criar_susbot_agente
 
@@ -328,7 +328,7 @@ def test_internacoes_por_dengue_sao_roteadas_para_sih(db, monkeypatch):
             return {"acao": "resposta", "resposta": "sem dados"}
 
     agente = criar_susbot_agente("351300", llm=LLMIgnoraFerramenta())
-    fim = _fim(list(agente.stream_eventos("Qual é a situação das internações por dengue?")))
+    fim = _fim(list(agente.stream_eventos("Qual é a situação das internações por dengue no SIH?")))
 
     assert fim["plano"]["ferramenta"] == "consultar_epidemiologia"
     assert fim["plano"]["argumentos"]["sistema"] == "SIH"
@@ -355,7 +355,7 @@ def test_epidemiologia_com_dado_e_narrada_pelo_llm_com_card_depois(db, monkeypat
 
     llm = LLMIgnoraFerramenta()
     eventos = list(criar_susbot_agente("351300", llm=llm).stream_eventos(
-        "Qual é a situação das internações por dengue?"))
+        "Qual é a situação das internações por dengue no SIH?"))
     fim = _fim(eventos)
 
     assert fim["resposta"].startswith("Foram 24.131 internações")
@@ -379,14 +379,36 @@ def test_consulta_de_utis_nao_e_confundida_com_perfil_de_outro_usuario(db):
         usuario="user-gabriel",
         memoria_usuario={"fatos": {"nome": "Gabriel"}},
         llm=LLMIgnoraFerramenta(),
+        tools={"consultar_leitos_internacoes": lambda **_: {
+            "encontrado": False, "motivo": "Sem informação atual das unidades.", "dados": [],
+        }},
     )
     eventos = list(agente.stream_eventos("Me fale sobre a situação atual das UTIs em Cotia"))
     fim = next(evento for evento in eventos if evento["event"] == "fim")
 
-    assert fim["data"]["plano"]["ferramenta"] == "consultar_epidemiologia"
-    assert fim["data"]["plano"]["argumentos"]["sistema"] == "SIH"
-    assert fim["data"]["plano"]["argumentos"]["escopo_solicitado"] == "uti"
+    assert fim["data"]["plano"]["ferramenta"] == "consultar_leitos_internacoes"
+    assert fim["data"]["plano"]["argumentos"] == {"categoria": "leitos", "tipo_leito": "UTI"}
     assert "Não tenho acesso à memória" not in fim["data"]["resposta"]
+
+
+def test_resposta_de_leitos_cita_unidade_data_e_origem(db):
+    from api.core.susbot_agent import criar_susbot_agente
+
+    tools = {"consultar_leitos_internacoes": lambda **_: {
+        "encontrado": True, "fonte": "Dados informados pelas unidades; não é DATASUS.",
+        "dados": [{"categoria": "leitos", "estabelecimento": "UBS Vila Albertina",
+                   "tipo_leito": "UTI", "qtd_leitos_ocupados": 8,
+                   "qtd_leitos_disponiveis": 2,
+                   "data_ultima_atualizacao": "2026-09-14T10:00:00Z"}],
+    }}
+    agente = criar_susbot_agente("355030", tools=tools, llm=LLMMock())
+
+    fim = _fim(list(agente.stream_eventos("Quantos leitos de UTI livres temos?")))
+
+    assert "UBS Vila Albertina" in fim["resposta"]
+    assert "14/09/2026" in fim["resposta"]
+    assert "não são DATASUS" in fim["resposta"]
+    assert fim["execucao"]["llm_resposta"] is False
 
 
 def test_consulta_de_insumos_nao_e_confundida_com_perfil_de_outro_usuario(db):

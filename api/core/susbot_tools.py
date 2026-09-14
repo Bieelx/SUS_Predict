@@ -353,6 +353,68 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
             "dados": rows,
         }
 
+    def consultar_leitos_internacoes(
+        categoria: str = "tudo", tipo_leito: str | None = None, **_kwargs
+    ) -> dict:
+        categoria = str(categoria or "tudo").strip().lower()
+        if categoria not in {"leitos", "internacoes_dengue", "tudo"}:
+            return _resposta_vazia("Categoria inválida para consulta de leitos e internações.", ibge6=ibge)
+        try:
+            from api.core.local_records_store import configured_store
+            with configured_store().transaction() as tx:
+                dados = []
+                if categoria in {"leitos", "tudo"}:
+                    rows = tx.all(
+                        "SELECT s.*,e.cnes,e.no_fantasia,e.municipio_ibge6 "
+                        "FROM internacao_estabelecimento s JOIN estabelecimentos e ON e.id=s.id_estabelecimento "
+                        "WHERE e.municipio_ibge6=? AND e.atende_sus=true ORDER BY e.no_fantasia,s.tipo_leito",
+                        (ibge,),
+                    )
+                    alvo = str(tipo_leito or "").strip().casefold()
+                    if alvo:
+                        rows = [row for row in rows if alvo in str(row.get("tipo_leito") or "").casefold()]
+                    dados.extend({
+                        "categoria": "leitos", "id_estabelecimento": row["id_estabelecimento"],
+                        "cnes": row.get("cnes"), "estabelecimento": row.get("no_fantasia"),
+                        "tipo_leito": row.get("tipo_leito"),
+                        "qtd_leitos_ocupados": row.get("qtd_leitos_ocupados"),
+                        "qtd_leitos_disponiveis": row.get("qtd_leitos_disponiveis"),
+                        "data_ultima_atualizacao": row.get("data_atualizacao"),
+                    } for row in rows)
+                if categoria in {"internacoes_dengue", "tudo"}:
+                    rows = tx.all(
+                        "SELECT s.*,e.cnes,e.no_fantasia,e.municipio_ibge6 "
+                        "FROM internacao_dengue_estabelecimento s JOIN estabelecimentos e ON e.id=s.id_estabelecimento "
+                        "WHERE e.municipio_ibge6=? AND e.atende_sus=true ORDER BY e.no_fantasia",
+                        (ibge,),
+                    )
+                    dados.extend({
+                        "categoria": "internacoes_dengue", "id_estabelecimento": row["id_estabelecimento"],
+                        "cnes": row.get("cnes"), "estabelecimento": row.get("no_fantasia"),
+                        "qtd_internacoes": row.get("qtd_internacoes"),
+                        "data_ultima_atualizacao": row.get("data_atualizacao"),
+                    } for row in rows)
+        except RuntimeError:
+            return _resposta_vazia(
+                "A fonte de dados informados pelas unidades está indisponível neste ambiente. Ausência não significa zero.",
+                ibge6=ibge, categoria=categoria, dados=[],
+            )
+        _registrar_consulta(
+            "internacao_estabelecimento+internacao_dengue_estabelecimento",
+            {"municipio_ibge6": ibge}, len(dados),
+            {"categoria": categoria, "tipo_leito": tipo_leito}, len(dados), origem="supabase",
+        )
+        if not dados:
+            return _resposta_vazia(
+                "Nenhuma informação de leitos ou internações por dengue foi enviada pelas unidades deste município. Ausência de registro não significa zero.",
+                ibge6=ibge, categoria=categoria, tipo_leito=tipo_leito, dados=[],
+            )
+        return {
+            "encontrado": True, "ibge6": ibge, "categoria": categoria,
+            "tipo_leito": tipo_leito, "fonte": "Dados informados pelas unidades; não é DATASUS.",
+            "dados": dados,
+        }
+
     def _sb(tabela: str, filtros: dict, order: str | None = None) -> list[dict]:
         # Município, período e ano vão na query do PostgREST; sem limite (sb_select
         # pagina até o fim). Nada é filtrado em Python depois de um corte.
@@ -578,6 +640,7 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
         "consultar_estoque": consultar_estoque,
         "consultar_alertas": consultar_alertas,
         "consultar_epidemiologia": consultar_epidemiologia,
+        "consultar_leitos_internacoes": consultar_leitos_internacoes,
         "gerar_etp": gerar_etp,
         "sobre_o_projeto": sobre_o_projeto,
         "executar_sql_fallback": executar_sql_fallback,

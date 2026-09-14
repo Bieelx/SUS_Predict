@@ -25,6 +25,7 @@ FERRAMENTAS_PLANEJAVEIS = (
     "consultar_estoque",
     "consultar_alertas",
     "consultar_epidemiologia",
+    "consultar_leitos_internacoes",
     "gerar_etp",
     "sobre_o_projeto",
 )
@@ -37,6 +38,7 @@ DESCRICOES_FERRAMENTAS = {
     "consultar_aquisicoes": "- consultar_aquisicoes: item (string opcional). Mesmas fontes das telas Alertas e Insumos; risco de aquisição, nunca estoque físico.",
     "consultar_alertas": "- consultar_alertas: status (string opcional), tipo (string opcional). Apenas alertas operacionais locais cadastrados. Para a Central de Alertas ou risco de aquisição, use consultar_aquisicoes.",
     "consultar_epidemiologia": '- consultar_epidemiologia: sistema (SIM|SIH|SINASC|SIA|SINAN), ano_ini, ano_fim (inteiros opcionais), doenca_cod, escopo_solicitado (strings opcionais). Internacao, hospital, leito, UTI => SIH (UTI: escopo_solicitado="uti"). Obito => SIM. Nascimento => SINASC. Ambulatorial => SIA. Casos, notificacoes, dengue => SINAN.',
+    "consultar_leitos_internacoes": "- consultar_leitos_internacoes: categoria (leitos|internacoes_dengue|tudo), tipo_leito (opcional). Dado atual informado pelas unidades do municipio; nao e DATASUS.",
     "gerar_etp": "- gerar_etp: item (string obrigatoria), alerta_id (opcional). So quando o usuario pedir explicitamente um ETP; exige confirmacao humana.",
     "sobre_o_projeto": "- sobre_o_projeto: sem argumentos. Perguntas sobre o que e o SUS Predict, o que a Clara faz, quais bases usa, quem e voce.",
 }
@@ -48,6 +50,9 @@ EXEMPLOS_FERRAMENTAS = {
     ],
     "consultar_epidemiologia": [
         '"Internacoes entre 2022 e 2024" => {"acao":"chamar_ferramenta","ferramenta":"consultar_epidemiologia","argumentos":{"sistema":"SIH","ano_ini":2022,"ano_fim":2024}}',
+    ],
+    "consultar_leitos_internacoes": [
+        '"Quantos leitos de UTI livres?" => {"acao":"chamar_ferramenta","ferramenta":"consultar_leitos_internacoes","argumentos":{"categoria":"leitos","tipo_leito":"UTI"}}',
     ],
     "sobre_o_projeto": [
         '"O que e o SUS Predict?" => {"acao":"chamar_ferramenta","ferramenta":"sobre_o_projeto","argumentos":{}}',

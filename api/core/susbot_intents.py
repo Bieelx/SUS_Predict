@@ -184,6 +184,28 @@ def rotear_intencao(pergunta: str) -> IntentRoute | None:
             },
         )
 
+    tem_periodo_historico = bool(_extrair_periodo(texto)) or "sih" in texto
+    if _contem_termo(texto, {"leito", "uti"}) and not tem_periodo_historico:
+        tipo = "UTI" if _contem_termo(texto, {"uti"}) else None
+        argumentos = {"categoria": "leitos"}
+        if tipo:
+            argumentos["tipo_leito"] = tipo
+        return IntentRoute(
+            "consultar_leitos_internacoes", 0.99,
+            {"acao": "ferramenta", "ferramenta": "consultar_leitos_internacoes",
+             "argumentos": argumentos, "resposta": "", "referencia_rota": "/internacoes"},
+            "situação atual de leitos informada pelas unidades",
+        )
+    if (_contem_termo(texto, {"internac", "hospitaliz"}) and "dengue" in texto
+            and not tem_periodo_historico):
+        return IntentRoute(
+            "consultar_leitos_internacoes", 0.99,
+            {"acao": "ferramenta", "ferramenta": "consultar_leitos_internacoes",
+             "argumentos": {"categoria": "internacoes_dengue"}, "resposta": "",
+             "referencia_rota": "/internacoes"},
+            "internações por dengue informadas pelas unidades",
+        )
+
     termos_internacao = {"internac", "hospitaliz", "hospitalar", "leito", "uti"}
     termos_epidemiologia = {
         "dengue", "caso", "epidemiologia", "notific", "obito", "mortalidade",

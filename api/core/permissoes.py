@@ -30,12 +30,14 @@ ORIGEM_PROVISIONAMENTO = "provisionamento_automatico"
 # `executar_sql_fallback` não entra em nenhum perfil, de propósito.
 PERFIS: dict[str, frozenset[str]] = {
     "gestor": frozenset({
-        "consultar_estoque", "consultar_alertas", "consultar_epidemiologia", "gerar_etp",
+        "consultar_estoque", "consultar_alertas", "consultar_epidemiologia",
+        "consultar_leitos_internacoes", "gerar_etp",
     }),
-    "vigilancia": frozenset({"consultar_epidemiologia", "consultar_alertas"}),
+    "vigilancia": frozenset({"consultar_epidemiologia", "consultar_alertas", "consultar_leitos_internacoes"}),
     "farmacia": frozenset({"consultar_estoque", "consultar_alertas", "gerar_etp"}),
     "admin": frozenset({
-        "consultar_estoque", "consultar_alertas", "consultar_epidemiologia", "gerar_etp",
+        "consultar_estoque", "consultar_alertas", "consultar_epidemiologia",
+        "consultar_leitos_internacoes", "gerar_etp",
     }),
     # Faixa 2 do provisionamento: só o texto universal. Nenhum dado, nenhum REST de dados.
     "visitante": frozenset(),
@@ -139,6 +141,7 @@ _NOMES_AMIGAVEIS = {
     "consultar_estoque": "estoque de insumos",
     "consultar_alertas": "alertas",
     "consultar_epidemiologia": "dados epidemiológicos",
+    "consultar_leitos_internacoes": "leitos e internações informados pelas unidades",
     "gerar_etp": "geração de ETP",
 }
 
@@ -205,7 +208,9 @@ def require_acesso(ferramenta: str | None = None):
     return dependency
 
 
-FERRAMENTAS_MUNICIPAIS = frozenset({"consultar_estoque", "consultar_alertas", "gerar_etp"})
+FERRAMENTAS_MUNICIPAIS = frozenset({
+    "consultar_estoque", "consultar_alertas", "consultar_leitos_internacoes", "gerar_etp",
+})
 
 def verificar_municipio(acesso: Acesso, ibge6: str) -> None:
     # Lista vazia não concede acesso privado. Admin também precisa de atribuição.

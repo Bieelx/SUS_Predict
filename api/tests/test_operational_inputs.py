@@ -193,6 +193,28 @@ def test_leitos_substituem_e_municipio_limita_estabelecimento(svc):
     assert exc.value.detail["codigo"] == "municipio_nao_autorizado"
 
 
+def test_ferramenta_consulta_leitos_e_internacoes_da_unidade(svc, monkeypatch):
+    from api.core import local_records_store
+    from api.core.susbot_tools import criar_susbot_tools
+
+    beds = svc.create_draft(ACTOR, ESTABLISHMENT, "UTI: 8 leitos ocupados e 2 disponíveis", "tool-beds")
+    svc.confirm(ACTOR, beds["id"], 1, "confirm-tool-beds")
+    dengue = svc.create_draft(
+        ACTOR, ESTABLISHMENT, "internamos 3 por dengue", "tool-dengue",
+        {"tipo": "internacao_dengue", "payload": {"qtd_internacoes": 3}},
+    )
+    svc.confirm(ACTOR, dengue["id"], 1, "confirm-tool-dengue")
+    monkeypatch.setattr(local_records_store, "configured_store", lambda: svc.store)
+
+    result = criar_susbot_tools("3550308")["consultar_leitos_internacoes"]()
+
+    assert result["encontrado"] is True
+    assert result["fonte"] == "Dados informados pelas unidades; não é DATASUS."
+    assert {item["categoria"] for item in result["dados"]} == {"leitos", "internacoes_dengue"}
+    assert all(item["estabelecimento"] == "UBS Vila Albertina" for item in result["dados"])
+    assert all(item["data_ultima_atualizacao"] for item in result["dados"])
+
+
 def test_estabelecimentos_sao_restritos_ao_municipio(svc):
     items = svc.establishments(ACTOR, "Albertina")["itens"]
     assert len(items) == 1 and items[0]["nome_municipio"] == "São Paulo"

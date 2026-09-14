@@ -40,6 +40,20 @@ def test_roteia_uti_com_escopo_e_periodo():
     }
 
 
+def test_roteia_leitos_atuais_para_dado_informado_pela_unidade():
+    rota = rotear_intencao("Quantos leitos de UTI livres temos?")
+
+    assert rota.plano["ferramenta"] == "consultar_leitos_internacoes"
+    assert rota.plano["argumentos"] == {"categoria": "leitos", "tipo_leito": "UTI"}
+
+
+def test_roteia_internacoes_dengue_atuais_para_dado_da_unidade():
+    rota = rotear_intencao("Quantas internações por dengue foram registradas?")
+
+    assert rota.plano["ferramenta"] == "consultar_leitos_internacoes"
+    assert rota.plano["argumentos"] == {"categoria": "internacoes_dengue"}
+
+
 @pytest.mark.parametrize("pergunta", ["Me fale sobre os insumos em Cotia", "Quais insumos estão em risco?", "Explique as aquisições de insumos"])
 def test_insumos_da_plataforma_nao_pressupoem_estoque_fisico(pergunta):
     rota = rotear_intencao(pergunta)
