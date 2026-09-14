@@ -5,6 +5,14 @@ import unicodedata
 from api.core.local_records_service import fail
 
 
+_AMBIGUOUS = re.compile(
+    r"\b(nao|amanha|talvez|exemplo|aproximadamente|cerca de|vou|vamos|se eu|se nos)\b"
+)
+_OPERATIONAL_EVENT = re.compile(
+    r"\b(aplic\w*|receb\w*|chegaram|retir\w*|utiliz\w*|entrada|saida|leitos?|intern\w*)\b"
+)
+
+
 def _plain(value):
     return "".join(c for c in unicodedata.normalize("NFKD", value.casefold()) if not unicodedata.combining(c))
 
@@ -16,11 +24,26 @@ def _positive(value, field="quantidade"):
     return number
 
 
+def _without_ambiguous_clauses(text):
+    """Mascara só orações negadas, futuras, hipotéticas ou aproximadas."""
+
+    parts = []
+    rejected_event = False
+    for match in re.finditer(r"[^,.!?;]+[,.!?;]?", text):
+        clause = match.group()
+        ambiguous = bool(_AMBIGUOUS.search(clause) or "?" in clause)
+        if ambiguous and _OPERATIONAL_EVENT.search(clause):
+            rejected_event = True
+            parts.append(" " * len(clause))
+        else:
+            parts.append(clause)
+    return "".join(parts).strip(" ,.;!?"), rejected_event
+
+
 def interpret_operational_input(text):
     source = " ".join(str(text or "").split()).strip()
     plain = _plain(source)
-    if re.search(r"\b(nao|amanha|talvez|exemplo|aproximadamente|cerca de|vou|vamos|se eu|se nos)\b", plain) or '?' in plain:
-        fail(422, "input_ambiguo", "Descreva uma movimentação realizada ou a situação medida dos leitos, sem hipóteses ou aproximações.")
+    plain, rejected_event = _without_ambiguous_clauses(plain)
     plain = re.sub(r"^(?:(?:clara|oi|ola|bom dia|boa tarde|boa noite)[,!:]?\s*)+", "", plain)
     plain = re.sub(r"^(?:hoje[, :]*)\s*", "", plain).rstrip('.! ')
     plain = re.sub(r"^(?:eu |nos )?(?:recebi|recebemos|chegaram)\s+(?:hoje\s+)?", "entrada de ", plain)
@@ -63,6 +86,8 @@ def interpret_operational_input(text):
             "tipo_movimentacao": movement,
         }}
 
+    if rejected_event:
+        fail(422, "input_ambiguo", "Descreva uma movimentação realizada ou a situação medida dos leitos, sem hipóteses ou aproximações.")
     fail(422, "input_operacional_nao_reconhecido",
          "Informe uma movimentação de vacina ou medicamento, ou a situação atual dos leitos, no formato orientado.")
 
@@ -84,8 +109,7 @@ def interpret_operational_items(text):
     formato único + Gemini. Cada item ainda passa pela validação do serviço.
     """
     plain = _plain(" ".join(str(text or "").split()))
-    if re.search(r"\b(nao|amanha|talvez|exemplo|aproximadamente|cerca de|vou|vamos|se eu|se nos)\b", plain) or '?' in plain:
-        fail(422, "input_ambiguo", "Descreva uma movimentação realizada ou a situação medida dos leitos, sem hipóteses ou aproximações.")
+    plain, rejected_event = _without_ambiguous_clauses(plain)
     items = []
     # Doses aplicadas saem do estoque de vacinas da unidade.
     for m in re.finditer(r"\b(?:apliquei|aplicamos|aplicou|aplicaram|foram aplicad[ao]s)\s+(?:hoje\s+)?" + _N +
@@ -108,6 +132,8 @@ def interpret_operational_items(text):
         if "dengue" in m.group(3):
             items.append((m.start(), {"tipo": "internacao_dengue", "payload": {
                 "qtd_internacoes": _int(m.group(1) or m.group(2))}}))
+    if not items and rejected_event:
+        fail(422, "input_ambiguo", "Descreva uma movimentação realizada ou a situação medida dos leitos, sem hipóteses ou aproximações.")
     return [item for _, item in sorted(items, key=lambda pair: pair[0])]
 
 

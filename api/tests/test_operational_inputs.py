@@ -245,6 +245,36 @@ def test_audio_com_varios_itens_vira_rascunhos_nas_tabelas_do_time(svc):
     assert interpret_operational_items("internamos 3 pessoas") == []
 
 
+@pytest.mark.parametrize("text,expected_types", [
+    ("aplicamos 30 doses de dengue", ["vacinacao"]),
+    ("aplicamos 30 doses de dengue, não teve internação", ["vacinacao"]),
+    ("não teve internação, recebemos 100 doses de influenza", ["vacinacao"]),
+    ("aplicamos 12 doses de covid-19; talvez internemos 2 por dengue", ["vacinacao"]),
+    ("UTI: 8 leitos ocupados e 2 disponíveis, não houve internação", ["internacao"]),
+    ("recebemos 40 doses de hepatite b. Vamos conferir o restante", ["vacinacao"]),
+])
+def test_negacao_ou_hipotese_descarta_so_a_oracao(text, expected_types):
+    from api.core.operational_inputs_interpreter import interpret_operational_items
+
+    assert [item["tipo"] for item in interpret_operational_items(text)] == expected_types
+
+
+@pytest.mark.parametrize("text", [
+    "não aplicamos 30 doses de dengue",
+    "vou receber 100 doses amanhã",
+    "vamos aplicar 20 doses de influenza",
+    "exemplo: aplicamos 15 doses de dengue",
+    "talvez recebemos 50 doses de covid-19",
+    "aplicamos aproximadamente 30 doses de dengue",
+])
+def test_oracao_operacional_negada_ou_hipotetica_e_recusada(text):
+    from api.core.operational_inputs_interpreter import interpret_operational_items
+
+    with pytest.raises(HTTPException) as exc:
+        interpret_operational_items(text)
+    assert exc.value.detail["codigo"] == "input_ambiguo"
+
+
 def test_saida_maior_que_saldo_e_recusada_e_internacao_dengue_acumula(svc):
     applied = svc.create_draft(ACTOR, ESTABLISHMENT, "aplicamos 30 doses de dengue", "apply-1",
                                {"tipo": "vacinacao", "payload": {"nome_vacina": "dengue", "qtd_doses": 30, "tipo_movimentacao": "saida"}})
