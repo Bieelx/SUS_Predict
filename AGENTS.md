@@ -34,9 +34,8 @@ Visão geral, stack, estrutura e como rodar: [readme.MD](./readme.MD).
 | Deploy | `deploy/azure-update.sh` + `suspredict-update.timer` (auto pela `main`) |
 | Pipeline de dados | `pipeline/` (notebooks Databricks) |
 
-Legado, não usar como referência de fluxo: `datasus.py`, `schema.py`, `debug.py`,
-`Requirements.txt`, rotas de job em `api/main.py` (`/api/download`, `/status`, `/resultado`…),
-`api/core/dengue.py` (`/api/dengue/*`, sem uso no frontend). PySUS está quebrado em produção.
+Legado removido em 14/09/2026 (PySUS, rotas de job, `/api/dengue/*`). Restam em `api/main.py`
+`/api/sistemas`, `/estados`, `/cidades`, `/overview`, `/runs` sem uso no frontend.
 
 ## Como rodar
 

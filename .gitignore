@@ -122,4 +122,8 @@ trailer
 .claude-flow/
 api/.claude-flow/
 
+# config local de MCP e rascunhos
+.mcp.json
+tmp/
+
 !frontend/tests/estoques-leitos.spec.js

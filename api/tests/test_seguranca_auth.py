@@ -1,7 +1,7 @@
 """Correções de segurança da auditoria de 06/09/2026 e o 2FA por e-mail.
 
 Cobre o que a auditoria encontrou aberto: payload cru do GoTrue no cadastro,
-enumeração de e-mail, `/api/cleanup` sem autenticação, docs públicas, ausência de
+enumeração de e-mail, docs públicas, ausência de
 cabeçalhos de defesa e login sem limite de tentativas.
 """
 
@@ -181,14 +181,8 @@ def test_docs_e_openapi_fechados_por_padrao(cliente):
     assert cliente.get("/openapi.json").status_code == 404
 
 
-def test_cleanup_exige_autenticacao(cliente):
-    assert cliente.delete("/api/cleanup/qualquer-job").status_code == 401
-
-
 @pytest.mark.parametrize("rota", [
     "/api/runs", "/api/overview/351300", "/api/sistemas", "/api/estados",
-    "/api/status/abc", "/api/resultado/abc", "/api/export/abc",
-    "/api/dengue/sinan/casos",
 ])
 def test_endpoints_de_dados_exigem_token(cliente, rota):
     assert cliente.get(rota).status_code == 401
