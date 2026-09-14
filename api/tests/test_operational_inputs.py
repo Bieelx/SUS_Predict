@@ -153,6 +153,23 @@ def test_rascunho_nao_altera_saldo_e_confirmacao_aciona_trigger(svc):
     assert svc.confirm(ACTOR, draft["id"], 1, "confirm-001")["replay"] is True
 
 
+def test_metricas_do_piloto_mostram_correcao_e_tempo_sem_texto(svc):
+    primeiro = svc.create_draft(ACTOR, ESTABLISHMENT, "Entrada de 500 doses da vacina COVID-19", "metric-001")
+    svc.confirm(ACTOR, primeiro["id"], 1, "metric-confirm-001")
+    segundo = svc.create_draft(ACTOR, ESTABLISHMENT, "Entrada de 30 doses da vacina dengue", "metric-002")
+    svc.confirm(ACTOR, segundo["id"], 1, "metric-confirm-002", {
+        "nome_vacina": "dengue", "qtd_doses": 25, "tipo_movimentacao": "entrada",
+    })
+
+    metricas = svc.pilot_metrics(ACTOR, ESTABLISHMENT)
+
+    assert metricas["confirmados"] == 2
+    assert metricas["interpretados_sem_correcao"] == 1
+    assert metricas["taxa_interpretados_sem_correcao"] == 0.5
+    assert metricas["tempo_mediano_confirmacao_segundos"] is not None
+    assert "texto" not in str(metricas)
+
+
 def test_gemini_so_estrutura_relato_complexo_e_o_servico_ainda_valida(svc, monkeypatch):
     from api.core import operational_inputs_service
     monkeypatch.setattr(operational_inputs_service, "interpretar_com_gemini", lambda _: [{

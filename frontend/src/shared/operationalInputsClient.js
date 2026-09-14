@@ -34,6 +34,8 @@ export const operationalInputsClient = {
     request(`/estabelecimentos${query({ busca, limite })}`, { signal }),
   listarRascunhos: ({ status = 'rascunho', id_estabelecimento, signal } = {}) =>
     request(`/rascunhos${query({ status, id_estabelecimento })}`, { signal }),
+  obterMetricasPiloto: (id_estabelecimento, { signal } = {}) =>
+    request(`/metricas-piloto${query({ id_estabelecimento })}`, { signal }),
   confirmar: (id, versao, chave, payload) => request(`/rascunhos/${encodeURIComponent(id)}/confirmar`, {
     method: 'POST', body: { versao_esperada: versao, chave_idempotencia: chave, ...(payload ? { payload } : {}) },
   }),

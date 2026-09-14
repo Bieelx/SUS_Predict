@@ -20,6 +20,7 @@ import {
   listarConversasSusbot,
   listarMensagensSusbot,
   revogarCanalSusbot,
+  transcreverAudioSusbot,
 } from '../shared/susbotClient.js';
 import { detalheLegivelSusbot, getSusbotPageLabel } from '../shared/susbotContract.js';
 
@@ -1169,6 +1170,9 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId 
   const [erroHistorico, setErroHistorico] = useState('');
   const [carregandoConversaId, setCarregandoConversaId] = useState(null);
   const [erroConversa, setErroConversa] = useState('');
+  const [voz, setVoz] = useState('parado'); // 'parado' | 'gravando' | 'transcrevendo'
+  const [erroVoz, setErroVoz] = useState('');
+  const gravadorRef = useRef(null);
 
   const fimRef = useRef(null);
   const inputRef = useRef(null);
@@ -1408,6 +1412,48 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId 
   function atualizarMensagemAtual(mensagemId, mapper) {
     setCurrent(c => atualizarMensagem(c, mensagemId, mapper));
   }
+
+  // Mesma transcrição local dos canais; o texto cai no campo para revisão antes do envio.
+  async function alternarGravacao() {
+    if (voz === 'gravando') { gravadorRef.current?.stop(); return; }
+    setErroVoz('');
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setErroVoz('Não consegui acessar o microfone. Verifique a permissão do navegador.');
+      return;
+    }
+    const gravador = new MediaRecorder(stream);
+    const partes = [];
+    // ponytail: corta em 120s, o limite padrão do backend (CLARA_AUDIO_MAX_SECONDS)
+    const limite = setTimeout(() => gravador.state === 'recording' && gravador.stop(), 120_000);
+    gravador.ondataavailable = e => { if (e.data.size) partes.push(e.data); };
+    gravador.onstop = async () => {
+      clearTimeout(limite);
+      stream.getTracks().forEach(t => t.stop());
+      gravadorRef.current = null;
+      setVoz('transcrevendo');
+      try {
+        const texto = await transcreverAudioSusbot({
+          audio: new Blob(partes, { type: gravador.mimeType }),
+          baseUrl: API_BASE,
+          headers: getAuthHeaders(),
+        });
+        setInput(atual => (atual.trim() ? `${atual.trim()} ${texto}` : texto));
+        inputRef.current?.focus();
+      } catch (erro) {
+        setErroVoz(typeof erro?.detail === 'string' && erro.detail ? erro.detail : 'Não consegui transcrever este áudio agora.');
+      } finally {
+        setVoz('parado');
+      }
+    };
+    gravadorRef.current = gravador;
+    gravador.start();
+    setVoz('gravando');
+  }
+
+  useEffect(() => () => gravadorRef.current?.stop(), []);
 
   async function enviar(textoForcado) {
     const pergunta = (textoForcado ?? input).trim();
@@ -1788,6 +1834,8 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId 
         .susbot-send:hover:not(:disabled) { transform: translateY(-1px); }
         .susbot-send:active:not(:disabled) { transform: scale(0.94); }
         .susbot-send:disabled { background: var(--tint); color: var(--ink-300); box-shadow: none; cursor: default; }
+        .susbot-mic { background: var(--tint); color: var(--ink-700); box-shadow: none; }
+        .susbot-mic[aria-pressed="true"] { background: var(--bad); color: #fff; }
         .susbot-rodape { margin: 8px 0 0; font-size: 11px; color: var(--ink-300); text-align: center; }
 
         .susbot-icon-btn {
@@ -2216,7 +2264,23 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId 
                   }}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                  <p className="susbot-dica">Enter envia, Shift+Enter quebra linha</p>
+                  <p className="susbot-dica" role="status">
+                    {erroVoz || (voz === 'gravando' ? 'Gravando… toque de novo para parar' : voz === 'transcrevendo' ? 'Transcrevendo seu áudio…' : 'Enter envia, Shift+Enter quebra linha')}
+                  </p>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                  {!demoReplay && typeof MediaRecorder !== 'undefined' && (
+                    <button
+                      type="button"
+                      onClick={() => void alternarGravacao()}
+                      disabled={voz === 'transcrevendo' || enviando}
+                      title={voz === 'gravando' ? 'Parar gravação' : 'Falar com a Clara'}
+                      aria-label={voz === 'gravando' ? 'Parar gravação' : 'Gravar mensagem de voz'}
+                      aria-pressed={voz === 'gravando'}
+                      className="susbot-send susbot-mic"
+                    >
+                      <MIcon m={voz === 'gravando' ? 'stop' : voz === 'transcrevendo' ? 'hourglass_top' : 'mic'} size={18} />
+                    </button>
+                  )}
                   <button
                     onClick={() => enviar()}
                     disabled={!input.trim() || enviando}
@@ -2226,6 +2290,7 @@ export function ClaraPanel({ page = 'visao-geral', onNavigate, ibge6, unidadeId 
                   >
                     <MIcon m="arrow_upward" size={18} />
                   </button>
+                  </div>
                 </div>
               </div>
               <p className="susbot-rodape">{demoReplay ? 'Leitura local do cenário. Nenhuma ação real é executada.' : 'Respostas geradas automaticamente. Confira antes de decidir.'}</p>

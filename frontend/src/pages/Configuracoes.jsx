@@ -2,6 +2,7 @@ import { botao } from '../shared/dataUi.jsx';
 import { Card } from '../shared/ui.jsx';
 import { LegalLinks } from './Legal.jsx';
 import AdminUsuarios from './AdminUsuarios.jsx';
+import ClaraMetricas from './ClaraMetricas.jsx';
 
 // ─── Page: Configurações ───────────────────────────────────────────────────────
 //
@@ -41,6 +42,8 @@ export default function PageConfiguracoes({ municipio, authUser, demo = false, o
       </div>
 
       {admin && <AdminUsuarios euId={authUser?.id} />}
+
+      {!demo && <ClaraMetricas />}
 
       <Card className="p-5" style={{ marginBottom: 20, border: '1px solid var(--ink-100)' }}>
         <CardHead title="Ambiente" hint="transparência" />

@@ -229,7 +229,20 @@ def test_endpoint_de_metricas_expoe_somente_contagens_anonimas(router):
     assert resposta["respostas_total"] == 1
     assert resposta["taxa_respostas_sem_llm"] == 1.0
     assert resposta["dados_pessoais_coletados"] is False
+    assert resposta["avaliacao_offline"]["casos_ferramenta"] >= 100
     assert "usuario" not in resposta
+
+
+def test_metricas_contabilizam_escrita_bloqueada_por_confirmacao():
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.susbot_metrics import obter_metricas, resetar_metricas
+
+    resetar_metricas()
+    agente = criar_susbot_agente("355030", perfil="gestor")
+    eventos = list(agente.stream_eventos("Gere um ETP para dipirona"))
+
+    assert any(evento["event"] == "confirmacao_pendente" for evento in eventos)
+    assert obter_metricas()["escritas_bloqueadas_confirmacao"] == 1
 
 
 def test_web_aprende_nome_do_perfil_autenticado(router):
@@ -285,3 +298,41 @@ def test_usuario_apaga_so_a_propria_conversa(router):
     router_module.excluir_conversa(minha["id"], user=dono)
     assert db_module.get_conversa(minha["id"]) is None
     assert db_module.contar_mensagens(minha["id"]) == 0
+
+
+class _RequestAudio:
+    def __init__(self, conteudo, mime="audio/webm;codecs=opus"):
+        self._conteudo = conteudo
+        self.headers = {"content-type": mime, "content-length": str(len(conteudo))}
+
+    async def body(self):
+        return self._conteudo
+
+
+def test_transcrever_web_devolve_texto_e_mapeia_erros(router, monkeypatch):
+    router_module, _db = router
+    from api.core.audio_transcription import AudioInvalido, ResultadoTranscricao
+
+    recebido = {}
+
+    def fake(conteudo, *, mime_type):
+        recebido.update(conteudo=conteudo, mime=mime_type)
+        return ResultadoTranscricao(texto="quantas doses de dengue temos")
+
+    monkeypatch.setattr(router_module, "transcrever_audio", fake)
+    resposta = asyncio.run(router_module.transcrever(_RequestAudio(b"abc"), "k", {"sub": "user-abc"}))
+    assert resposta == {"texto": "quantas doses de dengue temos"}
+    assert recebido == {"conteudo": b"abc", "mime": "audio/webm;codecs=opus"}
+
+    def invalido(*_a, **_k):
+        raise AudioInvalido("Este formato de áudio não é suportado.")
+
+    monkeypatch.setattr(router_module, "transcrever_audio", invalido)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(router_module.transcrever(_RequestAudio(b"abc"), "k", {"sub": "user-abc"}))
+    assert exc.value.status_code == 422
+
+    monkeypatch.setenv("CLARA_AUDIO_MAX_BYTES", "2")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(router_module.transcrever(_RequestAudio(b"abc"), "k", {"sub": "user-abc"}))
+    assert exc.value.status_code == 413

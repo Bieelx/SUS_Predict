@@ -54,3 +54,10 @@
   .app-page-content .re-page .re-tabela-wrap table.rl-tabela { min-width: 0; table-layout: fixed; }
   .re-page .re-tabela-wrap td.rl-valor { white-space: normal; }
 }
+.re-piloto { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0 0 18px; padding: 1px; border-radius: 10px; background: var(--ink-100); overflow: hidden; }
+.re-piloto > div { display: flex; flex-direction: column; gap: 5px; padding: 14px; background: var(--elev); }
+.re-piloto strong { color: var(--primary-dark); font: 750 var(--fs-lg)/1 var(--ff-mono); }
+.re-piloto span { color: var(--ink-700); font-size: var(--fs-sm); }
+.re-piloto p { grid-column: 1 / -1; margin: 0; padding: 8px 12px; background: var(--subtle); color: var(--ink-400); font-size: var(--fs-xs); }
+
+@media (max-width: 560px) { .re-piloto { grid-template-columns: 1fr; } .re-piloto p { grid-column: 1; } }

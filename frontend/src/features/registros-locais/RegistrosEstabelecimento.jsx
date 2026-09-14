@@ -25,6 +25,7 @@ export default function RegistrosEstabelecimento({ onOpenClara, onLegado }) {
   const [aba, setAba] = useState('saldo');
   const [dados, setDados] = useState(null);
   const [pendentes, setPendentes] = useState([]);
+  const [metricas, setMetricas] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
   const [texto, setTexto] = useState('');
@@ -52,11 +53,11 @@ export default function RegistrosEstabelecimento({ onOpenClara, onLegado }) {
   useEffect(() => {
     if (!unidade) return;
     const controller = new AbortController();
-    setCarregando(true); setDados(null); setPendentes([]); setErro('');
-    Promise.all([api.obterRegistros(unidade.id, { signal: controller.signal }), api.listarRascunhos({ id_estabelecimento: unidade.id, signal: controller.signal })])
-      .then(([resposta, rascunhos]) => {
+    setCarregando(true); setDados(null); setPendentes([]); setMetricas(null); setErro('');
+    Promise.all([api.obterRegistros(unidade.id, { signal: controller.signal }), api.listarRascunhos({ id_estabelecimento: unidade.id, signal: controller.signal }), api.obterMetricasPiloto(unidade.id, { signal: controller.signal })])
+      .then(([resposta, rascunhos, sinais]) => {
         if (controller.signal.aborted) return;
-        setDados(resposta); setPendentes((rascunhos.itens || []).filter(r => r.id_estabelecimento === unidade.id));
+        setDados(resposta); setPendentes((rascunhos.itens || []).filter(r => r.id_estabelecimento === unidade.id)); setMetricas(sinais);
       })
       .catch(e => { if (!controller.signal.aborted) setErro(e.message); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
@@ -103,6 +104,7 @@ export default function RegistrosEstabelecimento({ onOpenClara, onLegado }) {
     {!unidade ? <div className="re-inicio"><span className="eyebrow">Uma unidade, três controles</span><h2>O que você precisa atualizar?</h2><p>Vacinas em doses, medicamentos por apresentação e leitos por tipo. Cada registro fica vinculado à unidade selecionada.</p><ol><li>Selecione a unidade acima.</li><li>Descreva a movimentação ou situação atual.</li><li>Revise e confirme para atualizar os dados.</li></ol></div> : <>
       <nav className="re-modulos" aria-label="Tipo de registro">{Object.entries(MODULOS).map(([key, m]) => <button key={key} aria-pressed={tipo === key} disabled={ocupado} onClick={() => { setTipo(key); setEditando(false); setTexto(''); }}>{m.nome}</button>)}</nav>
       <div className="re-titulo"><div><h2>{modulo.nome}</h2><p>{modulo.ajuda}</p></div><button className="rl-botao-primario" disabled={ocupado || carregando} onClick={() => setEditando(v => !v)}>{editando ? 'Fechar preenchimento' : 'Novo registro'}</button></div>
+      {metricas?.confirmados > 0 && <section className="re-piloto" aria-label="Métricas do piloto nesta unidade"><div><strong>{(metricas.taxa_interpretados_sem_correcao * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</strong><span>confirmados sem corrigir a interpretação</span></div><div><strong>{metricas.tempo_mediano_confirmacao_segundos < 60 ? `${metricas.tempo_mediano_confirmacao_segundos} s` : `${Math.round(metricas.tempo_mediano_confirmacao_segundos / 60)} min`}</strong><span>tempo mediano até confirmar</span></div><p>Amostra: {metricas.confirmados.toLocaleString('pt-BR')} registros confirmados nesta unidade.</p></section>}
       {editando && <form className="re-form" onSubmit={criar}><label htmlFor="re-relato">Descreva o que aconteceu na unidade</label><p>A Clara prepara os campos para sua revisão. Os dados só mudam depois de confirmar.</p><textarea id="re-relato" autoFocus required maxLength={4000} rows={3} value={texto} disabled={ocupado} onChange={e => setTexto(e.target.value)} placeholder={modulo.exemplo} />
         <p className="re-exemplo">Exemplo: {modulo.exemplo}</p><div className="rl-acoes"><button className="rl-botao-primario" disabled={ocupado || !texto.trim()}>{ocupado ? 'Preparando…' : 'Preparar para revisão'}</button>
           {onOpenClara && <button type="button" className="rl-botao" disabled={ocupado} onClick={() => onOpenClara('', { intencao: 'input_operacional', estabelecimento: { id: unidade.id, cnes: unidade.cnes, nome: unidade.no_fantasia, municipio: unidade.nome_municipio || unidade.no_municipio }, rota_retorno: '/registros-unidade' }, { origem: 'registros-unidade', unidade: unidade.no_fantasia })}>Abrir conversa com a Clara</button>}</div></form>}

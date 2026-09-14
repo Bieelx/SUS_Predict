@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import unicodedata
+from statistics import median
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
@@ -217,6 +218,54 @@ class OperationalInputs:
                 establishment = self._establishment(tx, actor, row["id_estabelecimento"])
                 result.append(self._present(row, establishment))
             return {"itens": result, "origem": "input_operacional"}
+
+    def pilot_metrics(self, actor, establishment_id):
+        """Mede revisão e confirmação do piloto sem expor texto ou identidade."""
+
+        with self.store.transaction() as tx:
+            self._establishment(tx, actor, establishment_id)
+            rows = tx.all(
+                "SELECT payload_proposto,payload_confirmado,criado_em,confirmado_em "
+                "FROM clara_inputs_operacionais WHERE id_estabelecimento=? AND status='confirmado' "
+                "ORDER BY confirmado_em DESC LIMIT 500",
+                (establishment_id,),
+            )
+        tempos = []
+        sem_correcao = 0
+        for row in rows:
+            proposto = decode(row.get("payload_proposto")) or {}
+            confirmado = decode(row.get("payload_confirmado")) or {}
+            if self._payload_equivalente(proposto, confirmado):
+                sem_correcao += 1
+            try:
+                inicio = datetime.fromisoformat(str(row["criado_em"]).replace("Z", "+00:00"))
+                fim = datetime.fromisoformat(str(row["confirmado_em"]).replace("Z", "+00:00"))
+                tempos.append(max(0, (fim - inicio).total_seconds()))
+            except (TypeError, ValueError):
+                continue
+        total = len(rows)
+        return {
+            "confirmados": total,
+            "interpretados_sem_correcao": sem_correcao,
+            "taxa_interpretados_sem_correcao": round(sem_correcao / total, 4) if total else None,
+            "tempo_mediano_confirmacao_segundos": round(median(tempos)) if tempos else None,
+            "amostra_maxima": 500,
+            "origem": "clara_inputs_operacionais",
+        }
+
+    @staticmethod
+    def _payload_equivalente(esquerda, direita):
+        """Ignora apenas diferenças cosméticas aplicadas ao consolidar chaves."""
+
+        def normalizar(valor):
+            if isinstance(valor, dict):
+                return {chave: normalizar(item) for chave, item in sorted(valor.items())}
+            if isinstance(valor, list):
+                return [normalizar(item) for item in valor]
+            if isinstance(valor, str):
+                return " ".join(valor.casefold().split())
+            return valor
+        return normalizar(esquerda) == normalizar(direita)
 
     def confirm(self, actor, draft_id, expected, operation_key, payload=None):
         with self.store.transaction() as tx:

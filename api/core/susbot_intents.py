@@ -208,13 +208,13 @@ def rotear_intencao(pergunta: str) -> IntentRoute | None:
 
     termos_internacao = {"internac", "hospitaliz", "hospitalar", "leito", "uti"}
     termos_epidemiologia = {
-        "dengue", "caso", "epidemiologia", "notific", "obito", "mortalidade",
+        "dengue", "caso", "epidemiologia", "notific", "obito", "morte", "mortalidade",
         "nascimento", "ambulatorial",
     }
     if _contem_termo(texto, termos_internacao | termos_epidemiologia):
         if _contem_termo(texto, termos_internacao):
             sistema = "SIH"
-        elif _contem_termo(texto, {"obito", "mortalidade"}):
+        elif _contem_termo(texto, {"obito", "morte", "mortalidade"}):
             sistema = "SIM"
         elif _contem_termo(texto, {"nascimento"}):
             sistema = "SINASC"

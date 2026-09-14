@@ -35,6 +35,7 @@ MIMES_AUDIO_SUPORTADOS = {
     "audio/ogg": ".ogg",
     "audio/opus": ".opus",
     "audio/wav": ".wav",
+    "audio/webm": ".webm",
     "audio/x-m4a": ".m4a",
     "audio/x-wav": ".wav",
 }

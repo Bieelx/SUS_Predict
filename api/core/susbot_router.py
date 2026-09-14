@@ -11,12 +11,19 @@ import math
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from api.core.local_records_models import StrictModel
 from uuid import UUID
 
+from api.core.audio_transcription import (
+    AudioInvalido,
+    TranscricaoIndisponivel,
+    limite_audio_bytes,
+    transcrever_audio,
+)
 from api.core.auth import require_user
 from api.core.identidade import usuario_referencia
 from api.core import db, conversation_hub as hub
@@ -133,6 +140,34 @@ def _clamp_pagination(page: int, page_size: int, max_page_size: int = 100) -> tu
 
 def _sse(evento: str, dados: dict[str, Any]) -> str:
     return f"event: {evento}\ndata: {json.dumps(dados, ensure_ascii=False)}\n\n"
+
+
+@router.post("/transcrever")
+async def transcrever(
+    request: Request,
+    _acesso: str = Depends(verificar_acesso_susbot),
+    user: dict = Depends(require_user),
+):
+    """Transcreve o áudio gravado no navegador; o texto volta para revisão antes do envio."""
+
+    if not usuario_referencia(user):
+        raise HTTPException(401, "Usuario autenticado invalido")
+    try:
+        if int(request.headers.get("content-length") or 0) > limite_audio_bytes():
+            raise HTTPException(413, "O áudio ultrapassa o limite de tamanho permitido.")
+    except ValueError:
+        raise HTTPException(400, "Content-Length inválido")
+    conteudo = await request.body()
+    try:
+        resultado = await run_in_threadpool(
+            transcrever_audio, conteudo, mime_type=request.headers.get("content-type"),
+        )
+    except AudioInvalido as exc:
+        raise HTTPException(422, str(exc))
+    except TranscricaoIndisponivel as exc:
+        log.warning("Falha ao transcrever áudio da web: %s", exc)
+        raise HTTPException(503, "Não consegui transcrever este áudio agora.")
+    return {"texto": resultado.texto}
 
 
 @router.post("/perguntar")

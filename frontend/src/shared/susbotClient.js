@@ -73,6 +73,24 @@ async function requisicaoJson(path, {
   return lerJson(response);
 }
 
+// Áudio gravado no navegador vai cru no corpo; o Content-Type diz o formato.
+export async function transcreverAudioSusbot({
+  audio, baseUrl = '', fetchImpl = globalThis.fetch, signal, headers = {}, apiKey = SUSBOT_API_KEY,
+} = {}) {
+  const response = await fetchImpl(resolverUrl(baseUrl, SUSBOT_ENDPOINTS.transcrever), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': audio.type || 'audio/webm',
+      ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+      ...headers,
+    },
+    body: audio,
+    signal,
+  });
+  return (await lerJson(response)).texto;
+}
+
 export function listarCanaisSusbot(opcoes = {}) {
   return requisicaoJson(SUSBOT_ENDPOINTS.canais, opcoes);
 }

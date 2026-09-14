@@ -46,6 +46,11 @@ def listing(status: Literal["rascunho", "confirmado", "rejeitado"] = "rascunho",
     return svc.list(usuario, status, id_estabelecimento)
 
 
+@router.get("/metricas-piloto")
+def pilot_metrics(id_estabelecimento: str, usuario=Depends(actor), svc=Depends(service)):
+    return svc.pilot_metrics(usuario, id_estabelecimento)
+
+
 @router.get("/rascunhos/{rascunho_id}")
 def detail(rascunho_id: UUID, usuario=Depends(actor), svc=Depends(service)):
     return svc.get(usuario, str(rascunho_id))

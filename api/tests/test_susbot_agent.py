@@ -313,6 +313,28 @@ def test_metricas_contabilizam_rotas_com_e_sem_llm(db):
     assert metricas["chamadas_planejamento_llm"] == 1
     assert metricas["chamadas_resposta_llm"] == 1
     assert metricas["taxa_respostas_sem_llm"] == 0.5
+
+
+def test_metricas_contabilizam_fallback_sem_guardar_conteudo():
+    from api.core.susbot_agent import FallbackClaraLLM
+    from api.core.susbot_metrics import obter_metricas, resetar_metricas
+
+    class Falha:
+        def planejar(self, *_args):
+            raise RuntimeError("prompt secreto")
+
+    class Reserva:
+        def planejar(self, *_args):
+            return {"acao": "resposta", "resposta": "ok"}
+
+    resetar_metricas()
+    assert FallbackClaraLLM(Falha(), Reserva()).planejar("pergunta", {}, []) == {
+        "acao": "resposta", "resposta": "ok",
+    }
+    metricas = obter_metricas()
+    assert metricas["fallbacks_llm"] == 1
+    assert metricas["fallbacks_por_etapa"] == {"planejamento": 1}
+    assert "prompt secreto" not in str(metricas)
     assert metricas["dados_pessoais_coletados"] is False
 
 

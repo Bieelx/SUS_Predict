@@ -1,0 +1,10 @@
+{
+  "executada_em": "2026-09-14",
+  "casos_ferramenta": 100,
+  "acerto_ferramenta": 1.0,
+  "casos_json": 100,
+  "json_valido": 1.0,
+  "escritas_sem_confirmacao": 0,
+  "numeros_divergentes_aceitos": 0,
+  "comando": "venv/bin/python -m pytest api/tests/test_clara_quality_evaluation.py -q"
+}

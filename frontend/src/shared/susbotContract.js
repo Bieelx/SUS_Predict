@@ -1,5 +1,6 @@
 export const SUSBOT_ENDPOINTS = {
   perguntar: '/api/susbot/perguntar',
+  transcrever: '/api/susbot/transcrever',
   conversas: '/api/susbot/conversas',
   conversa: conversaId => `/api/susbot/conversas/${conversaId}`,
   mensagens: conversaId => `/api/susbot/conversas/${conversaId}/mensagens`,

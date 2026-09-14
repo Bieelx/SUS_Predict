@@ -39,7 +39,11 @@ from api.core.permissoes import mensagem_ferramenta_negada
 from api.core.clara_model_policy import RACIOCINIO_AVANCADO, perfil_para_plano
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
 from api.core.susbot_intents import normalizar_texto, rotear_intencao, rotear_com_contexto, tipo_conversa_social
-from api.core.susbot_metrics import registrar_execucao, registrar_falha_fidelidade
+from api.core.susbot_metrics import (
+    registrar_execucao,
+    registrar_falha_fidelidade,
+    registrar_fallback_llm,
+)
 
 log = logging.getLogger("sus_predict.susbot_agent")
 
@@ -747,6 +751,7 @@ class FallbackClaraLLM:
             if self._fallback is None:
                 raise
             log.warning("LLM primário falhou no planejamento (%s) — caindo pro fallback", exc)
+            registrar_fallback_llm("planejamento")
             return self._fallback.planejar(pergunta, contexto, ferramentas)
 
     def completar(self, mensagens: list[tuple[str, str]], max_tokens: int = 256) -> str:
@@ -757,6 +762,7 @@ class FallbackClaraLLM:
             if self._fallback is None:
                 raise
             log.warning("LLM primário falhou no completar (%s) — caindo pro fallback", exc)
+            registrar_fallback_llm("completar")
             return self._fallback.completar(mensagens, max_tokens=max_tokens)
 
     def stream_resposta(
@@ -776,6 +782,7 @@ class FallbackClaraLLM:
             if emitiu or self._fallback is None:
                 raise
             log.warning("LLM primário falhou na resposta (%s) — caindo pro fallback", exc)
+            registrar_fallback_llm("resposta")
             yield from self._fallback.stream_resposta(pergunta, contexto, plano, resultado_ferramenta)
 
 
@@ -1323,6 +1330,7 @@ class ClaraAgent:
 
         if plano.get("acao") == "ferramenta" and ferramenta in FERRAMENTAS_ESCRITA:
             argumentos = plano.get("argumentos") or {}
+            execucao["aguardando_confirmacao"] = True
             yield {
                 "event": "confirmacao_pendente",
                 "data": {
