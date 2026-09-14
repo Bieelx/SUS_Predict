@@ -373,6 +373,21 @@ def test_pendencia_sobrevive_a_consulta_intermediaria(flow):
     assert int(final['payload']['registros'][0]['atual']['valor']) == 25
 
 
+def test_pending_busca_uma_evidencia_sem_varrer_mensagens(flow, monkeypatch):
+    from api.core import conversation_hub as hub
+
+    _, conversation = flow
+    text = 'Hoje atendi cerca de 20 pessoas com suspeita de dengue'
+    first = process_input('writer', text, conversation, '355030')
+    persist_input(first, conversation, 'web', text)
+    monkeypatch.setattr(db, 'listar_mensagens', lambda *a, **k: pytest.fail('não deve varrer mensagens'))
+    monkeypatch.setattr(hub, 'listar_evidencias', lambda *a, **k: pytest.fail('não deve listar evidências'))
+
+    continued = process_input('writer', 'foram 25 pessoas', conversation, '355030')
+
+    assert continued['evento'] == 'rascunho_local_pronto'
+
+
 def test_relato_multiplo_separa_itens():
     text = 'Hoje atendemos 8 pessoas com suspeita de dengue e tivemos três encaminhamentos pra dengue'
     items = interpret(text, date(2026, 9, 13))

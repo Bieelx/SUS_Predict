@@ -68,6 +68,36 @@ def listar_evidencias(conversa_id: str, usuario: str) -> dict:
     return {row["mensagem_id"]: _decode(row)["artefato"] for row in rows}
 
 
+def obter_ultima_entrada(conversa_id: str, usuario: str) -> dict | None:
+    """Busca só a evidência mais recente do fluxo de entrada, sem varrer histórico."""
+
+    verificar_dono(conversa_id, usuario)
+    if db._clara_remoto():
+        query = (
+            "clara_evidencias?select=mensagem_id,artefato,susbot_mensagens!inner(criado_em)"
+            f"&conversa_id=eq.{db._e(conversa_id)}&artefato->>tipo=eq.entrada_clara"
+            "&order=susbot_mensagens(criado_em).desc&limit=1"
+        )
+        rows, _ = db._rest("GET", query)
+        if not rows:
+            return None
+        row = _decode(rows[0])
+        message = row.get("susbot_mensagens") or {}
+        return {"artefato": row["artefato"], "criado_em": message.get("criado_em")}
+    with db._conn() as con:
+        row = con.execute(
+            "SELECT e.artefato,m.criado_em FROM clara_evidencias e "
+            "JOIN susbot_mensagens m ON m.id=e.mensagem_id "
+            "WHERE e.conversa_id=? AND json_extract(e.artefato,'$.tipo')='entrada_clara' "
+            "ORDER BY m.criado_em DESC,m.id DESC LIMIT 1",
+            (conversa_id,),
+        ).fetchone()
+    if not row:
+        return None
+    decoded = _decode(row)
+    return {"artefato": decoded["artefato"], "criado_em": decoded.get("criado_em")}
+
+
 def verificar_dono(conversa_id: str, usuario: str) -> dict:
     conversa = db.get_conversa(conversa_id)
     if not conversa or conversa["usuario"] != usuario:

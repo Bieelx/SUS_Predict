@@ -33,20 +33,13 @@ def input_kind(text):
 
 
 def _pending(conversation, actor):
-    evidence = hub.listar_evidencias(conversation, actor)
-    page = 1
-    while True:
-        messages = db.listar_mensagens(conversation, page=page, page_size=100)
-        for message in messages:
-            artifact = evidence.get(message['id'], {})
-            if artifact.get('tipo') == 'entrada_clara':
-                pending = artifact.get('pendente')
-                if pending and not pending.get('criado_em'):
-                    pending = {**pending, 'criado_em': message.get('criado_em')}
-                return pending
-        if len(messages) < 100:
-            return None
-        page += 1
+    latest = hub.obter_ultima_entrada(conversation, actor)
+    if not latest:
+        return None
+    pending = latest['artefato'].get('pendente')
+    if pending and not pending.get('criado_em'):
+        pending = {**pending, 'criado_em': latest.get('criado_em')}
+    return pending
 
 
 def _result(text, pending=None, event=None, payload=None, route=None):
