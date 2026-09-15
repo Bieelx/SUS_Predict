@@ -164,12 +164,28 @@ def _numeros_na_fonte(valor: Any) -> set[tuple[str, str]]:
         pass
     elif isinstance(valor, (int, float, Decimal)):
         try:
-            encontrados.add(("numero", format(Decimal(str(valor)).normalize(), "f")))
+            numero = abs(Decimal(str(valor)))
         except InvalidOperation:
-            pass
+            return encontrados
+        # Formas legítimas do mesmo número: sinal na palavra ("queda de 89,65%"),
+        # arredondado ("89,7%") e em mil/milhões ("65 mil", "11,9 milhões").
+        # ponytail: variantes por escala podem casar um número pequeno por acaso;
+        # se isso aparecer, parsear "mil/milhões" no texto em vez de gerar variantes.
+        variantes = {Decimal(str(valor)), numero}
+        for escala in (1, 1000, 1_000_000):
+            for casas in (0, 1):
+                variantes.add(round(numero / escala, casas))
+        encontrados.update(("numero", format(v.normalize(), "f")) for v in variantes)
     else:
-        encontrados.update(_numeros_em_texto(str(valor)))
+        texto = str(valor)
+        encontrados.update(_numeros_em_texto(texto))
+        # Ano de uma data da fonte ("em 2025") é o mesmo dado, não número novo.
+        encontrados.update(("numero", ano) for ano in re.findall(r"(?<!\d)(\d{4})-\d{2}-\d{2}", texto))
     return encontrados
+
+
+# Constantes de unidade, não dados: "por 100 mil habitantes", "a cada 1.000".
+_NUMEROS_DE_UNIDADE = {("numero", "100"), ("numero", "1000"), ("numero", "100000")}
 
 
 def _resposta_numericamente_fiel(
@@ -179,7 +195,7 @@ def _resposta_numericamente_fiel(
 ) -> bool:
     citados = _numeros_em_texto(resposta)
     fonte = _numeros_na_fonte(artefato) | _numeros_na_fonte(resultado_ferramenta)
-    return citados <= fonte
+    return citados <= fonte | _NUMEROS_DE_UNIDADE
 
 
 # Recusa e texto institucional continuam saindo em código, nunca pelo LLM: são a

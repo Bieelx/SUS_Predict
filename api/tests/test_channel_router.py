@@ -443,6 +443,33 @@ def _parear_whatsapp(canais):
     return criado, router_module.confirmar_pareamento(criado["id"], user=_user())
 
 
+def test_whatsapp_converte_mp3_para_ogg_antes_de_enviar_como_voz(canais, monkeypatch):
+    router_module, _db, _mensagens = canais
+    conversoes = []
+    envios = []
+    monkeypatch.setattr(
+        router_module, "_openwa_post_json",
+        lambda rota, corpo, grupo="messages": conversoes.append((rota, corpo, grupo)) or {"base64": "T2dnUw=="},
+    )
+    monkeypatch.setattr(router_module, "_openwa_post", lambda rota, corpo: envios.append((rota, corpo)) or True)
+
+    assert router_module._whatsapp_send_audio(WA_CHAT, b"mp3") is True
+    assert conversoes[0][0:3:2] == ("convert/voice", "media")
+    assert envios[0][1]["mimetype"] == "audio/ogg; codecs=opus"
+    assert envios[0][1]["ptt"] is True
+
+
+def test_whatsapp_sem_conversor_envia_mp3_como_audio_comum(canais, monkeypatch):
+    router_module, _db, _mensagens = canais
+    envios = []
+    monkeypatch.setattr(router_module, "_openwa_post_json", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(router_module, "_openwa_post", lambda rota, corpo: envios.append((rota, corpo)) or True)
+
+    assert router_module._whatsapp_send_audio(WA_CHAT, b"mp3") is True
+    assert envios[0][1]["mimetype"] == "audio/mpeg"
+    assert envios[0][1]["ptt"] is False
+
+
 def test_whatsapp_pareia_por_link_wa_me_e_conversa_no_mesmo_historico(canais):
     router_module, db_module, mensagens = canais
     criado, conexao = _parear_whatsapp(canais)

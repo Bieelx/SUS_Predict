@@ -916,23 +916,28 @@ def _markdown_para_whatsapp(texto: str) -> str:
     return re.sub(r"\*\*(.+?)\*\*", r"*\1*", texto, flags=re.DOTALL)
 
 
-def _openwa_post(rota: str, corpo: dict) -> bool:
+def _openwa_post_json(rota: str, corpo: dict, grupo: str = "messages") -> dict | None:
     base_url, api_key, sessao = _openwa_config()
     if not api_key or not sessao:
         log.info("OPENWA_API_KEY/OPENWA_SESSION_ID ausentes; %s para %s nao enviado", rota, corpo.get("chatId"))
-        return False
+        return None
     request = urllib.request.Request(
-        f"{base_url}/api/sessions/{urllib.parse.quote(sessao, safe='')}/messages/{rota}",
+        f"{base_url}/api/sessions/{urllib.parse.quote(sessao, safe='')}/{grupo}/{rota}",
         data=json.dumps(corpo).encode("utf-8"),
         headers={"Content-Type": "application/json", "X-API-Key": api_key},
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=15):
-            return True
+        with urllib.request.urlopen(request, timeout=30) as resposta:
+            bruto = resposta.read()
+            return json.loads(bruto) if bruto else {}
     except (urllib.error.URLError, TimeoutError) as exc:
         log.warning("Falha no %s do WhatsApp: %s", rota, exc)
-        return False
+        return None
+
+
+def _openwa_post(rota: str, corpo: dict) -> bool:
+    return _openwa_post_json(rota, corpo) is not None
 
 
 def _whatsapp_send(chat_id: str, texto: str) -> bool:
@@ -957,12 +962,28 @@ def _whatsapp_send_document(chat_id: str, conteudo: bytes, nome: str, legenda: s
 
 
 def _whatsapp_send_audio(chat_id: str, conteudo: bytes) -> bool:
+    convertido = _openwa_post_json("convert/voice", {
+        "base64": base64.b64encode(conteudo).decode("ascii"),
+    }, grupo="media")
+    audio_ogg = convertido.get("base64") if isinstance(convertido, dict) else None
+    if audio_ogg:
+        return _openwa_post("send-audio", {
+            "chatId": chat_id,
+            "base64": audio_ogg,
+            "mimetype": "audio/ogg; codecs=opus",
+            "filename": "clara.ogg",
+            "ptt": True,
+        })
+
+    # Sem ffmpeg/conversor, MP3 continua reproduzível como arquivo de áudio.
+    # Marcá-lo como PTT faria o WhatsApp criar uma nota de voz quebrada.
+    log.warning("Conversão Ogg/Opus indisponível; enviando áudio comum em MP3")
     return _openwa_post("send-audio", {
         "chatId": chat_id,
         "base64": base64.b64encode(conteudo).decode("ascii"),
         "mimetype": "audio/mpeg",
         "filename": "clara.mp3",
-        "ptt": True,
+        "ptt": False,
     })
 
 
