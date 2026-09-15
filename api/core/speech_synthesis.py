@@ -14,6 +14,23 @@ class SinteseIndisponivel(RuntimeError):
     """ElevenLabs não está configurada ou recusou a geração."""
 
 
+def _erro_http_seguro(exc: urllib.error.HTTPError) -> str:
+    """Extrai apenas código/tipo/mensagem da ElevenLabs, nunca chave ou request."""
+
+    tipo = ""
+    mensagem = ""
+    try:
+        payload = json.loads(exc.read(16_384).decode("utf-8", errors="replace"))
+        detalhe = payload.get("detail", payload) if isinstance(payload, dict) else {}
+        if isinstance(detalhe, dict):
+            tipo = str(detalhe.get("status") or detalhe.get("code") or "")[:80]
+            mensagem = str(detalhe.get("message") or "")[:240]
+    except (ValueError, OSError):
+        pass
+    sufixo = ": ".join(parte for parte in (tipo, mensagem) if parte)
+    return f"ElevenLabs HTTP {exc.code}{': ' + sufixo if sufixo else ''}"
+
+
 def deve_responder_com_audio(resposta: str, entrada_foi_audio: bool) -> bool:
     if not entrada_foi_audio or not os.getenv("ELEVENLABS_API_KEY", "").strip():
         return False
@@ -54,8 +71,11 @@ def sintetizar_fala(texto: str) -> bytes:
     try:
         with urllib.request.urlopen(requisicao, timeout=30) as resposta:
             audio = resposta.read(8 * 1024 * 1024 + 1)
+    except urllib.error.HTTPError as exc:
+        raise SinteseIndisponivel(_erro_http_seguro(exc)) from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise SinteseIndisponivel("Falha ao gerar fala") from exc
+        motivo = str(getattr(exc, "reason", exc))[:160]
+        raise SinteseIndisponivel(f"Falha de rede ao chamar ElevenLabs: {motivo}") from exc
     if not audio or len(audio) > 8 * 1024 * 1024:
         raise SinteseIndisponivel("Áudio gerado inválido")
     return audio
