@@ -173,6 +173,23 @@ CREATE TABLE IF NOT EXISTS canal_eventos (
     PRIMARY KEY (provedor, external_id)
 );
 
+-- Caixa de entrada durável dos webhooks. O payload fica local na VM e é
+-- removido ao concluir; assim uma reinicialização não perde áudios pendentes.
+CREATE TABLE IF NOT EXISTS fila_canais (
+    id                    TEXT PRIMARY KEY,
+    tipo                  TEXT NOT NULL,
+    external_id           TEXT NOT NULL,
+    payload_json          TEXT NOT NULL,
+    status                TEXT NOT NULL DEFAULT 'pendente',
+    tentativas            INTEGER NOT NULL DEFAULT 0,
+    disponivel_em         TEXT NOT NULL,
+    reivindicado_em       TEXT,
+    ultimo_erro           TEXT,
+    criado_em             TEXT NOT NULL,
+    concluido_em          TEXT,
+    UNIQUE (tipo, external_id)
+);
+
 CREATE TABLE IF NOT EXISTS susbot_memorias (
     id                 TEXT PRIMARY KEY,
     owner_ref          TEXT NOT NULL,
@@ -219,6 +236,7 @@ CREATE INDEX IF NOT EXISTS idx_pareamentos_usuario ON canal_pareamentos (usuario
 CREATE INDEX IF NOT EXISTS idx_pareamentos_token ON canal_pareamentos (token_hash);
 CREATE INDEX IF NOT EXISTS idx_conexoes_usuario ON canal_conexoes (usuario, status);
 CREATE INDEX IF NOT EXISTS idx_memorias_owner ON susbot_memorias (owner_ref, atualizado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_fila_canais_pronta ON fila_canais (status, disponivel_em, criado_em);
 """
 
 
@@ -1110,6 +1128,32 @@ def listar_conexoes_canal(usuario: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def listar_conexoes_ativas() -> list[dict]:
+    if _clara_remoto():
+        rows, _ = _rest("GET", f"canal_conexoes?select={_CONEXAO_COLS}&status=eq.ativo")
+        return rows
+    with _conn() as con:
+        rows = con.execute("SELECT * FROM canal_conexoes WHERE status = 'ativo'").fetchall()
+    return [dict(row) for row in rows]
+
+
+def listar_eventos_canal(provedor: str) -> set[str]:
+    if _clara_remoto():
+        rows, _ = _rest("GET", f"canal_eventos?select=external_id&provedor=eq.{_e(provedor)}")
+        return {str(r["external_id"]) for r in rows}
+    with _conn() as con:
+        rows = con.execute("SELECT external_id FROM canal_eventos WHERE provedor = ?", (provedor,)).fetchall()
+    return {str(r["external_id"]) for r in rows}
+
+
+def remover_evento_canal(provedor: str, external_id: str) -> None:
+    if _clara_remoto():
+        _rest("DELETE", f"canal_eventos?provedor=eq.{_e(provedor)}&external_id=eq.{_e(external_id)}")
+        return
+    with _conn() as con:
+        con.execute("DELETE FROM canal_eventos WHERE provedor = ? AND external_id = ?", (provedor, str(external_id)))
+
+
 def get_conexao_canal_por_externo(provedor: str, external_user_id: str) -> dict | None:
     if _clara_remoto():
         rows, _ = _rest("GET", (
@@ -1168,6 +1212,81 @@ def registrar_evento_canal(provedor: str, external_id: str) -> bool:
             VALUES (?, ?, ?)
         """, (provedor, external_id, agora))
     return cursor.rowcount == 1
+
+
+# ── Fila local durável dos canais ───────────────────────────────────────────────────
+
+def enfileirar_evento_canal(tipo: str, external_id: str, payload: dict) -> bool:
+    """Persiste um webhook antes de devolver 200; duplicatas são ignoradas."""
+
+    agora = datetime.now(timezone.utc).isoformat()
+    with _conn() as con:
+        cursor = con.execute("""
+            INSERT OR IGNORE INTO fila_canais
+                (id, tipo, external_id, payload_json, status, disponivel_em, criado_em)
+            VALUES (?, ?, ?, ?, 'pendente', ?, ?)
+        """, (str(uuid.uuid4()), tipo, str(external_id), json.dumps(payload), agora, agora))
+    return cursor.rowcount == 1
+
+
+def reivindicar_evento_canal(lease_segundos: int = 300) -> dict | None:
+    """Reivindica atomicamente um job pronto e recupera leases abandonados."""
+
+    agora_dt = datetime.now(timezone.utc)
+    agora = agora_dt.isoformat()
+    limite_lease = datetime.fromtimestamp(agora_dt.timestamp() - lease_segundos, timezone.utc).isoformat()
+    with _conn() as con:
+        con.execute("BEGIN IMMEDIATE")
+        row = con.execute("""
+            SELECT id FROM fila_canais
+            WHERE (status = 'pendente' AND disponivel_em <= ?)
+               OR (status = 'processando' AND reivindicado_em < ?)
+            ORDER BY criado_em ASC LIMIT 1
+        """, (agora, limite_lease)).fetchone()
+        if not row:
+            return None
+        atualizado = con.execute("""
+            UPDATE fila_canais
+            SET status = 'processando', reivindicado_em = ?, tentativas = tentativas + 1
+            WHERE id = ? AND (status = 'pendente' OR (status = 'processando' AND reivindicado_em < ?))
+        """, (agora, row["id"], limite_lease))
+        if atualizado.rowcount != 1:
+            return None
+        job = con.execute("SELECT * FROM fila_canais WHERE id = ?", (row["id"],)).fetchone()
+    resultado = dict(job)
+    resultado["payload"] = json.loads(resultado.pop("payload_json"))
+    return resultado
+
+
+def concluir_evento_canal(job_id: str) -> None:
+    """Conclui e apaga o payload, que pode conter mídia em base64."""
+
+    agora = datetime.now(timezone.utc).isoformat()
+    with _conn() as con:
+        con.execute("""
+            UPDATE fila_canais SET status = 'concluido', payload_json = '{}',
+                concluido_em = ?, reivindicado_em = NULL, ultimo_erro = NULL
+            WHERE id = ? AND status = 'processando'
+        """, (agora, job_id))
+
+
+def falhar_evento_canal(job_id: str, erro: str, max_tentativas: int = 5) -> None:
+    """Agenda nova tentativa exponencial ou move o job para falha definitiva."""
+
+    with _conn() as con:
+        row = con.execute("SELECT tentativas FROM fila_canais WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            return
+        tentativas = int(row["tentativas"])
+        status = "falhou" if tentativas >= max_tentativas else "pendente"
+        atraso = min(300, 2 ** max(0, tentativas - 1))
+        disponivel = datetime.fromtimestamp(
+            datetime.now(timezone.utc).timestamp() + atraso, timezone.utc
+        ).isoformat()
+        con.execute("""
+            UPDATE fila_canais SET status = ?, disponivel_em = ?, reivindicado_em = NULL,
+                ultimo_erro = ? WHERE id = ? AND status = 'processando'
+        """, (status, disponivel, str(erro)[:1000], job_id))
 
 
 # ── Memória pessoal criptografada da Clara ──────────────────────────────────────

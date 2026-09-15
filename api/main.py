@@ -113,6 +113,16 @@ app.include_router(operational_inputs_router)
 def startup():
     avisar_se_protecao_desativada()
     init_db()
+    from api.core.channel_queue import iniciar_worker
+    iniciar_worker()
+    from api.core.clara_proativa import iniciar_agendador
+    iniciar_agendador()
+
+
+@app.on_event("shutdown")
+def shutdown():
+    from api.core.channel_queue import parar_worker
+    parar_worker()
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────

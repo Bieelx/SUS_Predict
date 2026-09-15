@@ -556,7 +556,33 @@ def test_whatsapp_webhook_valida_assinatura_hmac(canais):
     assinatura = "sha256=" + hmac_lib.new(b"segredo-openwa-de-teste", corpo, hashlib.sha256).hexdigest()
     tarefas = BackgroundTasks()
     assert asyncio.run(router_module.whatsapp_webhook(RequestFake(assinatura), tarefas)) == {"ok": True}
-    assert len(tarefas.tasks) == 1
+    assert tarefas.tasks == []
+    job = _db.reivindicar_evento_canal()
+    assert job["tipo"] == "whatsapp"
+    assert job["external_id"] == "msg_clara_w-1"
+
+
+def test_resposta_longa_para_entrada_de_audio_pode_ser_enviada_como_voz(canais, monkeypatch):
+    router_module, _db, mensagens = canais
+    _parear(canais)
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "chave-teste")
+    monkeypatch.setenv("CLARA_TTS_MIN_CHARS", "1")
+    monkeypatch.setattr(
+        router_module,
+        "_transcrever_audio_telegram",
+        lambda _mensagem: router_module.ResultadoTranscricao(texto="Como estão os alertas?"),
+    )
+    audios = []
+    monkeypatch.setattr(
+        router_module, "_enviar_audio",
+        lambda provedor, chat_id, texto: audios.append((provedor, chat_id, texto)) or True,
+    )
+
+    router_module.processar_update_telegram(_audio_update(99))
+
+    assert audios and audios[0][0] == "telegram"
+    assert "Leitura municipal" in audios[0][2]
+    assert not any("Leitura municipal" in texto for _, texto in mensagens)
 
 
 def test_markdown_para_whatsapp_usa_negrito_simples(canais):

@@ -382,6 +382,11 @@ def process_input(actor, text, conversation, city, channel='web', context=None,
             items = [{'id': str(d['id']), 'versao': d['versao'], 'rotulo': operational_summary(d)}
                      for d in drafts if d['status'] == 'rascunho']
             route, event = '/registros-unidade', 'rascunho_operacional_pronto'
+        if channel != 'web':
+            # No canal não há seletor visível: a unidade vem antes do rascunho para o CONFIRMO ser consciente.
+            unit = choices[0]
+            response = (f"📍 Unidade: {unit.get('nome') or unit.get('no_fantasia')}"
+                        f"{' · CNES ' + str(unit['cnes']) if unit.get('cnes') else ''}\n" + response)
         confirmation = {
             'etapa': 'confirmacao', 'tipo': kind, 'itens': items, 'criado_em': _now().isoformat(),
         } if items else None

@@ -45,6 +45,8 @@ def test_mesmo_relato_cria_rascunho_nos_tres_canais(flow, channel):
     text = 'Clara, hoje atendi 20 pessoas com suspeita de dengue'
     result = process_input('writer', text, conversation, '355030', channel=channel, event_id='evt-001')
     assert result['evento'] == 'rascunho_local_pronto'
+    # Canal não tem seletor na tela: a unidade aparece antes do rascunho.
+    assert result['resposta'].startswith('📍 Unidade: ') == (channel != 'web')
     record = result['payload']['registros'][0]
     detail = svc.detail('writer', record['id'])
     assert detail['relato']['canal'] == channel

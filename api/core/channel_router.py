@@ -33,8 +33,10 @@ from api.core.audio_transcription import (
 )
 from api.core.auth import require_user
 from api.core.identidade import usuario_referencia
+from api.core.local_records_interpreter import fold
 from api.core.permissoes import AcessoNegado, carregar_acesso, ferramentas_no_municipio
 from api.core.channel_media import MidiaCanalIndisponivel, baixar_audio_openwa, baixar_audio_telegram
+from api.core.speech_synthesis import deve_responder_com_audio, sintetizar_fala
 from api.core.susbot_agent import _montar_llm_com_fallback, criar_susbot_agente, montar_historico_recente
 from api.core.susbot_memory import (
     aprender_da_mensagem,
@@ -236,6 +238,28 @@ def _telegram_send_document(chat_id: str, conteudo: bytes, nome: str, legenda: s
         return False
 
 
+def _telegram_send_audio(chat_id: str, conteudo: bytes) -> bool:
+    token = _telegram_bot_token()
+    if not token:
+        return False
+    fronteira = uuid.uuid4().hex
+    corpo = (
+        f'--{fronteira}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'
+        f'--{fronteira}\r\nContent-Disposition: form-data; name="voice"; filename="clara.mp3"\r\n'
+        'Content-Type: audio/mpeg\r\n\r\n'
+    ).encode("utf-8") + conteudo + f"\r\n--{fronteira}--\r\n".encode("utf-8")
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendVoice", data=corpo,
+        headers={"Content-Type": f"multipart/form-data; boundary={fronteira}"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30):
+            return True
+    except (urllib.error.URLError, TimeoutError) as exc:
+        log.warning("Falha ao enviar áudio ao Telegram: %s", exc)
+        return False
+
+
 def _transcrever_audio_telegram(mensagem: dict[str, Any]) -> ResultadoTranscricao:
     audio = mensagem.get("voice") or mensagem.get("audio") or {}
     if not isinstance(audio, dict):
@@ -396,7 +420,7 @@ def confirmar_pareamento(pareamento_id: str, user: dict = Depends(require_user))
         raise HTTPException(410, "Pareamento expirado ou indisponivel")
     aprender_do_usuario_autenticado(usuario, user, origem="perfil_autenticado")
     nome = NOMES_CANAL.get(conexao["provedor"], conexao["provedor"])
-    _enviar(conexao["provedor"], conexao["external_chat_id"], f"{nome} conectado ao SusPredict. Suas novas conversas aparecerao tambem no historico web.")
+    _enviar(conexao["provedor"], conexao["external_chat_id"], f"{nome} conectado ao SusPredict. Suas novas conversas aparecerao tambem no historico web. Para receber alertas criticos por aqui, envie /alertas ligar.")
     _menu_inicial(conexao)
     return _resumo_conexao(conexao)
 
@@ -492,6 +516,7 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
         atualizar_resumo(usuario, texto, agente._obter_llm())
     except Exception as exc:  # pragma: no cover - LLM sem configuração
         log.warning("Falha ao atualizar resumo da memória (%s): %s", canal, exc)
+    sem_resposta = not resposta.strip() and not proposta
     resposta_base = resposta.strip() or proposta or "Nao consegui concluir esta consulta agora. Tente novamente em instantes."
     resposta = resposta_base
     if confirmacao_pendente:
@@ -501,6 +526,8 @@ def _processar_pergunta_canal(conexao: dict, texto: str) -> tuple[str, str]:
     hub.salvar_evidencia(conversa["id"], mensagem["id"], evidencia_com_contexto((dados_fim or {}).get("artefato"), dados_fim))
     db.atualizar_conversa_canal(conexao["id"], conversa["id"])
     resposta_canal = _formatar_resposta_telegram(resposta_base, dados_fim)
+    if sem_resposta or ((dados_fim or {}).get("plano") or {}).get("acao") in {"fora_do_escopo", "sem_permissao"}:
+        resposta_canal += "\n\n" + DICA_HUMANO
     if confirmacao_pendente:
         resposta_canal += "\n\n⚠️ Esta ação precisa ser confirmada no SusPredict. Se for um ETP, o PDF chega aqui depois da confirmação."
     return resposta, resposta_canal
@@ -612,6 +639,93 @@ def _selecionar_conversa(conexao: dict, conversa_id: str | None) -> None:
         _enviar(provedor, chat_id, "Esta conversa não está disponível para seu acesso. Use /conversas para atualizar a lista.")
 
 
+PEDIDO_HUMANO = re.compile(
+    r"^(?:/humano\b|(?:quero |preciso |posso )?falar com (?:um |uma |o |a )?"
+    r"(?:humano|atendente|pessoa|respons[aá]vel|gestora?|revisora?)\b)[\s:,.-]*(.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+DICA_HUMANO = "Se precisar de uma pessoa, envie /humano e sua dúvida; eu encaminho ao responsável da sua unidade."
+
+
+def _responsaveis_da_unidade(usuario: str, ibge6: str) -> list[dict]:
+    """Revisores e gestores ativos das unidades em que o usuário tem vínculo ativo no município."""
+
+    from api.core.local_records_store import configured_store
+
+    try:
+        store = configured_store()
+        with store.transaction() as tx:
+            return tx.all(
+                "SELECT DISTINCT l2.usuario, u.nome AS unidade FROM local_usuarios_unidades l1 "
+                "JOIN local_unidades_saude u ON u.id=l1.unidade_id "
+                "JOIN local_usuarios_unidades l2 ON l2.unidade_id=l1.unidade_id "
+                "WHERE l1.usuario=? AND l1.ativo=true AND u.ativa=true AND u.ibge6=? "
+                "AND l2.ativo=true AND l2.papel IN ('revisor','gestor_unidade') AND l2.usuario<>?",
+                (usuario, str(ibge6), usuario),
+            )
+    except HTTPException as exc:
+        log.info("Passagem para humano sem registros locais: %s", exc.detail)
+        return []
+
+
+def _comando_alertas(conexao: dict, comando: str) -> str:
+    """`/alertas` mostra o estado; `ligar`/`desligar` muda o opt-in desta conexão."""
+
+    from api.core.clara_proativa import alertas_ativos, definir_alertas
+
+    opcao = comando.split(maxsplit=1)[1].strip() if len(comando.split(maxsplit=1)) == 2 else ""
+    if opcao in {"ligar", "ativar", "on", "sim"}:
+        definir_alertas(conexao["id"], True)
+        return ("Pronto! Vou te avisar por aqui quando surgir alerta crítico no município, "
+                "fora do horário de silêncio (22h às 7h). Para parar: /alertas desligar")
+    if opcao in {"desligar", "desativar", "off", "nao", "não"}:
+        definir_alertas(conexao["id"], False)
+        return "Combinado, não envio mais alertas por aqui. Para voltar: /alertas ligar"
+    estado = "ligados" if alertas_ativos(conexao["id"]) else "desligados"
+    return f"Alertas críticos por aqui estão {estado}. Use /alertas ligar ou /alertas desligar."
+
+
+def _encaminhar_para_humano(conexao: dict, pedido: str) -> str:
+    """Leva a dúvida ao revisor/gestor da unidade pelo canal pareado dele. Não repassa respostas."""
+
+    usuario, ibge6 = conexao["usuario"], str(conexao["ibge6"])
+    if not pedido.strip():
+        return "Me conte em uma frase o que você precisa, por exemplo: /humano não consigo registrar a entrada de dipirona."
+    nome = str(carregar_perfil(usuario).get("nome") or "").strip() or "Usuário do SusPredict"
+    contato = conexao.get("external_username") or ""
+    if conexao["provedor"] == "telegram" and contato:
+        contato = f"@{str(contato).lstrip('@')} no Telegram"
+    elif conexao["provedor"] == "whatsapp":
+        numero = str(conexao["external_chat_id"]).split("@", 1)[0]
+        contato = f"wa.me/{numero} no WhatsApp" if numero.isdigit() else f"{contato} no WhatsApp"
+    unidades: dict[str, set[str]] = {}
+    for linha in _responsaveis_da_unidade(usuario, ibge6):
+        unidades.setdefault(str(linha["usuario"]), set()).add(str(linha["unidade"]))
+    avisados = 0
+    for destinatario, nomes_unidade in unidades.items():
+        try:
+            acesso = carregar_acesso(destinatario)
+        except AcessoNegado:
+            continue
+        if ibge6 not in acesso.municipios and not (acesso.perfil == "admin" and "*" in acesso.municipios):
+            continue
+        texto = (
+            "🙋 **Pedido de ajuda encaminhado pela Clara**\n"
+            f"De: {nome}{' (' + contato + ')' if contato else ''}\n"
+            f"Unidade: {', '.join(sorted(nomes_unidade))}\n\n“{pedido.strip()[:1000]}”\n\n"
+            "Responda diretamente a essa pessoa; a Clara não repassa respostas."
+        )
+        # Um aviso por pessoa, no primeiro canal que entregar.
+        if any(_enviar(c["provedor"], c["external_chat_id"], texto) for c in db.listar_conexoes_canal(destinatario)):
+            avisados += 1
+    if not avisados:
+        return ("Não encontrei um revisor ou gestor da sua unidade com Telegram ou WhatsApp conectado. "
+                "Procure o responsável da unidade diretamente; nada foi registrado.")
+    quem = "1 responsável" if avisados == 1 else f"{avisados} responsáveis"
+    return (f"Encaminhei sua dúvida para {quem} da sua unidade, com seu nome e contato no "
+            f"{NOMES_CANAL[conexao['provedor']]}. A resposta vem direto dessa pessoa.")
+
+
 def _processar_callback(callback: dict) -> None:
     _responder_callback(str(callback.get("id") or ""))
     remetente = str((callback.get("from") or {}).get("id") or "")
@@ -637,6 +751,7 @@ def _processar_mensagem_canal(
     token_pareamento: str | None,
     transcrever: Callable[[], ResultadoTranscricao] | None,
     evento_id: str | None = None,
+    propagar_falha_transcricao: bool = False,
 ) -> None:
     """Fluxo comum a Telegram e WhatsApp depois que o adaptador normalizou a mensagem.
 
@@ -692,6 +807,13 @@ def _processar_mensagem_canal(
         db.atualizar_conversa_canal(conexao["id"], None)
         enviar("Beleza, começamos do zero. Me conta, o que você quer ver?")
         return
+    if comando.split(maxsplit=1)[:1] == ["/alertas"]:
+        enviar(_comando_alertas(conexao, comando))
+        return
+    pedido_humano = PEDIDO_HUMANO.match(texto.strip()) if transcrever is None else None
+    if pedido_humano:
+        enviar(_encaminhar_para_humano(conexao, pedido_humano.group(1)))
+        return
     if transcrever is not None:
         enviar("🎙️ Recebi seu áudio. Estou transcrevendo com processamento local…")
         try:
@@ -701,6 +823,8 @@ def _processar_mensagem_canal(
             return
         except (MidiaCanalIndisponivel, TranscricaoIndisponivel) as exc:
             log.warning("Falha ao preparar áudio do %s para transcrição: %s", nome, exc)
+            if propagar_falha_transcricao:
+                raise
             enviar("Não consegui transcrever este áudio agora. Você pode tentar novamente ou enviar a pergunta em texto.")
             return
 
@@ -711,12 +835,17 @@ def _processar_mensagem_canal(
     except Exception as exc:  # pragma: no cover - defesa para webhook externo
         log.exception("Falha ao processar mensagem do %s: %s", nome, exc)
         resposta_canal = "Opa, tive um problema pra responder agora. Me manda de novo daqui a pouquinho?"
-    enviar(resposta_canal)
+    entrada_foi_audio = transcrever is not None
+    if not (
+        deve_responder_com_audio(resposta_canal, entrada_foi_audio)
+        and _enviar_audio(provedor, chat_id, resposta_canal)
+    ):
+        enviar(resposta_canal)
 
 
-def processar_update_telegram(update: dict) -> None:
+def processar_update_telegram(update: dict, registrar_evento: bool = True) -> None:
     update_id = str(update.get("update_id") or "").strip()
-    if update_id and not db.registrar_evento_canal("telegram", update_id):
+    if registrar_evento and update_id and not db.registrar_evento_canal("telegram", update_id):
         return
     if update.get("callback_query"):
         _processar_callback(update["callback_query"])
@@ -742,6 +871,7 @@ def processar_update_telegram(update: dict) -> None:
         "telegram", chat_id, external_user_id, remetente.get("username"), texto, token,
         (lambda: _transcrever_audio_telegram(mensagem)) if tem_audio else None,
         evento_id=update_id,
+        propagar_falha_transcricao=not registrar_evento,
     )
 
 
@@ -756,7 +886,11 @@ def telegram_webhook(
         raise HTTPException(503, "TELEGRAM_WEBHOOK_SECRET precisa ser configurado")
     if not hmac.compare_digest(x_telegram_bot_api_secret_token or "", segredo):
         raise HTTPException(403, "Webhook do Telegram nao autorizado")
-    background_tasks.add_task(processar_update_telegram, update)
+    from api.core.channel_queue import enfileirar
+    update_id = str(update.get("update_id") or hashlib.sha256(
+        json.dumps(update, sort_keys=True).encode("utf-8")
+    ).hexdigest())
+    enfileirar("telegram", update_id, update)
     return {"ok": True}
 
 
@@ -822,6 +956,16 @@ def _whatsapp_send_document(chat_id: str, conteudo: bytes, nome: str, legenda: s
     })
 
 
+def _whatsapp_send_audio(chat_id: str, conteudo: bytes) -> bool:
+    return _openwa_post("send-audio", {
+        "chatId": chat_id,
+        "base64": base64.b64encode(conteudo).decode("ascii"),
+        "mimetype": "audio/mpeg",
+        "filename": "clara.mp3",
+        "ptt": True,
+    })
+
+
 def enviar_etp_aos_canais(usuario: str, conversa_id: str, etp_id: str) -> int:
     """Manda o PDF do ETP para os canais cuja conversa atual é a que confirmou a ação.
 
@@ -847,6 +991,18 @@ def _enviar(provedor: str, chat_id: str, texto: str) -> bool:
     if provedor == "whatsapp":
         return _whatsapp_send(chat_id, texto)
     return _telegram_send(chat_id, texto)
+
+
+def _enviar_audio(provedor: str, chat_id: str, texto: str) -> bool:
+    """Gera e envia a fala; qualquer falha deixa o chamador usar texto."""
+
+    try:
+        conteudo = sintetizar_fala(texto)
+    except Exception as exc:  # TTS é enriquecimento; nunca pode impedir o fallback textual.
+        log.warning("TTS indisponível; usando texto: %s", exc)
+        return False
+    envio = _whatsapp_send_audio if provedor == "whatsapp" else _telegram_send_audio
+    return envio(chat_id, conteudo)
 
 
 def _transcrever_audio_whatsapp(mensagem: dict[str, Any]) -> ResultadoTranscricao:
@@ -891,12 +1047,12 @@ def _processar_voto_whatsapp(voto: dict) -> None:
         _quadro_conversas(conexao)
 
 
-def processar_evento_whatsapp(evento: dict) -> None:
+def processar_evento_whatsapp(evento: dict, registrar_evento: bool = True) -> None:
     if evento.get("event") not in {"message.received", "message.reaction"}:
         return
     mensagem = evento.get("data") if isinstance(evento.get("data"), dict) else {}
     chave = str(evento.get("idempotencyKey") or mensagem.get("id") or "").strip()
-    if chave and not db.registrar_evento_canal("whatsapp", chave):
+    if registrar_evento and chave and not db.registrar_evento_canal("whatsapp", chave):
         return
     if evento["event"] == "message.reaction":
         _processar_voto_whatsapp(mensagem)
@@ -920,6 +1076,7 @@ def processar_evento_whatsapp(evento: dict) -> None:
         (pedido.group(1) or "") if pedido else None,
         (lambda: _transcrever_audio_whatsapp(mensagem)) if tem_audio else None,
         evento_id=chave,
+        propagar_falha_transcricao=not registrar_evento,
     )
 
 
@@ -937,5 +1094,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     except ValueError as exc:
         raise HTTPException(400, "Payload invalido") from exc
     if isinstance(evento, dict):
-        background_tasks.add_task(processar_evento_whatsapp, evento)
+        from api.core.channel_queue import enfileirar
+        dados = evento.get("data") if isinstance(evento.get("data"), dict) else {}
+        chave = str(evento.get("idempotencyKey") or dados.get("id") or hashlib.sha256(corpo).hexdigest())
+        enfileirar("whatsapp", chave, evento)
     return {"ok": True}
