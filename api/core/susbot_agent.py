@@ -203,6 +203,25 @@ def _resposta_numericamente_fiel(
     return citados <= fonte | _NUMEROS_DE_UNIDADE
 
 
+# "Olhei aqui e não achei nada de alerta aberto" saía para consultas que TINHAM dado:
+# o modelo local copiava a frase de exemplo do prompt em vez de ler o resultado.
+_RE_NEGACAO_DE_DADO = re.compile(
+    r"n[ãa]o (?:achei|encontrei|localizei|consegui encontrar|h[áa]|tem|temos|existe|consta|"
+    r"foi encontrado|foram encontrados|ha registro)"
+    r"|nenhum(?:a|as|os)?\b"
+    r"|sem (?:dados|registro|registros|resultado|resultados|informa)",
+    re.IGNORECASE,
+)
+
+
+def _nega_dado_existente(resposta: str, resultado_ferramenta: dict[str, Any] | None) -> bool:
+    """A ferramenta trouxe dado e o texto afirma que não há: resposta inválida."""
+
+    if not resultado_ferramenta or not resultado_ferramenta.get("encontrado"):
+        return False
+    return bool(_RE_NEGACAO_DE_DADO.search(resposta))
+
+
 # Recusa e texto institucional continuam saindo em código, nunca pelo LLM: são a
 # garantia de que a indisponibilidade é dita com as palavras exatas da ferramenta.
 def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) -> str | None:
@@ -1241,6 +1260,11 @@ class ClaraAgent:
                 log.warning("Resposta do LLM descartada por divergência numérica")
                 registrar_falha_fidelidade()
                 execucao_final["falha_fidelidade_numerica"] = True
+                resposta_final = []
+            elif texto_llm and ferramenta_executada and _nega_dado_existente(texto_llm, resultado_ferramenta):
+                log.warning("Resposta do LLM descartada: negou dado que a ferramenta trouxe")
+                registrar_falha_fidelidade()
+                execucao_final["falha_negacao_de_dado"] = True
                 resposta_final = []
 
             if not "".join(resposta_final).strip():

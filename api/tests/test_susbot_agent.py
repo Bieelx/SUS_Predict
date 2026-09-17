@@ -876,3 +876,27 @@ def test_ultimas_conversas_retoma_assunto_sem_llm(db):
     resposta = next(e for e in agente.stream_eventos("Ultimas conversas") if e["event"] == "fim")["data"]["resposta"]
     assert "estoque de soro?" in resposta and "12 dias" in resposta
     assert "devendo" not in resposta and "“Oi”" not in resposta
+
+
+def test_resposta_que_nega_dado_existente_cai_na_reserva(db):
+    """O modelo local copiava "não achei nada de alerta" com dado na mão: tem que cair na reserva."""
+
+    from api.core.susbot_agent import criar_susbot_agente
+
+    class LLMNegador:
+        def planejar(self, *_a, **_k):
+            return {"acao": "chamar_ferramenta", "ferramenta": "consultar_alertas", "argumentos": {}}
+
+        def stream_resposta(self, *_a, **_k):
+            yield "Olhei aqui e não achei nada de alerta aberto."
+
+    resultado = {"encontrado": True, "dados": [
+        {"tipo": "ruptura", "severidade": "alta", "status": "aberto", "descricao": "Dipirona abaixo do mínimo"},
+    ]}
+    agente = criar_susbot_agente(
+        "355030", llm=LLMNegador(), tools={"consultar_alertas": lambda **_: resultado},
+    )
+    fim = next(e for e in agente.stream_eventos("quais alertas locais?") if e["event"] == "fim")
+    assert "não achei" not in fim["data"]["resposta"]
+    assert "Dipirona abaixo do mínimo" in fim["data"]["resposta"]
+    assert fim["data"]["execucao"]["falha_negacao_de_dado"] is True
