@@ -521,6 +521,20 @@ def test_whatsapp_quadro_vira_enquete_e_voto_seleciona_conversa(canais, monkeypa
     assert db_module.get_conexao_canal_por_externo("whatsapp", WA_CHAT)["conversa_atual_id"] is None
 
 
+def test_whatsapp_ultimas_conversas_em_texto_abre_enquete(canais, monkeypatch):
+    router_module, db_module, mensagens = canais
+    enquetes = []
+    monkeypatch.setattr(router_module, "_whatsapp_poll", lambda chat, titulo, opcoes: enquetes.append(opcoes) or True)
+    _parear_whatsapp(canais)
+
+    router_module.processar_evento_whatsapp(_wa_evento("u-0", "Últimas conversas"))
+    assert not enquetes and "Ainda não temos conversas" in mensagens[-1][1]
+
+    router_module.processar_evento_whatsapp(_wa_evento("u-1", "Estoque de dipirona"))
+    router_module.processar_evento_whatsapp(_wa_evento("u-2", "Ultimas conversas"))
+    assert enquetes[-1][0].startswith("1. ") and enquetes[-1][-1] == "0. Nova conversa"
+
+
 def test_saudacao_por_horario_de_brasilia_e_menu_inicial(canais, monkeypatch):
     router_module, db_module, mensagens = canais
     conexao = {"usuario": "user-abc", "provedor": "whatsapp", "external_username": "Márcia Souza"}

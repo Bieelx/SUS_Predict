@@ -116,6 +116,24 @@ def tipo_conversa_social(pergunta: str) -> str | None:
     return None
 
 
+# Pedido para retomar a conversa ("últimas conversas", "onde paramos"), texto normalizado.
+_RE_RETOMADA = re.compile(
+    r"\bultim[ao]s? (?:conversas?|mensagens?|assuntos?|perguntas?)\b|conversamos antes|"
+    r"conversas? anteriores?|onde (?:a gente )?paramos|historico d[ae] conversa|"
+    r"(?:o )?que (?:a gente )?(?:falamos|conversamos|falou|conversou)"
+)
+
+
+def pede_retomada(pergunta: str) -> bool:
+    """Mensagem curta pedindo as conversas anteriores.
+
+    Limite de palavras evita capturar "o que falamos sobre dengue em Cotia?", que é consulta.
+    """
+
+    texto = normalizar_texto(pergunta)
+    return len(texto.split()) <= 6 and bool(_RE_RETOMADA.search(texto))
+
+
 def rotear_intencao(pergunta: str) -> IntentRoute | None:
     """Retorna uma rota somente quando a intenção operacional é inequívoca."""
 

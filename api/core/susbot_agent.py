@@ -38,7 +38,7 @@ from api.core.prompts import (
 from api.core.permissoes import mensagem_ferramenta_negada
 from api.core.clara_model_policy import RACIOCINIO_AVANCADO, perfil_para_plano
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
-from api.core.susbot_intents import normalizar_texto, rotear_intencao, rotear_com_contexto, tipo_conversa_social
+from api.core.susbot_intents import normalizar_texto, rotear_intencao, rotear_com_contexto, tipo_conversa_social, pede_retomada
 from api.core.susbot_metrics import (
     registrar_execucao,
     registrar_falha_fidelidade,
@@ -72,13 +72,6 @@ def _ibge6(valor: str) -> str:
 _RE_APRESENTACAO = (
     r"\b(?:meu nome e|me chamo|pode me chamar de|sou (?:de|da|do|o|a)\b|moro (?:em|na|no)|"
     r"trabalho (?:na|no|com|em|como)|cuido (?:da|do|de)|prefiro respostas?)"
-)
-
-# Pedido para retomar a conversa ("últimas conversas", "onde paramos"), texto normalizado.
-_RE_RETOMADA = (
-    r"\bultim[ao]s? (?:conversas?|mensagens?|assuntos?|perguntas?)\b|conversamos antes|"
-    r"conversas? anteriores?|onde (?:a gente )?paramos|historico d[ae] conversa|"
-    r"(?:o )?que (?:a gente )?(?:falamos|conversamos|falou|conversou)"
 )
 
 
@@ -1033,7 +1026,7 @@ class ClaraAgent:
             for t in self.historico
             if str(t.get("pergunta") or "").strip()
             and tipo_conversa_social(t["pergunta"]) is None
-            and not re.search(_RE_RETOMADA, _normalizar_intencao(t["pergunta"]))
+            and not pede_retomada(t["pergunta"])
         ]
 
     def _resposta_contextual(self, pergunta: str) -> str | None:
@@ -1096,7 +1089,7 @@ class ClaraAgent:
             resposta += " Você pode pedir para eu esquecer uma informação a qualquer momento."
             return resposta
 
-        if re.search(_RE_RETOMADA, texto):
+        if pede_retomada(pergunta):
             trocas = self._trocas_relevantes()
             if not trocas:
                 return "Ainda não temos uma conversa sobre dados por aqui. O que você quer ver: estoque, alertas, casos ou internações?"

@@ -38,6 +38,7 @@ from api.core.permissoes import AcessoNegado, carregar_acesso, ferramentas_no_mu
 from api.core.channel_media import MidiaCanalIndisponivel, baixar_audio_openwa, baixar_audio_telegram
 from api.core.speech_synthesis import deve_responder_com_audio, sintetizar_fala
 from api.core.susbot_agent import _montar_llm_com_fallback, criar_susbot_agente, montar_historico_recente
+from api.core.susbot_intents import pede_retomada
 from api.core.susbot_memory import (
     aprender_da_mensagem,
     aprender_do_usuario_autenticado,
@@ -576,6 +577,10 @@ def _conversas_do_quadro(usuario: str) -> list[tuple[dict, str]]:
 
 def _quadro_conversas(conexao: dict) -> None:
     itens = _conversas_do_quadro(conexao["usuario"])
+    if not itens:
+        _enviar(conexao["provedor"], conexao["external_chat_id"],
+                "Ainda não temos conversas anteriores por aqui. Me conta, o que você quer ver?")
+        return
     rotulos = [rotulo for _, rotulo in itens]
     if conexao["provedor"] == "whatsapp":
         # Botões e listas não existem fora da Cloud API; a enquete é o único clicável.
@@ -830,6 +835,9 @@ def _processar_mensagem_canal(
 
         resumo = texto if len(texto) <= 600 else f"{texto[:597].rstrip()}…"
         enviar(f"🎙️ Entendi seu áudio como:\n\n“{resumo}”\n\nVou organizar sua mensagem.")
+    if pede_retomada(texto):
+        _quadro_conversas(conexao)
+        return
     try:
         _resposta_historico, resposta_canal = _processar_pergunta_canal(conexao, texto)
     except Exception as exc:  # pragma: no cover - defesa para webhook externo
