@@ -260,7 +260,7 @@ _CAPACIDADES = {
     "consultar_estoque": "**Estoque de insumos** — saldo por unidade e cobertura em dias. Ex.: “como está o estoque de dipirona?”",
     "consultar_aquisicoes": "**Risco de aquisição** — os mesmos sinais das telas Alertas e Insumos. Ex.: “quais insumos estão em risco de aquisição?”",
     "consultar_alertas": "**Alertas do município** — ocorrências abertas e em andamento. Ex.: “tem algum alerta aberto?”",
-    "consultar_epidemiologia": "**Casos, internações, óbitos e nascimentos** do DATASUS (SINAN, SIH, SIM, SINASC, SIA). Ex.: “casos de dengue em 2025”",
+    "consultar_epidemiologia": "**Casos, internações, óbitos e nascimentos** do DATASUS (SINAN, SIH, SIM, SINASC, SIA) e a **projeção dos próximos meses** de dengue. Ex.: “casos de dengue em 2025”, “qual a previsão para os próximos meses?”",
     "consultar_leitos_internacoes": "**Leitos e internações informados pelas unidades** — ocupação atual. Ex.: “quantos leitos de UTI estão livres?”",
     "gerar_etp": "**Rascunho de ETP** (Estudo Técnico Preliminar) para um insumo, só depois da sua confirmação. Ex.: “gere um ETP para dipirona 500mg”",
 }
