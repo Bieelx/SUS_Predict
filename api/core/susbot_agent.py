@@ -74,6 +74,13 @@ _RE_APRESENTACAO = (
     r"trabalho (?:na|no|com|em|como)|cuido (?:da|do|de)|prefiro respostas?)"
 )
 
+# Pedido para retomar a conversa ("últimas conversas", "onde paramos"), texto normalizado.
+_RE_RETOMADA = (
+    r"\bultim[ao]s? (?:conversas?|mensagens?|assuntos?|perguntas?)\b|conversamos antes|"
+    r"conversas? anteriores?|onde (?:a gente )?paramos|historico d[ae] conversa|"
+    r"(?:o )?que (?:a gente )?(?:falamos|conversamos|falou|conversou)"
+)
+
 
 def _normalizar_intencao(texto: str) -> str:
     return normalizar_texto(texto)
@@ -295,10 +302,34 @@ def _narrativa_de_reserva(ferramenta: str, resultado: dict[str, Any] | None) -> 
         if not stats:
             return None
         stats = limpar_vazios(stats)
-        linhas = [f"- **{chave.replace('_', ' ')}**: {valor}" for chave, valor in stats.items()]
         rotulo = _rotulo_periodo(resultado)
-        cabecalho = f"Dados de {resultado.get('sistema')}"
-        resposta = (f"{cabecalho} ({rotulo}):\n" if rotulo else f"{cabecalho}:\n") + "\n".join(linhas)
+        local = f" em {stats['nome_municipio']}" if stats.get("nome_municipio") else ""
+        frases = []
+        if stats.get("casos_atual") is not None:
+            frase = f"Foram **{_num_br(stats['casos_atual'])} casos**{local}" + (f" entre {rotulo.replace(' a ', ' e ')}" if rotulo else "")
+            if stats.get("casos_anterior") is not None and stats.get("variacao_pct") is not None:
+                variacao = float(stats["variacao_pct"])
+                sentido = "queda" if variacao < 0 else "alta"
+                frase += f", {sentido} de {_num_br(abs(variacao))}% frente ao período anterior ({_num_br(stats['casos_anterior'])})"
+            frases.append(frase + ".")
+        if stats.get("incidencia_atual") is not None:
+            frases.append(f"Incidência de {_num_br(stats['incidencia_atual'])} por 100 mil habitantes.")
+        desfechos = [
+            f"{_num_br(stats[chave])} {nome}" for chave, nome in (("hospitalizacoes_atual", "hospitalizações"), ("obitos_atual", "óbitos"))
+            if stats.get(chave) is not None
+        ]
+        if desfechos:
+            frases.append(f"No mesmo período, {' e '.join(desfechos)}.")
+        if frases:
+            resposta = f"Segundo o {resultado.get('sistema')}: " + " ".join(frases)
+        else:
+            # Payload sem os campos conhecidos (ex.: SIH): lista só o que é número.
+            linhas = [
+                f"- **{chave.replace('_', ' ')}**: {_num_br(valor)}" for chave, valor in stats.items()
+                if isinstance(valor, (int, float)) and not isinstance(valor, bool)
+            ]
+            cabecalho = f"Dados de {resultado.get('sistema')}"
+            resposta = (f"{cabecalho} ({rotulo}):\n" if rotulo else f"{cabecalho}:\n") + "\n".join(linhas)
         if resultado.get("escopo_solicitado") == "uti":
             resposta += (
                 "\n\n**Limitação:** o SIH descreve internações hospitalares e não informa "
@@ -355,6 +386,17 @@ def _colunas_uteis(linhas: list[dict], candidatas: tuple[str, ...]) -> list[str]
 
 def _vazio(valor: Any) -> bool:
     return valor is None or (isinstance(valor, (str, list, tuple, dict, set)) and not valor)
+
+
+def _num_br(valor: Any) -> str:
+    """Número em notação pt-BR (65.016 / 546,13)."""
+
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        return str(valor)
+    texto = f"{numero:,.0f}" if numero.is_integer() else f"{numero:,.4f}".rstrip("0")
+    return texto.replace(",", "_").replace(".", ",").replace("_", ".")
 
 
 def _data_br(valor: Any) -> str:
@@ -975,7 +1017,24 @@ class ClaraAgent:
                 return None
             tipo = "apresentacao"
         nome = str((self.memoria_usuario.get("fatos") or {}).get("nome") or "")
+        trocas = self._trocas_relevantes() if tipo == "saudacao" else []
+        if trocas:
+            # Só oferece retomar quando há assunto de verdade para retomar.
+            primeiro = nome.split()[0] if nome.split() else ""
+            return (f"Oi{', ' + primeiro if primeiro else ''}! Da última vez você perguntou "
+                    f"“{trocas[-1]['pergunta'][:120]}”. Seguimos nisso ou tem assunto novo?")
         return resposta_social(tipo, nome)
+
+    def _trocas_relevantes(self) -> list[dict[str, str]]:
+        """Histórico sem saudações e pedidos de retomada: o que dá pra retomar de fato."""
+
+        return [
+            {"pergunta": str(t.get("pergunta") or "").strip(), "resposta": str(t.get("resposta") or "").strip()}
+            for t in self.historico
+            if str(t.get("pergunta") or "").strip()
+            and tipo_conversa_social(t["pergunta"]) is None
+            and not re.search(_RE_RETOMADA, _normalizar_intencao(t["pergunta"]))
+        ]
 
     def _resposta_contextual(self, pergunta: str) -> str | None:
         social = self._resposta_social(pergunta)
@@ -1037,21 +1096,18 @@ class ClaraAgent:
             resposta += " Você pode pedir para eu esquecer uma informação a qualquer momento."
             return resposta
 
-        if "ultima conversa" in texto or "conversamos antes" in texto or "ultima mensagem" in texto:
-            if not self.historico:
-                return "Esta é a primeira mensagem disponível nesta conversa."
-            anterior = self.historico[-1]
-            pergunta_anterior = str(anterior.get("pergunta") or "").strip()
-            resposta_anterior = str(anterior.get("resposta") or "").strip()
-            if not pergunta_anterior:
-                return "Há histórico nesta conversa, mas a mensagem anterior não está disponível."
-            resumo = f'Na mensagem anterior, você perguntou: “{pergunta_anterior}”.'
-            if resposta_anterior:
-                resposta_curta = resposta_anterior[:280].rstrip()
-                if len(resposta_anterior) > 280:
-                    resposta_curta += "…"
-                resumo += f' Eu respondi: “{resposta_curta}”'
-            return resumo
+        if re.search(_RE_RETOMADA, texto):
+            trocas = self._trocas_relevantes()
+            if not trocas:
+                return "Ainda não temos uma conversa sobre dados por aqui. O que você quer ver: estoque, alertas, casos ou internações?"
+            linhas = []
+            for troca in trocas[-3:]:
+                linha = f"- Você perguntou “{troca['pergunta'][:120]}”"
+                if troca["resposta"]:
+                    resposta = troca["resposta"].replace("\n", " ")
+                    linha += f" e eu respondi: {resposta[:160].rstrip()}{'…' if len(resposta) > 160 else ''}"
+                linhas.append(linha)
+            return "Nas últimas conversas:\n" + "\n".join(linhas) + "\n\nQuer seguir em algum desses assuntos?"
 
         # Apresentação pessoal ("meu nome é…", "sou de Cotia") não é consulta: sem isso o
         # planejador marcava fora_do_escopo. O router já gravou nome/resumo antes do agente.

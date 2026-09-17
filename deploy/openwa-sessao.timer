@@ -1,0 +1,11 @@
+[Unit]
+Description=Vigia a sessao do OpenWA a cada cinco minutos
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=5min
+AccuracySec=30s
+Unit=openwa-sessao.service
+
+[Install]
+WantedBy=timers.target

@@ -855,3 +855,24 @@ def test_dados_da_tela_pulam_planejador_e_ferramenta(db):
     mensagem = montar_mensagem_resposta(pergunta, contexto, plano, resultado)
     assert '=== DADOS DA TELA (inicio)' in mensagem and '"casos_previstos": 98' in mensagem
     assert '"vazio"' not in mensagem and '"dados_tela"' not in mensagem.split("=== DADOS DA TELA")[0]
+
+
+def test_ultimas_conversas_retoma_assunto_sem_llm(db):
+    from api.core.susbot_agent import criar_susbot_agente
+
+    class LLMProibido(LLMMock):
+        def planejar(self, pergunta, contexto, ferramentas):
+            raise AssertionError("retomada de conversa não deve chamar o LLM")
+
+    historico = [
+        {"pergunta": "estoque de soro?", "resposta": "Seu estoque dura 12 dias."},
+        {"pergunta": "Oi", "resposta": "Oi, Gabriel! No que eu posso ajudar agora?"},
+    ]
+    agente = criar_susbot_agente("351300", usuario="user-gabriel", historico=historico, llm=LLMProibido())
+
+    saudacao = next(e for e in agente.stream_eventos("Oi") if e["event"] == "fim")["data"]["resposta"]
+    assert "estoque de soro?" in saudacao
+
+    resposta = next(e for e in agente.stream_eventos("Ultimas conversas") if e["event"] == "fim")["data"]["resposta"]
+    assert "estoque de soro?" in resposta and "12 dias" in resposta
+    assert "devendo" not in resposta and "“Oi”" not in resposta

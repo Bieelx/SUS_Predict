@@ -13,6 +13,7 @@
 #   bash deploy/openwa.sh enviar 5511999999999 "teste"
 #   bash deploy/openwa.sh webhook            # padrão: URL pública da Clara (via Caddy)
 #   bash deploy/openwa.sh smoke 5511999999999
+#   bash deploy/openwa.sh religar     # religa a sessão se ela caiu (usado pelo timer)
 #   bash deploy/openwa.sh logs
 #
 # Config em .env na raiz do projeto (ver .env.example, bloco WhatsApp).
@@ -113,6 +114,8 @@ religar_sessao() {
         sleep 2
     done
     [ -n "$id" ] || { warn "Sessão '$OPENWA_SESSION_NAME' não encontrada — rode 'bash deploy/openwa.sh sessao'"; return 0; }
+    # Chamado também pelo timer de vigia: sessão já ready não precisa de start.
+    [ "$(api GET "/api/sessions/$id" | campo status)" = "ready" ] && return 0
     api POST "/api/sessions/$id/start" >/dev/null
     local status=""
     for tentativa in $(seq 1 20); do
@@ -278,6 +281,7 @@ case "${1:-}" in
     enviar)  shift; cmd_enviar "$@" ;;
     webhook) shift; cmd_webhook "$@" ;;
     smoke)   shift; cmd_smoke "$@" ;;
+    religar) religar_sessao ;;
     logs)    cmd_logs ;;
     *)       sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^#\{1,\} \{0,1\}//' ;;
 esac

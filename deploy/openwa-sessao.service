@@ -1,0 +1,14 @@
+[Unit]
+Description=Religa a sessao do WhatsApp (OpenWA) se ela caiu
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=gabriel
+WorkingDirectory=/home/gabriel/suspredict
+ExecStart=/bin/bash deploy/openwa.sh religar
+TimeoutStartSec=5min
+UMask=0077
+StandardOutput=journal
+StandardError=journal

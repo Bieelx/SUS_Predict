@@ -193,7 +193,6 @@ _RESPOSTAS_SOCIAIS = {
     "saudacao": (
         "Oi{nome}! Que bom te ver de novo. No que eu posso ajudar agora?",
         "Olá{nome}! Tô por aqui. O que você quer ver?",
-        "Oi{nome}! Seguimos de onde paramos ou tem assunto novo?",
     ),
     "como_vai": (
         "Tudo ótimo por aqui{nome}, obrigada por perguntar! E com você? Se precisar de algum dado, é só falar.",

@@ -70,3 +70,7 @@ Migrations do Supabase não rodam no deploy.
 - **Commits:** em português, descritivos.
 - **Números:** `.toLocaleString('pt-BR')` (helpers em `shared/formatters.js`).
 - **Datas:** ISO 8601 no backend; DD/MM/AAAA no frontend.
+
+## Imported Claude Cowork project instructions
+
+Esse projeto é uma startup que estou construindo com meu grupo da faculdade, estamos atualmente em 5 e estou na função de cientista de dados

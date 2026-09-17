@@ -100,3 +100,30 @@ def test_escrita_nunca_e_executada_sem_confirmacao(item):
 def test_numero_divergente_nunca_passa_na_checagem(inventado):
     fonte = {"quantidade": 42, "competencia": "2024"}
     assert _resposta_numericamente_fiel(f"O resultado foi {inventado}.", None, fonte) is False
+
+
+@pytest.mark.parametrize("frase", (
+    "queda de 89,65% frente ao ano anterior",
+    "cerca de 89,7% a menos",
+    "foram 65 mil casos em 2025",
+    "incidência de 546,13 por 100 mil habitantes",
+))
+def test_reescrita_legitima_do_numero_passa_na_checagem(frase):
+    fonte = {"stats": {"variacao_pct": -89.65, "casos_atual": 65016, "incidencia_atual": 546.13,
+                       "periodo_inicio": "2025-02-01T00:00:00"}}
+    assert _resposta_numericamente_fiel(frase, None, fonte) is True
+
+
+def test_reserva_de_epidemiologia_e_texto_humano():
+    from api.core.susbot_agent import _narrativa_de_reserva
+
+    resultado = {"encontrado": True, "sistema": "SINAN", "dados": {"stats": {
+        "janela": "12 Meses", "id_agravo": "Dengue", "nome_municipio": "São Paulo",
+        "periodo_inicio": "2025-02-01T00:00:00", "periodo_fim": "2026-01-01T00:00:00",
+        "casos_atual": 65016, "casos_anterior": 628351, "variacao_pct": -89.65,
+        "possui_base_comparacao": True, "incidencia_atual": 546.13,
+        "hospitalizacoes_atual": 2807, "obitos_atual": 37, "observacao": "OK",
+    }}}
+    texto = _narrativa_de_reserva("consultar_epidemiologia", resultado)
+    assert "65.016 casos" in texto and "queda de 89,65%" in texto and "2.807 hospitalizações" in texto
+    assert "possui base comparacao" not in texto and "True" not in texto
