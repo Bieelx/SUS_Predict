@@ -84,8 +84,24 @@ def test_fora_do_escopo_nao_chama_geracao_e_emite_recusa_padronizada(db):  # noq
 def test_sobre_o_projeto_devolve_texto_curado_sem_llm(db):  # noqa: F811
     llm = LLMPlanoFixo({"acao": "chamar_ferramenta", "ferramenta": "sobre_o_projeto"})
     agente = criar_susbot_agente("3550308", llm=llm)
-    fim = next(e for e in agente.stream_eventos("o que voce faz?") if e["event"] == "fim")
+    fim = next(e for e in agente.stream_eventos("o que e o SUS Predict?") if e["event"] == "fim")
     assert fim["data"]["resposta"] == TEXTO_SOBRE_O_PROJETO
+    assert not llm.stream_chamadas
+
+
+def test_pergunta_de_capacidade_lista_so_ferramentas_do_perfil(db):  # noqa: F811
+    """"O que você pode fazer?" sai em código, com a lista real do perfil e sem saudação."""
+
+    llm = LLMPlanoFixo({"acao": "chamar_ferramenta", "ferramenta": "sobre_o_projeto"})
+    agente = criar_susbot_agente(
+        "3550308", llm=llm, perfil="vigilancia",
+        permitidas={"consultar_epidemiologia", "consultar_alertas", "sobre_o_projeto"},
+    )
+    fim = next(e for e in agente.stream_eventos("então me fale o que você pode fazer") if e["event"] == "fim")
+    resposta = fim["data"]["resposta"]
+    assert "Casos, internações" in resposta and "Alertas do município" in resposta
+    assert "ETP" not in resposta and "Estoque de insumos" not in resposta
+    assert not resposta.lower().startswith(("oi", "ola", "olá", "boa noite"))
     assert not llm.stream_chamadas
 
 

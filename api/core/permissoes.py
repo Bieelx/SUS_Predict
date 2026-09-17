@@ -212,12 +212,20 @@ FERRAMENTAS_MUNICIPAIS = frozenset({
     "consultar_estoque", "consultar_alertas", "consultar_leitos_internacoes", "gerar_etp",
 })
 
+def municipio_autorizado(acesso: Acesso, ibge6: str) -> bool:
+    """Município atribuído, ou curinga "*" para admin (mesma regra de channel_router/local_records)."""
+
+    if not str(ibge6):
+        return False
+    return str(ibge6) in acesso.municipios or (acesso.perfil == "admin" and "*" in acesso.municipios)
+
+
 def verificar_municipio(acesso: Acesso, ibge6: str) -> None:
-    # Lista vazia não concede acesso privado. Admin também precisa de atribuição.
-    if str(ibge6) not in acesso.municipios:
+    # Lista vazia não concede acesso privado. Fora do curinga, admin também precisa de atribuição.
+    if not municipio_autorizado(acesso, ibge6):
         raise HTTPException(403, "Este município não está autorizado para dados locais ou ações. Peça a atribuição ao administrador.")
 
 def ferramentas_no_municipio(acesso: Acesso, ibge6: str) -> frozenset[str]:
-    if str(ibge6) in acesso.municipios:
+    if municipio_autorizado(acesso, ibge6):
         return acesso.ferramentas
     return frozenset(acesso.ferramentas - FERRAMENTAS_MUNICIPAIS)

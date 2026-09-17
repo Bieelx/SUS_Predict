@@ -136,6 +136,8 @@ IDENTIDADE E TOM
 - Evite frases de robô: "Segue abaixo", "Conforme solicitado", "Não foram encontrados registros", "Prezado". Diga como uma pessoa diria ("Olhei aqui e não achei nada de alerta aberto").
 - Quando o dado for preocupante, demonstre que entendeu o peso da situação em poucas palavras antes de sugerir o próximo passo.
 - Comece pelo que importa: o que o dado significa e o que fazer com isso. Sem "Claro", "Com certeza", elogios ou introduções vazias.
+- Não cumprimente de novo ("oi", "olá", "boa noite", "tudo bem?") se já houver histórico nesta conversa: cumprimento é só na primeira mensagem.
+- Não repita recusa de permissão nem aviso de acesso vindo de mensagens anteriores: responda só o que foi perguntado agora.
 - Nunca reformule a pergunta nem repita município, período, datas, modelo ou números que o usuário acabou de citar ou já vê na tela. Ele sabe do que perguntou; entregue o que ele ainda não sabe.
 - Cada frase precisa acrescentar algo. Se uma frase só reafirma o que veio antes, corte.
 - Pode fechar com uma oferta curta de próximo passo ("Quer que eu compare com o ano passado?"), só quando fizer sentido.
@@ -222,6 +224,55 @@ def resposta_social(tipo: str, nome: str | None = None, escolher=None) -> str:
     primeiro = (nome or "").split()[0] if (nome or "").split() else ""
     opcoes = _RESPOSTAS_SOCIAIS[tipo]
     return (escolher or random.choice)(opcoes).format(nome=f", {primeiro}" if primeiro else "")
+
+# Lista do que a Clara faz, montada só com as ferramentas liberadas ao perfil no
+# município atual. Cada linha traz a frase exata que dispara a ferramenta, para que
+# "então faça isso" logo depois funcione de verdade. Nunca passa pelo LLM.
+_CAPACIDADES = {
+    "consultar_estoque": "**Estoque de insumos** — saldo por unidade e cobertura em dias. Ex.: “como está o estoque de dipirona?”",
+    "consultar_aquisicoes": "**Risco de aquisição** — os mesmos sinais das telas Alertas e Insumos. Ex.: “quais insumos estão em risco de aquisição?”",
+    "consultar_alertas": "**Alertas do município** — ocorrências abertas e em andamento. Ex.: “tem algum alerta aberto?”",
+    "consultar_epidemiologia": "**Casos, internações, óbitos e nascimentos** do DATASUS (SINAN, SIH, SIM, SINASC, SIA). Ex.: “casos de dengue em 2025”",
+    "consultar_leitos_internacoes": "**Leitos e internações informados pelas unidades** — ocupação atual. Ex.: “quantos leitos de UTI estão livres?”",
+    "gerar_etp": "**Rascunho de ETP** (Estudo Técnico Preliminar) para um insumo, só depois da sua confirmação. Ex.: “gere um ETP para dipirona 500mg”",
+}
+_ORDEM_CAPACIDADES = (
+    "consultar_estoque", "consultar_aquisicoes", "consultar_alertas",
+    "consultar_epidemiologia", "consultar_leitos_internacoes", "gerar_etp",
+)
+
+
+def texto_capacidades(permitidas=None, nome: str | None = None) -> str:
+    """Resposta a 'o que você pode fazer?': só o que o perfil realmente pode executar."""
+
+    conjunto = set(permitidas) if permitidas is not None else set(FERRAMENTAS_PLANEJAVEIS)
+    linhas = [f"- {_CAPACIDADES[f]}" for f in _ORDEM_CAPACIDADES if f in conjunto]
+    primeiro = (nome or "").split()[0] if (nome or "").split() else ""
+    if not linhas:
+        return MENSAGEM_SEM_CAPACIDADES
+    abertura = f"Olha o que eu consigo fazer por aqui{', ' + primeiro if primeiro else ''}:"
+    return "\n".join([abertura, "", *linhas, "",
+                      "Tudo sai de consulta ao banco do SUS Predict — não invento número. "
+                      "É só pedir com suas palavras que eu busco."])
+
+
+MENSAGEM_SEM_CAPACIDADES = (
+    "Por enquanto eu só consigo explicar o que é o SUS Predict: seu perfil ainda não tem "
+    "ferramenta de dados liberada neste município. Peça a liberação ao administrador."
+)
+
+# Abertura de apresentação ao vivo (banca, demo): resposta curta, calorosa e sem dado.
+RESPOSTA_APRESENTACAO = (
+    "Boa noite! Tudo ótimo por aqui{nome} — e que bom estar junto nessa apresentação. "
+    "Boa noite à banca também. Estou com os dados do município à mão: estoque, alertas, "
+    "casos e internações. É só pedir."
+)
+
+
+def resposta_apresentacao(nome: str | None = None) -> str:
+    primeiro = (nome or "").split()[0] if (nome or "").split() else ""
+    return RESPOSTA_APRESENTACAO.format(nome=f", {primeiro}" if primeiro else "")
+
 
 # ---------------------------------------------------------------------------
 # TEXTO CURADO À MÃO. Não deve ser gerado nem reescrito pelo modelo em runtime.

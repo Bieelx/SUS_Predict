@@ -116,6 +116,46 @@ def tipo_conversa_social(pergunta: str) -> str | None:
     return None
 
 
+# "O que você pode fazer?" — respondido em código com a lista real de ferramentas do
+# perfil, nunca pelo LLM (o modelo inventava capacidade e repetia saudação).
+_RE_CAPACIDADES = re.compile(
+    r"(?:o que|oque|tudo que|no que|em que|com o que)\b[^?]{0,40}\b(?:voce|vc|tu|clara)\b[^?]{0,40}"
+    r"\b(?:pode|consegue|sabe|faz|fazer|ajuda|ajudar|ajudo)\b"
+    r"|\b(?:voce|vc|clara)\b[^?]{0,20}\b(?:pode|consegue|sabe)\b[^?]{0,20}\bfazer\b"
+    r"|\b(?:quais|que|qual)\b[^?]{0,30}\b(?:funcoes|funcionalidades|capacidades|habilidades|recursos|comandos)\b"
+    r"|\bcomo (?:voce|vc|a clara) (?:pode )?(?:me )?ajud\w*"
+    r"|\bme ajuda com o que\b|\bqual (?:e )?(?:o )?seu papel\b|\bpara que (?:voce|vc) serve\b"
+)
+
+
+# "o que você sabe sobre mim/sobre X" é pergunta de memória/assunto, não de capacidade.
+_RE_NAO_CAPACIDADES = re.compile(r"\b(?:sabe|fala|falar|diz|dizer|conta|contar) sobre\b|\bsobre mim\b")
+
+
+def pede_capacidades(pergunta: str) -> bool:
+    """Pergunta sobre o que a Clara faz ('o que você pode fazer?', 'quais suas funções?')."""
+
+    texto = normalizar_texto(pergunta)
+    if _RE_NAO_CAPACIDADES.search(texto):
+        return False
+    return bool(_RE_CAPACIDADES.search(texto))
+
+
+# Abertura de apresentação ao vivo (banca/demo): saudação + contexto de plateia.
+_RE_APRESENTACAO = re.compile(
+    r"\b(?:ao vivo|banca|apresentacao|apresentando|demonstracao|demo|avaliadores?|professores?|jurados?)\b"
+)
+
+
+def eh_abertura_apresentacao(pergunta: str) -> bool:
+    """Saudação dirigida à Clara num contexto de apresentação ao vivo."""
+
+    texto = normalizar_texto(pergunta)
+    if len(texto.split()) > 25 or not _RE_APRESENTACAO.search(texto):
+        return False
+    return bool(re.search(_SAUDACAO, texto))
+
+
 # Pedido para retomar a conversa ("últimas conversas", "onde paramos"), texto normalizado.
 _RE_RETOMADA = re.compile(
     r"\bultim[ao]s? (?:conversas?|mensagens?|assuntos?|perguntas?)\b|conversamos antes|"

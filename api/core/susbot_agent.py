@@ -31,6 +31,8 @@ from api.core.prompts import (
     MENSAGEM_FORA_DO_ESCOPO,
     MENSAGEM_IDENTIDADE,
     resposta_social,
+    resposta_apresentacao,
+    texto_capacidades,
     SYSTEM_PROMPT_RESPOSTA,
     montar_mensagem_resposta,
     system_prompt_planejador,
@@ -38,7 +40,10 @@ from api.core.prompts import (
 from api.core.permissoes import mensagem_ferramenta_negada
 from api.core.clara_model_policy import RACIOCINIO_AVANCADO, perfil_para_plano
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
-from api.core.susbot_intents import normalizar_texto, rotear_intencao, rotear_com_contexto, tipo_conversa_social, pede_retomada
+from api.core.susbot_intents import (
+    normalizar_texto, rotear_intencao, rotear_com_contexto, tipo_conversa_social,
+    pede_retomada, pede_capacidades, eh_abertura_apresentacao,
+)
 from api.core.susbot_metrics import (
     registrar_execucao,
     registrar_falha_fidelidade,
@@ -1030,6 +1035,13 @@ class ClaraAgent:
         ]
 
     def _resposta_contextual(self, pergunta: str) -> str | None:
+        nome_memoria = str((self.memoria_usuario.get("fatos") or {}).get("nome") or "")
+        # "O que você pode fazer?" e a abertura de apresentação saem em código: a lista
+        # precisa ser exatamente a das ferramentas liberadas, sem saudação repetida.
+        if eh_abertura_apresentacao(pergunta):
+            return resposta_apresentacao(nome_memoria)
+        if pede_capacidades(pergunta):
+            return texto_capacidades(self.permitidas, nome_memoria)
         social = self._resposta_social(pergunta)
         if social is not None:
             return social

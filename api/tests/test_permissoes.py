@@ -410,3 +410,18 @@ def test_admin_do_seed_na_lista_da_equipe_nao_e_rebaixado(db):
         acesso = provisionar_acesso({"id": "971ffd73-af1a-44f5-b7d9-9d2b2665170b", "email": email})
         assert acesso.perfil == "admin"
     assert db.get_acesso("971ffd73-af1a-44f5-b7d9-9d2b2665170b")["atribuido_por"] == email
+
+
+def test_admin_com_curinga_mantem_ferramentas_municipais():
+    """Admin com municipios=["*"] não pode perder gerar_etp/estoque no município atual."""
+
+    from api.core.permissoes import Acesso, ferramentas_do_perfil, ferramentas_no_municipio
+
+    admin = Acesso("u", "admin", ferramentas_do_perfil("admin"), ("*",))
+    gestor = Acesso("g", "gestor", ferramentas_do_perfil("gestor"), ("*", "355030"))
+
+    assert "gerar_etp" in ferramentas_no_municipio(admin, "355030")
+    assert "consultar_estoque" in ferramentas_no_municipio(admin, "310620")
+    # Curinga não vale para quem não é admin: fora do município atribuído, cai o municipal.
+    assert "gerar_etp" in ferramentas_no_municipio(gestor, "355030")
+    assert "gerar_etp" not in ferramentas_no_municipio(gestor, "310620")
