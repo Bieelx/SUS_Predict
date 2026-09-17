@@ -65,7 +65,7 @@ def _meta(tabelas: list[str], referencias: list[Any]) -> dict[str, Any]:
     }
 
 
-def _prever_meses(
+def prever_meses(
     linhas: list[dict],
     horizonte_meses: int = 3,
     competencia_corte: str | None = None,
@@ -162,7 +162,7 @@ def epidemiologia(
     )
     competencia = _select("visao_geral_competencia_referencia", limit=1)
     competencia_corte = competencia[0].get("competencia_referencia") if competencia else None
-    previsao = _prever_meses(historico_previsao, horizonte, competencia_corte)
+    previsao = prever_meses(historico_previsao, horizonte, competencia_corte)
     desfecho = _select("sinan_dengue_municipios_desfecho_clinico_anual", {"cod_ibge_municipio": codigo}, order="ano_referencia.asc")
 
     referencias = [
@@ -251,7 +251,7 @@ def visao_geral(
         order="mes_ano.asc",
     )
     previsao = (
-        _prever_meses(
+        prever_meses(
             historico_previsao,
             horizonte,
             competencia[0].get("competencia_referencia") if competencia else None,

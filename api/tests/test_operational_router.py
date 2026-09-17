@@ -199,7 +199,7 @@ def test_previsao_descarta_mes_posterior_a_competencia_oficial():
     ]
     linhas.append({"mes_ano": "2026-01-01", "casos_atual": 1})
 
-    previsao = operational._prever_meses(linhas, 12, "2025-12-01")
+    previsao = operational.prever_meses(linhas, 12, "2025-12-01")
 
     assert previsao["ultimo_mes_observado"] == "2025-12-01"
     assert previsao["serie"][0]["mes"] == "2026-01-01"

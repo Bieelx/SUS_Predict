@@ -28,8 +28,11 @@ from typing import Any, Callable, Iterable
 from api.core.prompts import (
     FERRAMENTAS_PLANEJAVEIS,
     limpar_vazios,
+    MENSAGEM_ATENDIMENTO_HUMANO,
     MENSAGEM_FORA_DO_ESCOPO,
     MENSAGEM_IDENTIDADE,
+    MENSAGEM_SEM_PLANEJAMENTO,
+    OFERTA_ATENDIMENTO_HUMANO,
     resposta_social,
     resposta_apresentacao,
     texto_capacidades,
@@ -42,7 +45,7 @@ from api.core.clara_model_policy import RACIOCINIO_AVANCADO, perfil_para_plano
 from api.core.susbot_tools import FERRAMENTAS_ESCRITA, criar_susbot_tools
 from api.core.susbot_intents import (
     normalizar_texto, rotear_intencao, rotear_com_contexto, tipo_conversa_social,
-    pede_retomada, pede_capacidades, eh_abertura_apresentacao,
+    pede_retomada, pede_capacidades, pede_atendimento_humano, eh_abertura_apresentacao,
 )
 from api.core.susbot_metrics import (
     registrar_execucao,
@@ -109,7 +112,7 @@ def _jsonable(valor: Any) -> Any:
 
 
 def _sse(evento: str, dados: dict[str, Any]) -> str:
-    return f"event: {evento}\ndata: {json.dumps(_jsonable(dados), ensure_ascii=False)}\n\n"
+    return f"event: {evento}\ndata: {json.dumps(_jsonable(dados), ensure_ascii=False, default=str)}\n\n"
 
 
 _RE_DATA_NUMERICA = re.compile(
@@ -229,9 +232,10 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
         return None
 
     if not resultado.get("encontrado"):
-        motivo = str(resultado.get("motivo") or "Não encontrei esse dado para este município.")
+        motivo = str(resultado.get("motivo") or "Não sei responder isso com os dados que tenho aqui.")
         acao = str(resultado.get("acao_sugerida") or "").strip()
-        return f"{motivo}\n\n**Próximo passo:** {acao}" if acao else motivo
+        texto = f"{motivo}\n\n**Próximo passo:** {acao}" if acao else motivo
+        return f"{texto}\n\n{OFERTA_ATENDIMENTO_HUMANO}"
 
     if ferramenta == "consultar_aquisicoes":
         linhas = [f"**Risco de aquisição · {resultado.get('periodo', '')}**"]
@@ -275,6 +279,32 @@ def _resposta_deterministica(ferramenta: str, resultado: dict[str, Any] | None) 
 # Rede de segurança: o payload narrado campo a campo, em código. Só é usado quando o
 # LLM não devolve texto (falha de provedor ou resposta vazia) — antes esse era o
 # caminho normal, e era ele que despejava o dado cru na tela.
+def _narrativa_previsao(previsao: dict[str, Any]) -> str:
+    """Projeção mensal narrada campo a campo, com o intervalo e a limitação do modelo."""
+
+    if not previsao.get("disponivel"):
+        motivo = str(previsao.get("motivo") or "Não consigo projetar os próximos meses agora.")
+        return f"{motivo}\n\n{OFERTA_ATENDIMENTO_HUMANO}"
+    linhas = [
+        f"- **{_mes_br(item.get('mes'))}**: {_num_br(item.get('casos_previstos'))} casos previstos "
+        f"(entre {_num_br(item.get('limite_inferior'))} e {_num_br(item.get('limite_superior'))})"
+        for item in previsao.get("serie", [])
+    ]
+    if not linhas:
+        return ("O modelo não devolveu meses projetados para este município.\n\n"
+                + OFERTA_ATENDIMENTO_HUMANO)
+    nivel = previsao.get("intervalo_confianca_pct")
+    return (
+        "Projeção de casos de dengue (SINAN, modelo do SusPredict):\n"
+        + "\n".join(linhas)
+        + f"\n\nÚltimo mês observado: {_mes_br(previsao.get('ultimo_mes_observado'))}. "
+        + f"Modelo: {previsao.get('modelo') or 'não informado'}"
+        + (f"; intervalo de {_num_br(nivel)}%." if nivel else ".")
+        + f"\n\n**Limitação:** {previsao.get('aviso') or 'é projeção estatística, não certeza'} "
+        "Projeção não é decisão clínica nem garantia de ocorrência."
+    )
+
+
 def _narrativa_de_reserva(ferramenta: str, resultado: dict[str, Any] | None) -> str | None:
     if not resultado or not resultado.get("encontrado"):
         return None
@@ -285,7 +315,19 @@ def _narrativa_de_reserva(ferramenta: str, resultado: dict[str, Any] | None) -> 
             qualidade = dado.get("qualidade") or {}
             dias = dado.get("dias_restantes")
             if dias is None:
-                linhas.append(f"- **{dado.get('item')}**: cálculo indisponível, falta consumo médio local válido")
+                # Saldo informado pela unidade nao tem consumo medio, so cobertura e
+                # incalculavel. O saldo em si e a resposta — antes a reserva escondia
+                # a quantidade e o usuario saia sem nada.
+                onde = dado.get("estabelecimento")
+                unidade = dado.get("unidade_medida") or "unidades"
+                quantidade = dado.get("quantidade_atual")
+                saldo = f"{_num_br(quantidade)} {unidade}" if quantidade is not None else "saldo não informado"
+                linhas.append(
+                    f"- **{dado.get('item')}**: {saldo}"
+                    + (f" em {onde}" if onde else "")
+                    + f" (atualizado em {_data_br(dado.get('atualizado_em'))})."
+                    " Cobertura em dias não pode ser calculada: falta consumo médio local."
+                )
                 continue
             defasagem = qualidade.get("defasagem_dias")
             competencia = qualidade.get("competencia") or "não informada"
@@ -315,6 +357,9 @@ def _narrativa_de_reserva(ferramenta: str, resultado: dict[str, Any] | None) -> 
         return "Alertas ativos:\n" + "\n".join(linhas)
 
     if ferramenta == "consultar_epidemiologia":
+        previsao = (resultado.get("dados") or {}).get("previsao")
+        if previsao is not None:
+            return _narrativa_previsao(previsao)
         stats = (resultado.get("dados") or {}).get("stats") or {}
         if not stats:
             return None
@@ -416,6 +461,16 @@ def _num_br(valor: Any) -> str:
     return texto.replace(",", "_").replace(".", ",").replace("_", ".")
 
 
+def _mes_br(valor: Any) -> str:
+    """"2026-02-01" -> "02/2026". Mês projetado não tem dia útil para mostrar."""
+
+    texto = str(valor or "")
+    try:
+        return datetime.fromisoformat(texto.replace("Z", "+00:00")).strftime("%m/%Y")
+    except ValueError:
+        return texto
+
+
 def _data_br(valor: Any) -> str:
     texto = str(valor)
     try:
@@ -513,6 +568,26 @@ def _construir_artefato(ferramenta: str, resultado: dict[str, Any] | None) -> di
         }
 
     if ferramenta == "consultar_epidemiologia":
+        previsao = (resultado.get("dados") or {}).get("previsao")
+        if previsao and previsao.get("disponivel") and previsao.get("serie"):
+            linhas = [
+                {"mes": _mes_br(item.get("mes")), "casos_previstos": item.get("casos_previstos"),
+                 "limite_inferior": item.get("limite_inferior"), "limite_superior": item.get("limite_superior")}
+                for item in previsao["serie"]
+            ]
+            return {
+                "tipo": "tabela",
+                "titulo": f"Projeção de casos — {len(linhas)} meses",
+                "colunas": _colunas_uteis(linhas, ("mes", "casos_previstos", "limite_inferior", "limite_superior")),
+                "linhas": linhas,
+                "evidencia": {
+                    "fonte": "SINAN curado (série mensal), projetado pelo modelo do SusPredict",
+                    "modelo": previsao.get("modelo"),
+                    "intervalo_confianca_pct": previsao.get("intervalo_confianca_pct"),
+                    "ultimo_mes_observado": previsao.get("ultimo_mes_observado"),
+                    "limitacao": previsao.get("aviso"),
+                },
+            }
         stats = (resultado.get("dados") or {}).get("stats") or {}
         campos, detalhes = _particionar(stats, _ESSENCIAIS_EPI, _ORIGEM_EPI)
         if not campos and not detalhes:
@@ -1066,6 +1141,8 @@ class ClaraAgent:
             return resposta_apresentacao(nome_memoria)
         if pede_capacidades(pergunta):
             return texto_capacidades(self.permitidas, nome_memoria)
+        if pede_atendimento_humano(pergunta):
+            return MENSAGEM_ATENDIMENTO_HUMANO
         social = self._resposta_social(pergunta)
         if social is not None:
             return social
@@ -1352,7 +1429,23 @@ class ClaraAgent:
                 "sem_llm": False,
             }
         elif plano_obrigatorio is None:
-            plano = self._planejar_com_llm(pergunta)
+            try:
+                plano = self._planejar_com_llm(pergunta)
+            except Exception as exc:  # provedor fora do ar, quota, chave invalida
+                # Sem planejador nao ha consulta possivel: a Clara admite que nao sabe
+                # e oferece atendimento humano, em vez de derrubar a conversa com erro.
+                log.warning("Planejamento indisponivel (%s); respondendo que nao sei", type(exc).__name__)
+                registrar_fallback_llm("planejamento")
+                execucao = {"modo": "sem_planejador", "intencao": "nao_sei", "confianca": None,
+                            "llm_planejamento": False, "llm_resposta": False, "sem_llm": True}
+                registrar_execucao(execucao)
+                yield {"event": "token", "data": {"texto": MENSAGEM_SEM_PLANEJAMENTO}}
+                yield {"event": "fim", "data": {
+                    "resposta": MENSAGEM_SEM_PLANEJAMENTO, "referencia_rota": None,
+                    "plano": {"acao": "resposta", "origem": "sem_planejador"},
+                    "resultado_ferramenta": None, "artefato": None, "execucao": execucao,
+                }}
+                return
             execucao = {
                 "modo": "generativo",
                 "intencao": str(plano.get("ferramenta") or "conversa_livre"),

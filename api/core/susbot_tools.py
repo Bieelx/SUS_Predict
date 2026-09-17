@@ -72,6 +72,8 @@ def _instrumentar(nome, funcao, municipio_recebido, ibge):
             _CONSULTA.reset(token)
     return executar
 
+from fastapi import HTTPException
+
 from api.core import db
 from api.core.prompts import TEXTO_SOBRE_O_PROJETO
 from api.core.sql_guard import validar_sql
@@ -88,6 +90,8 @@ _TABELAS_SINAN_KPI = (
     "sinan_dengue_municipios_taxa_obito",
 )
 _TABELA_SINAN_ANUAL = "sinan_dengue_municipios_desfecho_clinico_anual"
+# Mesma série mensal que a tela de Epidemiologia usa para projetar (janela "5 Anos").
+_TABELA_SINAN_SAZONALIDADE = "sinan_dengue_municipios_sazonalidade"
 _TABELAS_SIH_KPI = (
     "sih_dengue_interacoes_periodo",
     "sih_dengue_permanencia_media_periodo",
@@ -99,6 +103,10 @@ MSG_SEM_FONTE_ESTOQUE = (
     "Não há fonte de estoque físico conectada ao SusPredict para este município — a Clara "
     "não consegue informar quantidade disponível, consumo médio ou dias de cobertura. "
     "A tela de Insumos mostra risco de aquisição (indicador de ruptura), que não é estoque."
+)
+MSG_FONTE_LOCAL_INDISPONIVEL = (
+    "A fonte dos dados informados pelas unidades não respondeu agora, então não consigo "
+    "confirmar esse número. Ausência de resposta não significa zero."
 )
 ACAO_SEM_FONTE_ESTOQUE = (
     "Consulte a tela de Insumos para o risco de aquisição. Para estoque físico é preciso "
@@ -114,6 +122,9 @@ def _janela_curada(ano_ini: int | None, ano_fim: int | None) -> str:
     fim = int(ano_fim if ano_fim is not None else ano_ini)
     span = fim - ini + 1
     return "12 Meses" if span <= 1 else ("3 Anos" if span <= 3 else "5 Anos")
+
+
+ESCOPO_PREVISAO = "previsao"
 
 
 def _e_dengue(doenca_cod: str | None) -> bool:
@@ -259,14 +270,19 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
 
     ibge = _normalizar_ibge6(ibge6)
 
-    def _buscar_estoque_por_item(item: str | None) -> tuple[list[dict], list[dict]]:
+    def _buscar_estoque_por_item(item: str | None) -> tuple[list[dict] | None, list[dict] | None]:
         # Busca por substring (case-insensitive), não exata: o modelo tende a mandar
         # "dipirona" quando o item cadastrado é "Dipirona 500mg" — match exato
         # devolvia vazio sempre que faltava a dosagem/forma.
         # Devolve (todas as linhas do município, linhas após o filtro por item) para
         # distinguir "não há fonte de estoque" de "há estoque, mas não esse item".
+        # (None, None) = a fonte não respondeu; lista vazia significaria "zero", que é outra coisa.
         _registrar_consulta("estoque", {"ibge6": ibge}, None)
-        rows = db.get_estoque(ibge)
+        try:
+            rows = db.get_estoque(ibge)
+        except (RuntimeError, HTTPException) as exc:
+            _log_consulta("clara_ferramenta_erro", erro_tipo=type(exc).__name__)
+            return None, None
         alvo = _normalizar_item(item)
         filtradas = (
             [row for row in rows if _item_corresponde(alvo, row.get("item"))] if item else rows
@@ -277,6 +293,11 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
 
     def consultar_estoque(item: str | None = None, somente_risco: bool = False, **_kwargs) -> dict:
         todas, rows = _buscar_estoque_por_item(item)
+        if todas is None:
+            return _resposta_vazia(
+                MSG_FONTE_LOCAL_INDISPONIVEL,
+                ibge6=ibge, item=item, base_disponivel=False, fonte_indisponivel=True, dados=[],
+            )
         if not todas:
             if os.getenv("CLARA_REGISTROS_LOCAIS_ENABLED", "").lower() in {"1", "true"}:
                 return _resposta_vazia(
@@ -422,10 +443,11 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
                         "qtd_internacoes": row.get("qtd_internacoes"),
                         "data_ultima_atualizacao": row.get("data_atualizacao"),
                     } for row in rows)
-        except RuntimeError:
+        except (RuntimeError, HTTPException) as exc:
+            _log_consulta("clara_ferramenta_erro", erro_tipo=type(exc).__name__)
             return _resposta_vazia(
-                "A fonte de dados informados pelas unidades está indisponível neste ambiente. Ausência não significa zero.",
-                ibge6=ibge, categoria=categoria, dados=[],
+                MSG_FONTE_LOCAL_INDISPONIVEL,
+                ibge6=ibge, categoria=categoria, fonte_indisponivel=True, dados=[],
             )
         _registrar_consulta(
             "internacao_estabelecimento+internacao_dengue_estabelecimento",
@@ -451,6 +473,26 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
         _registrar_consulta(tabela, filtros, len(rows), linhas_apos_filtros=len(rows),
                             origem="supabase", limite=None)
         return rows
+
+    def _previsao_mensal(horizonte_meses: int = 3) -> dict:
+        """Projeção mensal de casos, com o mesmo modelo e a mesma série da tela.
+
+        Reaproveita `prever_meses` de /api/dados/epidemiologia: uma pergunta sobre o
+        futuro não pode ser respondida com o acumulado do passado, e a Clara não tem
+        modelo próprio.
+        """
+
+        from api.core.operational_router import prever_meses
+        linhas = _sb(_TABELA_SINAN_SAZONALIDADE,
+                     {"cod_ibge_municipio": ibge, "periodo": "5 Anos"}, order="mes_ano.asc")
+        if not linhas:
+            return {"disponivel": False,
+                    "motivo": "A série mensal curada não tem histórico deste município para projetar."}
+        corte = None
+        competencia = _sb("visao_geral_competencia_referencia", {})
+        if competencia:
+            corte = competencia[0].get("competencia_referencia")
+        return prever_meses(linhas, horizonte_meses, corte)
 
     def _epidemiologia_sinan(janela, ano_ini, ano_fim, escopo_solicitado, comum) -> dict:
         filtros = {"cod_ibge_municipio": ibge, "periodo": janela}
@@ -478,6 +520,14 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
                 periodo=janela, **comum,
             )
         anos = [int(p["ano"]) for p in serie if p.get("ano") is not None]
+        previsao = None
+        if str(escopo_solicitado or "").strip().lower() == ESCOPO_PREVISAO:
+            try:
+                previsao = _previsao_mensal()
+            except RuntimeError as exc:
+                _log_consulta("clara_ferramenta_erro", erro_tipo=type(exc).__name__)
+                previsao = {"disponivel": False,
+                            "motivo": "A fonte da série mensal não respondeu agora; não consigo projetar."}
         return {
             "encontrado": True,
             "ibge6": ibge,
@@ -493,6 +543,7 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
                          "dados_reais": True, "periodo": janela},
                 "stats": {"janela": janela, **stats},
                 "serie_temporal": serie,
+                **({"previsao": previsao} if previsao is not None else {}),
             },
         }
 
@@ -584,6 +635,11 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
             return _resposta_vazia("Para preparar o ETP, informe qual medicamento ou insumo você deseja adquirir.", ibge6=ibge)
         item = item.strip()
         todas, rows = _buscar_estoque_por_item(item)
+        if todas is None:
+            return _resposta_vazia(
+                MSG_FONTE_LOCAL_INDISPONIVEL,
+                ibge6=ibge, item=item, base_disponivel=False, fonte_indisponivel=True,
+            )
         if not todas:
             return _resposta_vazia(
                 f"Não é possível fundamentar o ETP de '{item}': não há fonte de estoque físico "

@@ -315,7 +315,15 @@ def _formatar_estoque_telegram(resultado: dict[str, Any]) -> str | None:
     for item in dados:
         status = str(item.get("status") or "indisponivel")
         dias = item.get("dias_restantes")
-        cobertura = f"{_numero_compacto(dias)} dias de cobertura" if dias is not None else "Cobertura indisponível"
+        if dias is not None:
+            cobertura = f"{_numero_compacto(dias)} dias de cobertura"
+        else:
+            # Sem consumo medio nao ha cobertura, mas o saldo informado pela unidade e
+            # a resposta que a pessoa pediu — antes o canal so dizia "indisponivel".
+            quantidade = item.get("quantidade_atual")
+            unidade = item.get("unidade_medida") or "unidades"
+            cobertura = (f"{_numero_compacto(quantidade)} {unidade} em estoque · cobertura em dias indisponível"
+                         if quantidade is not None else "Cobertura indisponível")
         linhas.append(
             f"{icones.get(status, '⚪')} **{item.get('item') or 'Insumo'}**\n"
             f"{cobertura} · {rotulos.get(status, status)}"

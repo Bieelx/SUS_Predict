@@ -325,3 +325,66 @@ def test_busca_de_item_ignora_acento_e_espaco_na_dosagem():
     assert casa("Dipirona Sódica 500 MG", "Dipirona sodica 500mg")
     assert not casa("dipirona 500mg", "Paracetamol 750mg")
     assert not casa("dipirona 1g", "Dipirona 500mg")
+
+
+def test_store_converte_timestamp_do_postgres_para_texto_serializavel():
+    """`timestamptz` volta como datetime no psycopg e o SSE da Clara morria nele.
+
+    O erro chegava na tela como "Não consegui consultar a Clara agora" em qualquer
+    pergunta de leitos, internações ou estoque informado pelas unidades.
+    """
+
+    import json
+    from datetime import datetime, timezone
+    from decimal import Decimal
+    from api.core.local_records_store import _linha
+    from api.core.susbot_agent import _construir_artefato, _sse
+
+    linha = _linha({
+        "id_estabelecimento": "3550305576989",
+        "tipo_leito": "UTI",
+        "qtd_leitos_ocupados": 19,
+        "qtd_leitos_disponiveis": 1,
+        "data_atualizacao": datetime(2026, 9, 12, 14, 20, 57, tzinfo=timezone.utc),
+        "media": Decimal("1.5"),
+    })
+    assert linha["data_atualizacao"] == "2026-09-12T14:20:57+00:00"
+    assert linha["media"] == 1.5
+    json.dumps(linha)  # não levanta
+
+    resultado = {
+        "encontrado": True, "ibge6": "355030", "categoria": "leitos",
+        "dados": [{
+            "categoria": "leitos", "id_estabelecimento": linha["id_estabelecimento"],
+            "estabelecimento": "AMA 12H Jardim das Laranjeiras",
+            "tipo_leito": linha["tipo_leito"],
+            "qtd_leitos_ocupados": linha["qtd_leitos_ocupados"],
+            "qtd_leitos_disponiveis": linha["qtd_leitos_disponiveis"],
+            "data_ultima_atualizacao": linha["data_atualizacao"],
+        }],
+    }
+    artefato = _construir_artefato("consultar_leitos_internacoes", resultado)
+    assert "12/09/2026" in _sse("artefato", artefato) or artefato["linhas"]
+    assert "resultado_ferramenta" in _sse("fim", {"resultado_ferramenta": resultado, "artefato": artefato})
+
+
+def test_fonte_local_fora_do_ar_nao_derruba_a_conversa(monkeypatch):
+    """503 do store é resposta "não sei", não exceção subindo até o stream SSE."""
+
+    from fastapi import HTTPException
+    from api.core import db as db_module, local_records_store
+    from api.core.susbot_tools import criar_susbot_tools, MSG_FONTE_LOCAL_INDISPONIVEL
+
+    def fora_do_ar():
+        raise HTTPException(503, {"codigo": "servico_indisponivel", "mensagem": "Registros locais indisponíveis."})
+
+    monkeypatch.setattr(local_records_store, "configured_store", fora_do_ar)
+    monkeypatch.setattr(db_module, "get_estoque", lambda *a, **k: fora_do_ar())
+    tools = criar_susbot_tools("355030")
+
+    leitos = tools["consultar_leitos_internacoes"](categoria="leitos")
+    assert leitos["encontrado"] is False and leitos["fonte_indisponivel"] is True
+    assert leitos["motivo"] == MSG_FONTE_LOCAL_INDISPONIVEL
+
+    estoque = tools["consultar_estoque"](item="dipirona")
+    assert estoque["encontrado"] is False and estoque["fonte_indisponivel"] is True

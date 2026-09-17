@@ -139,7 +139,9 @@ def _clamp_pagination(page: int, page_size: int, max_page_size: int = 100) -> tu
 
 
 def _sse(evento: str, dados: dict[str, Any]) -> str:
-    return f"event: {evento}\ndata: {json.dumps(dados, ensure_ascii=False)}\n\n"
+    # default=str: um tipo nao serializavel no payload da ferramenta nao pode derrubar
+    # a resposta inteira. A normalizacao de verdade acontece em local_records_store.
+    return f"event: {evento}\ndata: {json.dumps(dados, ensure_ascii=False, default=str)}\n\n"
 
 
 @router.post("/transcrever")
@@ -329,10 +331,25 @@ def perguntar(
                 log.warning("Falha ao persistir mensagem da Clara: %s", exc)
 
         except HTTPException as exc:
-            yield _sse("erro", {"mensagem": str(exc.detail)})
+            # Dentro do stream, HTTPException e falha de servico dependente (ex.: store de
+            # registros locais devolve 503 com detail em dict). Vira texto legivel, nao
+            # repr de dicionario, e sempre com a saida humana.
+            from api.core.prompts import OFERTA_ATENDIMENTO_HUMANO
+            detalhe = exc.detail
+            if isinstance(detalhe, dict):
+                detalhe = detalhe.get("mensagem") or detalhe.get("codigo") or "Serviço indisponível."
+            texto = f"{detalhe}\n\nNão consigo confirmar esse dado agora. {OFERTA_ATENDIMENTO_HUMANO}"
+            yield _sse("token", {"texto": texto})
+            yield _sse("fim", {"resposta": texto, "referencia_rota": None})
         except Exception as exc:  # pragma: no cover - defesa contra falha do LLM/tool
             log.warning("Falha no stream da Clara: %s", exc)
-            yield _sse("erro", {"mensagem": "Falha ao gerar resposta da Clara. Tente novamente."})
+            from api.core.prompts import OFERTA_ATENDIMENTO_HUMANO
+            # Falha inesperada nao pode virar tela de erro sem saida: a Clara assume que
+            # nao sabe e abre o caminho humano (requisito de produto).
+            texto = ("Não consegui completar essa consulta agora, então não sei te responder "
+                     f"com segurança. Tente novamente em instantes. {OFERTA_ATENDIMENTO_HUMANO}")
+            yield _sse("token", {"texto": texto})
+            yield _sse("fim", {"resposta": texto, "referencia_rota": None})
 
     headers = {
         "X-Conversa-Id": conversa["id"],

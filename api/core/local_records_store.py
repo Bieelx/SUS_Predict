@@ -1,9 +1,35 @@
 """Transações locais isoladas das séries DataSUS. Nenhum fallback de produção."""
 from contextlib import contextmanager
+from datetime import date, datetime
+from decimal import Decimal
 import os
 import sqlite3
+import uuid
 
 from fastapi import HTTPException
+
+
+def _serializavel(valor):
+    """Converte o que o psycopg devolve e o json.dumps nao aceita.
+
+    Colunas timestamptz voltam como `datetime`; SQLite devolve texto. Sem essa
+    normalizacao a resposta da Clara morria no `json.dumps` do SSE (leitos,
+    internacoes, estoque) com "Object of type datetime is not JSON
+    serializable" — o erro chegava na tela como falha generica. Datas seguem a
+    convencao do backend (ISO 8601).
+    """
+
+    if isinstance(valor, (datetime, date)):
+        return valor.isoformat()
+    if isinstance(valor, Decimal):
+        return float(valor)
+    if isinstance(valor, uuid.UUID):
+        return str(valor)
+    return valor
+
+
+def _linha(row):
+    return {chave: _serializavel(valor) for chave, valor in dict(row).items()}
 
 
 class Session:
@@ -15,10 +41,10 @@ class Session:
 
     def one(self, sql, values=()):
         row = self.execute(sql, values).fetchone()
-        return dict(row) if row else None
+        return _linha(row) if row else None
 
     def all(self, sql, values=()):
-        return [dict(row) for row in self.execute(sql, values).fetchall()]
+        return [_linha(row) for row in self.execute(sql, values).fetchall()]
 
     def lock_unit(self, unit):
         # Serializa também confirmações concorrentes com dimensões sobrepostas.

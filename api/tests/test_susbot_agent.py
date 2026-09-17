@@ -934,3 +934,85 @@ def test_groq_envia_user_agent_e_modelo_valido(monkeypatch):
     # urllib capitaliza os nomes dos headers.
     assert capturado["headers"].get("User-agent")
     assert capturado["modelo"] == "groq/compound-mini"
+
+
+def test_previsao_narra_meses_projetados_e_nao_o_acumulado(db):
+    """Pergunta sobre o futuro tem que responder projeção, com intervalo e limitação."""
+
+    from api.core.susbot_agent import criar_susbot_agente
+
+    tools = {"consultar_epidemiologia": lambda **_: {
+        "encontrado": True, "sistema": "SINAN", "periodo": "12 Meses",
+        "dados": {
+            "stats": {"janela": "12 Meses", "casos_atual": 65016},
+            "serie_temporal": [],
+            "previsao": {
+                "disponivel": True, "horizonte_meses": 2,
+                "ultimo_mes_observado": "2025-12-01",
+                "modelo": "Holt-Winters aditivo (log1p, sazonalidade 12m)",
+                "intervalo_confianca_pct": 80,
+                "aviso": "A fonte termina antes do mês atual.",
+                "serie": [
+                    {"mes": "2026-01-01", "casos_previstos": 675,
+                     "limite_inferior": 190, "limite_superior": 2391},
+                    {"mes": "2026-02-01", "casos_previstos": 873,
+                     "limite_inferior": 219, "limite_superior": 3467},
+                ],
+            },
+        },
+    }}
+    agente = criar_susbot_agente("355030", tools=tools, llm=LLMMock())
+
+    fim = _fim(list(agente.stream_eventos("Qual a previsão de casos de dengue nos próximos meses?")))
+
+    assert fim["plano"]["argumentos"]["escopo_solicitado"] == "previsao"
+    assert "01/2026" in fim["resposta"] and "675" in fim["resposta"]
+    assert "65.016" not in fim["resposta"], "acumulado do passado não responde pergunta de futuro"
+    assert "Limitação" in fim["resposta"]
+    assert fim["artefato"]["colunas"] == ["mes", "casos_previstos", "limite_inferior", "limite_superior"]
+
+
+def test_consulta_sem_resultado_admite_que_nao_sabe_e_oferece_humano(db):
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.prompts import OFERTA_ATENDIMENTO_HUMANO
+
+    tools = {"consultar_leitos_internacoes": lambda **_: {
+        "encontrado": False, "motivo": "Nenhuma informação enviada pelas unidades.", "dados": [],
+    }}
+    agente = criar_susbot_agente("355030", tools=tools, llm=LLMMock())
+
+    fim = _fim(list(agente.stream_eventos("Quantos leitos de UTI estão livres?")))
+
+    assert OFERTA_ATENDIMENTO_HUMANO in fim["resposta"]
+
+
+def test_pedido_de_atendimento_humano_responde_em_codigo_sem_llm(db):
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.prompts import MENSAGEM_ATENDIMENTO_HUMANO
+
+    class LLMProibido(LLMMock):
+        def planejar(self, *args, **kwargs):
+            pytest.fail("Pedido de atendimento humano não deve chamar o LLM")
+
+    agente = criar_susbot_agente("355030", tools={}, llm=LLMProibido())
+    fim = _fim(list(agente.stream_eventos("quero atendimento humano")))
+
+    assert fim["resposta"] == MENSAGEM_ATENDIMENTO_HUMANO
+    assert fim["execucao"]["sem_llm"] is True
+
+
+def test_planejador_indisponivel_diz_que_nao_sabe_em_vez_de_derrubar(db):
+    """Groq/Gemini fora do ar não pode virar 'não consegui consultar a Clara'."""
+
+    from api.core.susbot_agent import criar_susbot_agente
+    from api.core.prompts import OFERTA_ATENDIMENTO_HUMANO
+
+    class LLMForaDoAr(LLMMock):
+        def planejar(self, *args, **kwargs):
+            raise RuntimeError("Groq HTTP 404: model_decommissioned")
+
+    agente = criar_susbot_agente("355030", tools={}, llm=LLMForaDoAr())
+    fim = _fim(list(agente.stream_eventos("me explique a situação de saúde da região norte")))
+
+    assert "não sei responder agora" in fim["resposta"]
+    assert OFERTA_ATENDIMENTO_HUMANO in fim["resposta"]

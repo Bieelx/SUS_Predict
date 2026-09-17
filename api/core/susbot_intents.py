@@ -174,6 +174,41 @@ def pede_retomada(pergunta: str) -> bool:
     return len(texto.split()) <= 6 and bool(_RE_RETOMADA.search(texto))
 
 
+# Termos de projeção. Lista explícita (não prefixo) porque "proje*" também casa
+# "projeto", que é pergunta sobre o SusPredict, não sobre o futuro dos casos.
+_TERMOS_PREVISAO = {
+    "previsao", "previsoes", "previsto", "previstos", "prever", "preve",
+    "projecao", "projecoes", "projetado", "projetados", "prognostico", "estimativa",
+}
+_RE_HORIZONTE = re.compile(
+    r"\bproxim[oa]s? (?:\d+ )?(?:mes|meses|semanas?|dias?|trimestre)\b"
+    r"|\bnos? proximos?\b|\bpara (?:o )?futuro\b|\bvai (?:subir|aumentar|cair|piorar)\b"
+)
+
+
+_RE_TERMOS_PREVISAO = re.compile(rf"\b(?:{'|'.join(sorted(_TERMOS_PREVISAO))})\b")
+
+
+def _pede_previsao(texto_normalizado: str) -> bool:
+    """Pergunta sobre o que vem, não sobre o que já aconteceu."""
+
+    return bool(_RE_TERMOS_PREVISAO.search(texto_normalizado) or _RE_HORIZONTE.search(texto_normalizado))
+
+
+# Pedido explícito de atendimento humano. A Clara oferece isso quando não sabe;
+# aqui ela reconhece o "sim" sem depender de estado da conversa.
+_RE_ATENDIMENTO_HUMANO = re.compile(
+    r"\batendimento humano\b|\bsuporte humano\b|\bquero (?:um )?humano\b"
+    r"|\b(?:falar|conversar|passar|encaminhar|me passa\w*|me encaminh\w*)\b[^?]{0,20}"
+    r"\b(?:alguem|humano|gente|pessoa|atendente|responsavel|equipe|suporte)\b"
+    r"|\bchamar (?:alguem|a equipe|o suporte)\b"
+)
+
+
+def pede_atendimento_humano(pergunta: str) -> bool:
+    return bool(_RE_ATENDIMENTO_HUMANO.search(normalizar_texto(pergunta)))
+
+
 def rotear_intencao(pergunta: str) -> IntentRoute | None:
     """Retorna uma rota somente quando a intenção operacional é inequívoca."""
 
@@ -262,6 +297,22 @@ def rotear_intencao(pergunta: str) -> IntentRoute | None:
              "argumentos": {"categoria": "internacoes_dengue"}, "resposta": "",
              "referencia_rota": "/internacoes"},
             "internações por dengue informadas pelas unidades",
+        )
+
+    # Pergunta sobre o futuro ("previsão", "próximos meses") precisa da projeção, não do
+    # acumulado do passado. Só dengue tem série curada, então cai em SINAN.
+    if _pede_previsao(texto):
+        return IntentRoute(
+            intencao="consultar_epidemiologia",
+            confianca=0.97,
+            motivo="pergunta sobre projeção de casos",
+            plano={
+                "acao": "ferramenta",
+                "ferramenta": "consultar_epidemiologia",
+                "argumentos": {"sistema": "SINAN", "escopo_solicitado": "previsao"},
+                "resposta": "",
+                "referencia_rota": "/epidemiologia",
+            },
         )
 
     termos_internacao = {"internac", "hospitaliz", "hospitalar", "leito", "uti"}

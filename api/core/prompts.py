@@ -37,7 +37,7 @@ DESCRICOES_FERRAMENTAS = {
     "consultar_estoque": "- consultar_estoque: item (string opcional), somente_risco (boolean opcional). Palavras genericas (insumos, medicamentos, estoque) NAO sao item. somente_risco=true para falta, ruptura, critico, baixo, acabando. Saldos por estabelecimento: vacinas em doses e medicamentos em embalagens por apresentacao. Preserve estabelecimento e unidade_medida na resposta; nao some apresentacoes distintas. Sem consumo medio, nao calcule dias restantes ou risco.",
     "consultar_aquisicoes": "- consultar_aquisicoes: item (string opcional). Mesmas fontes das telas Alertas e Insumos; risco de aquisição, nunca estoque físico.",
     "consultar_alertas": "- consultar_alertas: status (string opcional), tipo (string opcional). Apenas alertas operacionais locais cadastrados. Para a Central de Alertas ou risco de aquisição, use consultar_aquisicoes.",
-    "consultar_epidemiologia": '- consultar_epidemiologia: sistema (SIM|SIH|SINASC|SIA|SINAN), ano_ini, ano_fim (inteiros opcionais), doenca_cod, escopo_solicitado (strings opcionais). Internacao, hospital, leito, UTI => SIH (UTI: escopo_solicitado="uti"). Obito => SIM. Nascimento => SINASC. Ambulatorial => SIA. Casos, notificacoes, dengue => SINAN.',
+    "consultar_epidemiologia": '- consultar_epidemiologia: sistema (SIM|SIH|SINASC|SIA|SINAN), ano_ini, ano_fim (inteiros opcionais), doenca_cod, escopo_solicitado (strings opcionais). Internacao, hospital, leito, UTI => SIH (UTI: escopo_solicitado="uti"). Obito => SIM. Nascimento => SINASC. Ambulatorial => SIA. Casos, notificacoes, dengue => SINAN. Pergunta sobre o FUTURO (previsao, projecao, proximos meses, tendencia) => SINAN com escopo_solicitado="previsao"; o payload volta com dados.previsao (serie mensal projetada com limite_inferior/limite_superior). Nunca responda pergunta sobre o futuro com o acumulado do passado.',
     "consultar_leitos_internacoes": "- consultar_leitos_internacoes: categoria (leitos|internacoes_dengue|tudo), tipo_leito (opcional). Dado atual informado pelas unidades do municipio; nao e DATASUS.",
     "gerar_etp": "- gerar_etp: item (string obrigatoria), alerta_id (opcional). So quando o usuario pedir explicitamente um ETP; exige confirmacao humana.",
     "sobre_o_projeto": "- sobre_o_projeto: sem argumentos. Perguntas sobre o que e o SUS Predict, o que a Clara faz, quais bases usa, quem e voce.",
@@ -50,6 +50,7 @@ EXEMPLOS_FERRAMENTAS = {
     ],
     "consultar_epidemiologia": [
         '"Internacoes entre 2022 e 2024" => {"acao":"chamar_ferramenta","ferramenta":"consultar_epidemiologia","argumentos":{"sistema":"SIH","ano_ini":2022,"ano_fim":2024}}',
+        '"Qual a previsao de casos de dengue para os proximos meses?" => {"acao":"chamar_ferramenta","ferramenta":"consultar_epidemiologia","argumentos":{"sistema":"SINAN","escopo_solicitado":"previsao"}}',
     ],
     "consultar_leitos_internacoes": [
         '"Quantos leitos de UTI livres?" => {"acao":"chamar_ferramenta","ferramenta":"consultar_leitos_internacoes","argumentos":{"categoria":"leitos","tipo_leito":"UTI"}}',
@@ -173,9 +174,34 @@ FORMATO
 - Quando houver rota de referência no plano, termine com uma frase curta apontando a tela."""
 
 # Recusa padronizada. Gerada em codigo, nunca pelo LLM.
+# Oferta de atendimento humano. Vem em codigo e e anexada a todo caminho de
+# "nao sei responder" (fora do escopo, consulta sem resultado, falha de geracao).
+OFERTA_ATENDIMENTO_HUMANO = (
+    "Se preferir resolver com uma pessoa, me diga **atendimento humano** que eu passo o caminho."
+)
+
+# ponytail: nao existe canal de handoff (ticket, fila, transferencia) no SusPredict.
+# A Clara diz para onde ir; quando houver canal, e aqui que ele entra.
+MENSAGEM_ATENDIMENTO_HUMANO = (
+    "Combinado — isso aqui pede gente. Eu ainda não consigo transferir a conversa "
+    "automaticamente, então o caminho é falar com o administrador do SusPredict do seu "
+    "município (quem liberou o seu acesso). Se quiser, me conte o que você precisa: "
+    "fica registrado aqui na conversa e você encaminha do jeito que for mais rápido."
+)
+
+# Planejador sem LLM disponivel (provedor fora do ar, quota, chave invalida). Antes
+# isso subia como erro e a tela mostrava "nao consegui consultar a Clara".
+MENSAGEM_SEM_PLANEJAMENTO = (
+    "Não consegui entender essa pergunta bem o suficiente para buscar o dado certo, "
+    "então prefiro não arriscar um número errado: não sei responder agora. "
+    "Você pode reformular (ex.: \"casos de dengue nos últimos 12 meses\", \"leitos de UTI livres\", "
+    f"\"estoque de dipirona\"). {OFERTA_ATENDIMENTO_HUMANO}"
+)
+
 MENSAGEM_FORA_DO_ESCOPO = (
-    "Ah, essa eu vou ficar devendo. Meu forte são os dados de saúde do seu município: "
-    "estoque de insumos, alertas, casos, internações e óbitos. Quer que eu olhe algum desses?"
+    "Ah, essa eu vou ficar devendo — não sei responder isso. Meu forte são os dados de "
+    "saúde do seu município: estoque de insumos, alertas, casos, internações e óbitos. "
+    f"Quer que eu olhe algum desses? {OFERTA_ATENDIMENTO_HUMANO}"
 )
 
 # Resposta fixa para "quem é você" — vem do codigo, o modelo nunca decide o nome.

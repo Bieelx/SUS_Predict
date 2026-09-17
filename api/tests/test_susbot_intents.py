@@ -59,3 +59,35 @@ def test_insumos_da_plataforma_nao_pressupoem_estoque_fisico(pergunta):
     rota = rotear_intencao(pergunta)
     assert rota.plano["ferramenta"] == "consultar_aquisicoes"
     assert rota.plano["argumentos"] == {}
+
+
+@pytest.mark.parametrize("pergunta", [
+    "me diga qual a previsão para os casos de dengue nos proximos meses",
+    "qual a projeção de dengue?",
+    "quantos casos esperar nos próximos 3 meses?",
+])
+def test_pergunta_sobre_o_futuro_pede_previsao_e_nao_o_acumulado(pergunta):
+    rota = rotear_intencao(pergunta)
+    assert rota.plano["ferramenta"] == "consultar_epidemiologia"
+    assert rota.plano["argumentos"] == {"sistema": "SINAN", "escopo_solicitado": "previsao"}
+
+
+@pytest.mark.parametrize("pergunta", [
+    "quantos casos de dengue em 2025?",
+    "o que é o projeto SUS Predict?",
+    "previsão de ruptura de estoque?",
+])
+def test_pergunta_sobre_o_passado_ou_projeto_nao_vira_previsao(pergunta):
+    rota = rotear_intencao(pergunta)
+    assert rota is None or rota.plano["argumentos"].get("escopo_solicitado") != "previsao"
+
+
+@pytest.mark.parametrize("pergunta", [
+    "quero atendimento humano",
+    "pode me passar pra alguém da equipe?",
+    "quero falar com uma pessoa",
+])
+def test_pedido_de_atendimento_humano_e_reconhecido(pergunta):
+    from api.core.susbot_intents import pede_atendimento_humano
+    assert pede_atendimento_humano(pergunta) is True
+    assert pede_atendimento_humano("como está o estoque de dipirona?") is False

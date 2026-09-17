@@ -48,7 +48,9 @@ const SUGESTOES = [
 
 const SUGESTOES_ICONES = ['notifications_active', 'inventory_2', 'trending_up'];
 
-const ERRO_SUSBOT_PADRAO ='Não consegui consultar a Clara agora. Tente novamente em instantes.';
+const ERRO_SUSBOT_PADRAO =
+  'Não consegui consultar a Clara agora, então não sei te responder. Tente novamente em '
+  + 'instantes ou peça **atendimento humano** na próxima mensagem.';
 const SUSBOT_IBGE6_PADRAO = '351300';
 
 function mensagemErroSusbot(error) {
