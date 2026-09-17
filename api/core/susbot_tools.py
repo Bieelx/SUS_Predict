@@ -16,6 +16,8 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
+import unicodedata
 import uuid
 
 _LOG = logging.getLogger("sus_predict.clara.consultas")
@@ -195,6 +197,30 @@ def _qualidade_cobertura(row: dict, dias_restantes: float | None) -> dict:
     }
 
 
+def _normalizar_item(texto: str | None) -> str:
+    """Minúsculo, sem acento e sem pontuação, com a dosagem colada ("500 mg" -> "500mg").
+
+    O usuário escreve "dipirona 500mg" e o cadastro tem "Dipirona 500 mg · Comprimido";
+    sem isso a busca por substring devolve vazio por causa de um espaço.
+    """
+
+    sem_acento = "".join(
+        ch for ch in unicodedata.normalize("NFKD", str(texto or "")) if not unicodedata.combining(ch)
+    ).casefold()
+    limpo = re.sub(r"[^a-z0-9]+", " ", sem_acento)
+    # "500 mg", "1 l", "8 mcg" viram "500mg", "1l", "8mcg".
+    return re.sub(r"\b(\d+(?:[.,]\d+)?) +(mg|g|ml|l|mcg|ui|un)\b", r"\1\2", limpo).strip()
+
+
+def _item_corresponde(alvo_normalizado: str, item_cadastrado: str | None) -> bool:
+    """Casa quando todo termo pedido aparece no nome cadastrado, em qualquer ordem."""
+
+    if not alvo_normalizado:
+        return True
+    nome = _normalizar_item(item_cadastrado)
+    return all(termo in nome for termo in alvo_normalizado.split())
+
+
 def _enriquecer_estoque(rows: list[dict]) -> list[dict]:
     itens: list[dict] = []
     for row in rows:
@@ -241,10 +267,12 @@ def criar_susbot_tools(ibge6: str, permitidas=None, contexto=None) -> dict[str, 
         # distinguir "não há fonte de estoque" de "há estoque, mas não esse item".
         _registrar_consulta("estoque", {"ibge6": ibge}, None)
         rows = db.get_estoque(ibge)
-        alvo = str(item or "").strip().casefold()
-        filtradas = [row for row in rows if alvo in str(row.get("item") or "").casefold()] if item else rows
+        alvo = _normalizar_item(item)
+        filtradas = (
+            [row for row in rows if _item_corresponde(alvo, row.get("item"))] if item else rows
+        )
         _registrar_consulta("estoque", {"ibge6": ibge}, len(rows),
-                            {"item_substring_casefold": alvo} if item else {}, len(filtradas))
+                            {"item_normalizado": alvo} if item else {}, len(filtradas))
         return rows, filtradas
 
     def consultar_estoque(item: str | None = None, somente_risco: bool = False, **_kwargs) -> dict:

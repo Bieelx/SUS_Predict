@@ -310,3 +310,18 @@ def test_etp_sem_item_pede_esclarecimento_sem_escrever(db, monkeypatch, argument
     resultado = criar_susbot_tools("3550308")["gerar_etp"](**argumentos)
     assert resultado["encontrado"] is False
     assert "informe qual medicamento ou insumo" in resultado["motivo"]
+
+
+def test_busca_de_item_ignora_acento_e_espaco_na_dosagem():
+    """"dipirona 500 mg" precisa achar "Dipirona 500mg" e o nome longo dos registros locais."""
+
+    from api.core.susbot_tools import _item_corresponde, _normalizar_item
+
+    def casa(pedido, cadastrado):
+        return _item_corresponde(_normalizar_item(pedido), cadastrado)
+
+    assert casa("dipirona 500 mg", "Dipirona 500mg")
+    assert casa("dipirona 500mg", "Dipirona 500 mg · Comprimido · Caixa com 20 unidades")
+    assert casa("Dipirona Sódica 500 MG", "Dipirona sodica 500mg")
+    assert not casa("dipirona 500mg", "Paracetamol 750mg")
+    assert not casa("dipirona 1g", "Dipirona 500mg")
