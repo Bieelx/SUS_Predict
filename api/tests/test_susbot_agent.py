@@ -900,3 +900,37 @@ def test_resposta_que_nega_dado_existente_cai_na_reserva(db):
     assert "não achei" not in fim["data"]["resposta"]
     assert "Dipirona abaixo do mínimo" in fim["data"]["resposta"]
     assert fim["data"]["execucao"]["falha_negacao_de_dado"] is True
+
+
+def test_groq_envia_user_agent_e_modelo_valido(monkeypatch):
+    """Sem User-Agent o Cloudflare da Groq devolve 403 (1010); o default não pode ser modelo morto."""
+
+    import json as _json
+    import urllib.request
+    from api.core.susbot_agent import GroqClaraLLM
+
+    capturado = {}
+
+    class _Resposta:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self):
+            return _json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode()
+
+    def _urlopen(req, timeout=None):
+        capturado["headers"] = dict(req.headers)
+        capturado["modelo"] = _json.loads(req.data)["model"]
+        return _Resposta()
+
+    monkeypatch.setenv("GROQ_API_KEY", "chave-de-teste")
+    monkeypatch.delenv("GROQ_MODEL", raising=False)
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+
+    assert GroqClaraLLM().completar([("human", "oi")]) == "ok"
+    # urllib capitaliza os nomes dos headers.
+    assert capturado["headers"].get("User-agent")
+    assert capturado["modelo"] == "groq/compound-mini"

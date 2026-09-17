@@ -751,7 +751,9 @@ class GroqClaraLLM:
         self._chave = (api_key or os.getenv("GROQ_API_KEY") or "").strip()
         if not self._chave:
             raise RuntimeError("GROQ_API_KEY ausente")
-        self._modelo = model or os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"
+        # llama-3.3-70b-versatile saiu do catálogo da Groq (404); o default precisa ser
+        # um modelo que ainda existe, senão o fallback morre justo quando é acionado.
+        self._modelo = model or os.getenv("GROQ_MODEL") or "groq/compound-mini"
 
     def _chamar(self, mensagens: list[tuple[str, str]], *, json_mode: bool, max_tokens: int) -> str:
         papel_openai = {"human": "user", "system": "system", "assistant": "assistant"}
@@ -770,6 +772,9 @@ class GroqClaraLLM:
             headers={
                 "Authorization": f"Bearer {self._chave}",
                 "Content-Type": "application/json",
+                # Sem User-Agent o Cloudflare da Groq devolve 403 (error code 1010)
+                # para o UA padrão do urllib. Não é a chave: é o filtro de borda.
+                "User-Agent": "SusPredict-Clara/1.0",
             },
             method="POST",
         )
